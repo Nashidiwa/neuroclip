@@ -54,3 +54,29 @@ Khi cần làm rõ yêu cầu hoặc xin quyết định, format bắt buộc g�
 >   * **Option 2:** <Ưu điểm / Nhược điểm / Rủi ro>
 > * **Đề xuất từ @lead-architect:** <Chọn option nào và tại sao?>
 > * **Hành động tiếp theo:** Đợi PO trả lời [1] hoặc [2] trước khi tiếp tục.
+
+---
+
+## 4. Architectural Exception Protocol (Xử lý Bất cập Kiến trúc ở Phase 3)
+
+Nếu trong quá trình bóc tách task ở Phase 3 phát hiện lỗi thiết kế kiến trúc nghiêm trọng:
+
+1. **Internal Deliberation**:
+   - `@tech-lead` trình bày lỗi kỹ thuật kèm bằng chứng (POC ngắn hoặc trích dẫn doc thư viện).
+   - `@lead-architect` phản biện và tìm giải pháp thay thế.
+   - `@qa-reviewer` đánh giá mức độ ảnh hưởng đến toàn bộ hệ thống.
+
+2. **Trigger Rollback Gate**:
+   - Nếu lỗi thuộc cấp độ `CRITICAL` (không thể bypass ở tầng code), team TẠM DỪNG chia task.
+   - `@lead-architect` tạo file `docs/adr/RFC-ROLLBACK-<tên-vấn-đề>.md` và gửi báo cáo khẩn cho PO theo format:
+
+> **[YÊU CẦU ROLLBACK PHASE 2] Bất cập kiến trúc phát sinh tại Phase 3**
+> - **Điểm nghẽn:** <Vấn đề cụ thể khiến không thể tiếp tục Phase 3>
+> - **Bằng chứng:** <Tại sao thiết kế cũ trong ARCHITECTURE.md bị gãy?>
+> - **Phương án sửa đổi đề xuất:** <Giải pháp kiến trúc mới>
+> - **Ảnh hưởng:** <Các module nào trong ARCHITECTURE.md cần viết lại?>
+> - **Trạng thái:** Dừng chờ PO phê duyệt để mở khóa Phase 2.
+
+3. **Quyền hạn của PO**:
+   - **PO chấp thuận**: Trạng thái project quay về `Phase 2: Revision`. Mở khóa `ARCHITECTURE.md` để sửa, sau đó PO duyệt lại rồi mới tiếp tục Phase 3.
+   - **PO từ chối**: Team giữ nguyên kiến trúc, `@tech-lead` bắt buộc phải tìm giải pháp workaround ở tầng code.

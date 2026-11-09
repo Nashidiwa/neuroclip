@@ -1,0 +1,24 @@
+:root {
+  --color-bg-primary: #12131C;
+  --color-bg-secondary: #1A1C28;
+  --color-bg-tertiary: #242738;
+  --color-accent-neuro: #FFB6C1;
+  --color-accent-evil: #FF0055;
+  --color-accent-vedal: #98FB98;
+  --color-accent-guest: #FFD700;
+  --color-accent-chat: #87CEEB;
+  --color-border: #2E3247;
+  --font-family-base: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Acrylic/Mica effect when supported */
+.acrylic-window {
+  background-color: rgba(18, 19, 28, 0.78);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* Solid fallback when acrylic is unsupported or disabled */
+.solid-window-fallback {
+  background-color: var(--color-bg-primary);
+}
