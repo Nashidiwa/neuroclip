@@ -8,15 +8,22 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod error;
+
+pub use error::{
+    codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
+    IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
+};
+
 pub const DEFAULT_WINDOW_WIDTH: f64 = 1280.0;
 pub const DEFAULT_WINDOW_HEIGHT: f64 = 800.0;
 pub const MIN_WINDOW_WIDTH: f64 = 1024.0;
 pub const MIN_WINDOW_HEIGHT: f64 = 640.0;
 pub const SOLID_BACKGROUND_FALLBACK: &str = "#12131C";
 
-/// Health check ping/pong command
+/// Health check ping/pong command adhering to Result<T, AppError> contract
 #[tauri::command]
-pub fn ping() -> Result<String, String> {
+pub fn ping() -> Result<String, AppError> {
     Ok("pong".to_string())
 }
 

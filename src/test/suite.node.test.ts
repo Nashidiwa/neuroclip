@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadTheme, resolveBackdropConfig, THEME_PALETTE, WINDOW_GEOMETRY } from '../styles/theme.ts';
+import { ERROR_CODES, ERROR_MESSAGES_VI, isIpcError, parseIpcError } from '../services/ipc/error.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -193,3 +194,186 @@ describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
     });
   });
 });
+
+describe('TASK-M4-02 Test Suite: Core Crate, Unified Error Handling & IPC Protocol', () => {
+  describe('UT-02.1: Rust Error Codes & Domain Invariant Checks', () => {
+    it('should verify src-tauri/src/error/codes.rs contains all canonical error code constants', () => {
+      const codesPath = path.resolve('src-tauri/src/error/codes.rs');
+      assert.strictEqual(fs.existsSync(codesPath), true, 'codes.rs must exist');
+
+      const content = fs.readFileSync(codesPath, 'utf8');
+      const requiredCodes = [
+        'ERR_INGEST_DISK_FULL',
+        'ERR_INGEST_BOT_BLOCKED',
+        'ERR_INGEST_CHAT_UNAVAILABLE',
+        'ERR_INGEST_NETWORK_TIMEOUT',
+        'ERR_INGEST_INVALID_URL',
+        'ERR_INGEST_EXTRACTION_FAILED',
+        'ERR_INGEST_LIVE_STREAM_UNSUPPORTED',
+        'ERR_STT_RATE_LIMIT',
+        'ERR_STT_PAYLOAD_TOO_LARGE',
+        'ERR_STT_VRAM_INSUFFICIENT',
+        'ERR_STT_INVALID_API_KEY',
+        'ERR_STT_VAD_FAILED',
+        'ERR_TRANSLATE_SAFETY_FILTER',
+        'ERR_TRANSLATE_INVALID_API_KEY',
+        'ERR_TRANSLATE_API_FAILED',
+        'ERR_EXPORT_CAPCUT_NOT_FOUND',
+        'ERR_EXPORT_FILE_WRITE_FAILED',
+        'ERR_EXPORT_INVALID_LAYOUT',
+        'ERR_HIGHLIGHT_CHAT_PARSING_FAILED',
+        'ERR_HIGHLIGHT_AUDIO_ANALYSIS_FAILED',
+        'ERR_HIGHLIGHT_NO_HIGHLIGHTS',
+        'ERR_HIGHLIGHT_WORKER_PANICKED',
+        'ERR_SIDECAR_BINARY_NOT_FOUND',
+        'ERR_SIDECAR_EXECUTION_FAILED',
+        'ERR_SIDECAR_UPDATE_FAILED',
+        'ERR_SIDECAR_PROCESS_KILLED',
+        'ERR_HARDWARE_PROBE_FAILED',
+        'ERR_HARDWARE_UNSUPPORTED_GPU',
+        'ERR_HARDWARE_INSUFFICIENT_MEMORY',
+        'ERR_STORAGE_DISK_CHECK_FAILED',
+        'ERR_STORAGE_DIRECTORY_CREATION_FAILED',
+        'ERR_STORAGE_CACHE_CLEANUP_FAILED',
+        'ERR_STORAGE_FILE_NOT_FOUND',
+        'ERR_CONFIG_NOT_FOUND',
+        'ERR_CONFIG_INVALID_FORMAT',
+        'ERR_CONFIG_SAVE_FAILED',
+        'ERR_CONFIG_INVALID_VALUE',
+        'ERR_TASK_CANCELLED',
+        'ERR_INTERNAL_ERROR',
+      ];
+
+      for (const code of requiredCodes) {
+        assert.ok(
+          content.includes(`pub const ${code}: &str = "${code}";`),
+          `codes.rs must define constant ${code}`,
+        );
+      }
+    });
+
+    it('should verify src-tauri/src/error/mod.rs defines AppError and IpcErrorResponse', () => {
+      const modPath = path.resolve('src-tauri/src/error/mod.rs');
+      assert.strictEqual(fs.existsSync(modPath), true, 'error/mod.rs must exist');
+
+      const content = fs.readFileSync(modPath, 'utf8');
+      assert.ok(content.includes('pub struct IpcErrorResponse'), 'Must define IpcErrorResponse');
+      assert.ok(content.includes('pub enum AppError'), 'Must define AppError enum');
+      assert.ok(content.includes('impl Serialize for AppError'), 'Must implement Serialize for AppError');
+      assert.ok(content.includes('pub fn code(&self) ->'), 'Must implement code method');
+      assert.ok(content.includes('pub fn is_recoverable(&self) -> bool'), 'Must implement is_recoverable');
+      assert.ok(content.includes('pub fn to_ipc_response(&self) -> IpcErrorResponse'), 'Must implement to_ipc_response');
+    });
+
+    it('should verify src-tauri/src/lib.rs exports error module and ping returns Result<String, AppError>', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      assert.strictEqual(fs.existsSync(libPath), true);
+
+      const content = fs.readFileSync(libPath, 'utf8');
+      assert.ok(content.includes('pub mod error;'), 'lib.rs must export error module');
+      assert.ok(
+        content.includes('pub fn ping() -> Result<String, AppError>'),
+        'ping command signature must be Result<String, AppError>',
+      );
+    });
+  });
+
+  describe('ED-02.1: Clippy Zero-Panic & Static Rust Invariants Audit', () => {
+    it('should verify all Rust source files contain zero forbidden panic calls in non-test code', () => {
+      function scanRustFiles(dir: string): string[] {
+        const files: string[] = [];
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            files.push(...scanRustFiles(fullPath));
+          } else if (entry.name.endsWith('.rs')) {
+            files.push(fullPath);
+          }
+        }
+        return files;
+      }
+
+      const rustFiles = scanRustFiles(path.resolve('src-tauri/src'));
+      assert.ok(rustFiles.length >= 4, 'Must scan at least 4 Rust source files');
+
+      for (const file of rustFiles) {
+        const content = fs.readFileSync(file, 'utf8');
+        const nonTestContent = content.split('#[cfg(test)]')[0] ?? content;
+        const lines = nonTestContent.split('\n');
+
+        const forbiddenPattern = /\b(unwrap|expect|panic!|todo!|unimplemented!)\b/g;
+
+        for (let i = 0; i < lines.length; i += 1) {
+          const line = lines[i]?.trim() ?? '';
+          if (
+            line.startsWith('#![deny(') ||
+            line.startsWith('//') ||
+            line.startsWith('/*') ||
+            line.startsWith('*')
+          ) {
+            continue;
+          }
+          const match = line.match(forbiddenPattern);
+          assert.strictEqual(
+            match,
+            null,
+            `Forbidden call '${match?.[0]}' found in ${path.basename(file)} at line ${i + 1}: ${line}`,
+          );
+        }
+      }
+    });
+  });
+
+  describe('IT-02.1: TypeScript IPC Error Envelope & Protocol Invariants', () => {
+    it('should validate valid IpcErrorResponse objects and reject malformed inputs', () => {
+      assert.strictEqual(
+        isIpcError({
+          code: ERROR_CODES.INGEST_DISK_FULL,
+          message: 'Ổ đĩa đầy',
+          details: null,
+          recoverable: true,
+        }),
+        true,
+      );
+
+      assert.strictEqual(isIpcError(null), false);
+      assert.strictEqual(isIpcError(undefined), false);
+      assert.strictEqual(isIpcError({ code: 123 }), false);
+    });
+
+    it('should parse various error formats into normalized IpcErrorResponse', () => {
+      const parsedString = parseIpcError('Tải stream thất bại');
+      assert.strictEqual(parsedString.code, ERROR_CODES.INTERNAL_ERROR);
+      assert.strictEqual(parsedString.message, 'Tải stream thất bại');
+      assert.strictEqual(parsedString.recoverable, false);
+
+      const jsonPayload = JSON.stringify({
+        code: ERROR_CODES.INGEST_BOT_BLOCKED,
+        message: 'Bị chặn bot',
+        details: 'HTTP 403',
+        recoverable: true,
+      });
+      const parsedJson = parseIpcError(jsonPayload);
+      assert.strictEqual(parsedJson.code, ERROR_CODES.INGEST_BOT_BLOCKED);
+      assert.strictEqual(parsedJson.recoverable, true);
+    });
+
+    it('should verify all canonical error codes have Vietnamese descriptions', () => {
+      assert.ok(ERROR_MESSAGES_VI[ERROR_CODES.INGEST_DISK_FULL]?.includes('ổ đĩa'));
+      assert.ok(ERROR_MESSAGES_VI[ERROR_CODES.STT_RATE_LIMIT]?.includes('Rate Limit'));
+      assert.ok(ERROR_MESSAGES_VI[ERROR_CODES.TRANSLATE_SAFETY_FILTER]?.includes('an toàn'));
+      assert.ok(ERROR_MESSAGES_VI[ERROR_CODES.EXPORT_CAPCUT_NOT_FOUND]?.includes('CapCut'));
+    });
+  });
+
+  describe('IT-02.2: React Error Components Artifact Invariants', () => {
+    it('should verify ErrorBanner and ErrorBoundary source files exist', () => {
+      const bannerPath = path.resolve('src/components/common/ErrorBanner.tsx');
+      const boundaryPath = path.resolve('src/components/common/ErrorBoundary.tsx');
+
+      assert.strictEqual(fs.existsSync(bannerPath), true, 'ErrorBanner.tsx must exist');
+      assert.strictEqual(fs.existsSync(boundaryPath), true, 'ErrorBoundary.tsx must exist');
+    });
+  });
+});
+

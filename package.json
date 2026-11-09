@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "typecheck": "node --experimental-strip-types src/test/typecheck.node.ts",
+    "typecheck": "tsc --noEmit && node --experimental-strip-types src/test/typecheck.node.ts",
     "typecheck:tsc": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/test/suite.node.test.ts",
     "test:vitest": "vitest run",
