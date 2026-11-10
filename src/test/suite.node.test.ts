@@ -29,6 +29,16 @@ import {
   toLogLevel,
   isLogEntryJson,
 } from '../services/logging/index.ts';
+import {
+  type DiskStatusJson,
+  toDiskStatus,
+  isDiskStatusJson,
+  isCacheCleanupResultJson,
+  isStoragePathsJson,
+  toStoragePaths,
+  toCacheCleanupResult,
+} from '../services/ipc/storage.ts';
+import { MIN_REQUIRED_DISK_SPACE_MB } from '../stores/useProjectStore.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -1181,6 +1191,186 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
       assert.strictEqual(sanitized['key'], 'gsk_[REDACTED]5678');
       const meta = sanitized['meta'] as Record<string, unknown>;
       assert.strictEqual(meta['sub'], 'AIza[REDACTED]7890');
+    });
+  });
+});
+
+describe('TASK-M4-05 Test Suite: Storage Preflight Check, Cache Management & Project Store', () => {
+  describe('UT-05.1 & UT-05.2: DiskStatus Wire Serialization & Domain Contracts', () => {
+    it('UT-05.1 (Happy Path): should serialize and convert 20GB free space status correctly', () => {
+      const wireJson: DiskStatusJson = {
+        free_space_mb: 20480,
+        is_sufficient: true,
+        cache_dir: 'C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache',
+      };
+
+      assert.strictEqual(isDiskStatusJson(wireJson), true, 'Valid DiskStatusJson must pass type guard');
+      assert.strictEqual(isDiskStatusJson({ bad: 123 }), false, 'Malformed payload must be rejected');
+
+      const domain = toDiskStatus(wireJson);
+      assert.strictEqual(domain.freeSpaceMb, 20480);
+      assert.strictEqual(domain.free_space_mb, 20480);
+      assert.strictEqual(domain.isSufficient, true);
+      assert.strictEqual(domain.is_sufficient, true);
+      assert.strictEqual(domain.cacheDir, 'C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache');
+    });
+
+    it('UT-05.2 (Failure Path): should serialize and convert 3.2GB insufficient free space status', () => {
+      const wireJson: DiskStatusJson = {
+        free_space_mb: 3276,
+        is_sufficient: false,
+        cache_dir: 'C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache',
+      };
+
+      const domain = toDiskStatus(wireJson);
+      assert.strictEqual(domain.freeSpaceMb, 3276);
+      assert.strictEqual(domain.isSufficient, false);
+      assert.strictEqual(domain.is_sufficient, false);
+      assert.strictEqual(domain.freeSpaceMb < MIN_REQUIRED_DISK_SPACE_MB, true);
+    });
+
+    it('should assert MIN_REQUIRED_DISK_SPACE_MB threshold equals 5120MB (5GB)', () => {
+      assert.strictEqual(MIN_REQUIRED_DISK_SPACE_MB, 5120, 'Threshold must be exactly 5120MB');
+    });
+
+    it('should verify CacheCleanupResult and StoragePaths serialization and guards', () => {
+      const cleanupRaw = {
+        files_deleted: 10,
+        bytes_freed: 104857600,
+        freed_mb: 100,
+      };
+
+      assert.strictEqual(isCacheCleanupResultJson(cleanupRaw), true);
+      const cleanupDomain = toCacheCleanupResult(cleanupRaw);
+      assert.strictEqual(cleanupDomain.filesDeleted, 10);
+      assert.strictEqual(cleanupDomain.bytesFreed, 104857600);
+      assert.strictEqual(cleanupDomain.freedMb, 100);
+
+      const pathsRaw = {
+        cache_dir: 'C:\\NeuroClip\\cache',
+        projects_dir: 'C:\\NeuroClip\\projects',
+      };
+      assert.strictEqual(isStoragePathsJson(pathsRaw), true);
+      const pathsDomain = toStoragePaths(pathsRaw);
+      assert.strictEqual(pathsDomain.cacheDir, 'C:\\NeuroClip\\cache');
+      assert.strictEqual(pathsDomain.projectsDir, 'C:\\NeuroClip\\projects');
+    });
+  });
+
+  describe('ED-05.1: Clippy Zero-Panic & Static Rust Invariants Audit', () => {
+    it('should verify zero forbidden unwrap/expect/panic in all new Rust storage files', () => {
+      const storageFiles = [
+        'src-tauri/src/core/mod.rs',
+        'src-tauri/src/core/storage.rs',
+        'src-tauri/src/commands/storage_cmd.rs',
+      ];
+
+      for (const relPath of storageFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.ok(fs.existsSync(fullPath), `Storage file ${relPath} must exist on disk`);
+
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const testIndex = content.indexOf('#[cfg(test)]');
+        const prodContent = testIndex !== -1 ? content.slice(0, testIndex) : content;
+
+        assert.strictEqual(
+          prodContent.includes('.unwrap()'),
+          false,
+          `Forbidden .unwrap() found in production code of ${relPath}`,
+        );
+        assert.strictEqual(
+          prodContent.includes('.expect('),
+          false,
+          `Forbidden .expect() found in production code of ${relPath}`,
+        );
+        assert.strictEqual(
+          prodContent.includes('panic!('),
+          false,
+          `Forbidden panic!() found in production code of ${relPath}`,
+        );
+      }
+    });
+  });
+
+  describe('IT-05.1: Win32 Direct Kernel Query & Mock Override Invariants', () => {
+    it('should assert Cargo.toml activates Win32_Storage_FileSystem feature', () => {
+      const cargoPath = path.resolve('src-tauri/Cargo.toml');
+      const content = fs.readFileSync(cargoPath, 'utf8');
+      assert.ok(
+        content.includes('"Win32_Storage_FileSystem"'),
+        'Cargo.toml must include Win32_Storage_FileSystem in windows-sys features',
+      );
+    });
+
+    it('should assert core/storage.rs calls GetDiskFreeSpaceExW on Windows', () => {
+      const storagePath = path.resolve('src-tauri/src/core/storage.rs');
+      const content = fs.readFileSync(storagePath, 'utf8');
+      assert.ok(
+        content.includes('GetDiskFreeSpaceExW'),
+        'core/storage.rs must call Win32 GetDiskFreeSpaceExW for high-performance volume inspection',
+      );
+    });
+
+    it('should assert core/storage.rs supports NEUROCLIP_MOCK_DISK_FREE_MB environment override', () => {
+      const storagePath = path.resolve('src-tauri/src/core/storage.rs');
+      const content = fs.readFileSync(storagePath, 'utf8');
+      assert.ok(
+        content.includes('NEUROCLIP_MOCK_DISK_FREE_MB'),
+        'core/storage.rs must check NEUROCLIP_MOCK_DISK_FREE_MB for unit testing',
+      );
+    });
+
+    it('should assert query_disk_free_mb traverses ancestors for non-existent directories', () => {
+      const storagePath = path.resolve('src-tauri/src/core/storage.rs');
+      const content = fs.readFileSync(storagePath, 'utf8');
+      assert.ok(
+        content.includes('ancestors()'),
+        'query_disk_free_mb must traverse path ancestors to find existing root volume',
+      );
+    });
+  });
+
+  describe('ED-05.2: Safe Retention Blacklist & Prunable Whitelist AST Checks', () => {
+    it('should assert PRUNABLE_EXTENSIONS only whitelists tmp and wav', () => {
+      const storagePath = path.resolve('src-tauri/src/core/storage.rs');
+      const content = fs.readFileSync(storagePath, 'utf8');
+      assert.ok(
+        content.includes('&["tmp", "wav"]'),
+        'PRUNABLE_EXTENSIONS must only permit "tmp" and "wav"',
+      );
+    });
+
+    it('should assert PROTECTED_EXTENSIONS strictly shields json, ass, srt, mp4', () => {
+      const storagePath = path.resolve('src-tauri/src/core/storage.rs');
+      const content = fs.readFileSync(storagePath, 'utf8');
+      assert.ok(
+        content.includes('PROTECTED_EXTENSIONS'),
+        'core/storage.rs must define PROTECTED_EXTENSIONS',
+      );
+      assert.ok(content.includes('"json"'), 'Must protect json files');
+      assert.ok(content.includes('"ass"'), 'Must protect ass subtitle files');
+      assert.ok(content.includes('"srt"'), 'Must protect srt subtitle files');
+      assert.ok(content.includes('"mp4"'), 'Must protect mp4 media files');
+    });
+  });
+
+  describe('IT-05.2: Module Wiring & Command Registration in lib.rs', () => {
+    it('should assert src-tauri/src/lib.rs exports core::storage and registers storage IPC commands', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const content = fs.readFileSync(libPath, 'utf8');
+      assert.ok(content.includes('pub use core::storage;'), 'lib.rs must export core::storage');
+      assert.ok(
+        content.includes('commands::check_preflight_storage'),
+        'lib.rs must register check_preflight_storage command',
+      );
+      assert.ok(
+        content.includes('commands::initialize_storage'),
+        'lib.rs must register initialize_storage command',
+      );
+      assert.ok(
+        content.includes('commands::clean_expired_cache'),
+        'lib.rs must register clean_expired_cache command',
+      );
     });
   });
 });

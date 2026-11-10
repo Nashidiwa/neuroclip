@@ -13,15 +13,20 @@ pub mod config;
 pub mod error;
 pub mod logging;
 
+#[path = "core/storage.rs"]
+pub mod storage;
+
 /// Backward-compatibility and architectural alias for core logging subsystem.
 pub mod core {
     pub use crate::logging;
+    pub use crate::storage;
 }
 
 pub use commands::AppState;
 pub use config::{
     AppConfig, CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode, SidecarPaths,
 };
+pub use core::storage;
 pub use error::{
     codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
@@ -60,7 +65,11 @@ pub fn run() {
             commands::detect_hardware,
             commands::get_recent_logs,
             commands::clear_logs,
-            commands::log_frontend_event
+            commands::log_frontend_event,
+            commands::check_preflight_storage,
+            commands::initialize_storage,
+            commands::initialize_project,
+            commands::clean_expired_cache
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {
