@@ -8,8 +8,14 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod commands;
+pub mod config;
 pub mod error;
 
+pub use commands::AppState;
+pub use config::{
+    AppConfig, CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode, SidecarPaths,
+};
 pub use error::{
     codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
@@ -31,7 +37,14 @@ pub fn ping() -> Result<String, AppError> {
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![ping]);
+        .manage(AppState::default())
+        .invoke_handler(tauri::generate_handler![
+            ping,
+            commands::get_app_config,
+            commands::save_app_config,
+            commands::get_hardware_profile,
+            commands::detect_hardware
+        ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {
         eprintln!("error while running tauri application: {err}");

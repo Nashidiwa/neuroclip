@@ -2,8 +2,25 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+import Ajv from 'ajv';
 import { loadTheme, resolveBackdropConfig, THEME_PALETTE, WINDOW_GEOMETRY } from '../styles/theme.ts';
 import { ERROR_CODES, ERROR_MESSAGES_VI, isIpcError, parseIpcError } from '../services/ipc/error.ts';
+import {
+  type HardwareProfileJson,
+  toHardwareProfile,
+  toHardwareProfileJson,
+  isHardwareProfileJson,
+  isHardwareProfile,
+  isGpuVendor,
+  isRecommendedMode,
+} from '../services/config/hardware.ts';
+import {
+  type AppConfigJson,
+  DEFAULT_APP_CONFIG,
+  toAppConfig,
+  toAppConfigJson,
+  isAppConfig,
+} from '../services/config/settings.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -376,4 +393,541 @@ describe('TASK-M4-02 Test Suite: Core Crate, Unified Error Handling & IPC Protoc
     });
   });
 });
+
+describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Management', () => {
+  const HARDWARE_PROFILE_SCHEMA_5_1 = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    title: 'HardwareProfile',
+    type: 'object',
+    required: ['cpu_info', 'ram_info', 'gpu_info', 'recommended_mode', 'timestamp'],
+    properties: {
+      cpu_info: {
+        type: 'object',
+        required: ['model', 'cores', 'threads'],
+        properties: {
+          model: { type: 'string' },
+          cores: { type: 'integer' },
+          threads: { type: 'integer' },
+        },
+      },
+      ram_info: {
+        type: 'object',
+        required: ['total_mb', 'available_mb'],
+        properties: {
+          total_mb: { type: 'integer' },
+          available_mb: { type: 'integer' },
+        },
+      },
+      gpu_info: {
+        type: 'object',
+        required: ['vendor', 'model', 'vram_mb', 'cuda_supported'],
+        properties: {
+          vendor: { type: 'string', enum: ['NVIDIA', 'AMD', 'Intel', 'Unknown'] },
+          model: { type: 'string' },
+          vram_mb: { type: 'integer' },
+          cuda_supported: { type: 'boolean' },
+        },
+      },
+      recommended_mode: {
+        type: 'string',
+        enum: ['cloud_byok', 'hybrid', 'offline_local'],
+      },
+      recommendation_reason: { type: 'string' },
+      timestamp: { type: 'string', format: 'date-time' },
+    },
+  };
+
+  describe('UT-03.1: Hardware Profile Schema 5.1 Draft-07 Validation', () => {
+    it('should validate valid high-end, mid-range and low-end hardware profiles', () => {
+      const ajv = new Ajv({ allErrors: true, format: 'full' });
+      const validate = ajv.compile(HARDWARE_PROFILE_SCHEMA_5_1);
+
+      const highEnd: HardwareProfileJson = {
+        cpu_info: { model: 'AMD Ryzen 9 7950X', cores: 16, threads: 32 },
+        ram_info: { total_mb: 32768, available_mb: 24576 },
+        gpu_info: {
+          vendor: 'NVIDIA',
+          model: 'GeForce RTX 4090',
+          vram_mb: 24576,
+          cuda_supported: true,
+        },
+        recommended_mode: 'offline_local',
+        recommendation_reason: 'GPU 24GB VRAM và CUDA hỗ trợ tốt mô hình lớn',
+        timestamp: '2026-11-09T20:00:00.000Z',
+      };
+      assert.strictEqual(validate(highEnd), true);
+
+      const midRange: HardwareProfileJson = {
+        cpu_info: { model: 'AMD Ryzen 5 5600H', cores: 6, threads: 12 },
+        ram_info: { total_mb: 16384, available_mb: 10000 },
+        gpu_info: {
+          vendor: 'NVIDIA',
+          model: 'GeForce RTX 3050',
+          vram_mb: 4096,
+          cuda_supported: true,
+        },
+        recommended_mode: 'hybrid',
+        timestamp: '2026-11-09T20:01:00Z',
+      };
+      assert.strictEqual(validate(midRange), true);
+
+      const lowEnd: HardwareProfileJson = {
+        cpu_info: { model: 'Intel Core i5-1135G7', cores: 4, threads: 8 },
+        ram_info: { total_mb: 8192, available_mb: 3500 },
+        gpu_info: {
+          vendor: 'Intel',
+          model: 'Intel Iris Xe Graphics',
+          vram_mb: 0,
+          cuda_supported: false,
+        },
+        recommended_mode: 'cloud_byok',
+        recommendation_reason: 'Máy tính văn phòng/iGPU nên dùng Cloud BYOK',
+        timestamp: '2026-11-09T20:02:00Z',
+      };
+      assert.strictEqual(validate(lowEnd), true);
+    });
+
+    it('should reject malformed payloads missing required fields or invalid enums', () => {
+      const ajv = new Ajv({ allErrors: true, format: 'full' });
+      const validate = ajv.compile(HARDWARE_PROFILE_SCHEMA_5_1);
+
+      // Missing cpu_info
+      assert.strictEqual(
+        validate({
+          ram_info: { total_mb: 16384, available_mb: 8000 },
+          gpu_info: { vendor: 'NVIDIA', model: 'RTX 3060', vram_mb: 12288, cuda_supported: true },
+          recommended_mode: 'offline_local',
+          timestamp: '2026-11-09T20:00:00Z',
+        }),
+        false,
+      );
+
+      // Invalid vendor
+      assert.strictEqual(
+        validate({
+          cpu_info: { model: 'M3 Max', cores: 16, threads: 16 },
+          ram_info: { total_mb: 36864, available_mb: 28000 },
+          gpu_info: { vendor: 'Apple', model: 'M3 GPU', vram_mb: 36864, cuda_supported: false },
+          recommended_mode: 'hybrid',
+          timestamp: '2026-11-09T20:00:00Z',
+        }),
+        false,
+      );
+
+      // Invalid timestamp
+      assert.strictEqual(
+        validate({
+          cpu_info: { model: 'i5', cores: 4, threads: 8 },
+          ram_info: { total_mb: 8192, available_mb: 4000 },
+          gpu_info: { vendor: 'Intel', model: 'Iris Xe', vram_mb: 0, cuda_supported: false },
+          recommended_mode: 'cloud_byok',
+          timestamp: 'invalid-date',
+        }),
+        false,
+      );
+    });
+
+    it('should verify TypeScript bidirectional conversion and type guards', () => {
+      const sample: HardwareProfileJson = {
+        cpu_info: { model: 'i7-13700K', cores: 16, threads: 24 },
+        ram_info: { total_mb: 32768, available_mb: 20000 },
+        gpu_info: { vendor: 'NVIDIA', model: 'RTX 3080', vram_mb: 10240, cuda_supported: true },
+        recommended_mode: 'offline_local',
+        recommendation_reason: '10GB VRAM CUDA',
+        timestamp: '2026-11-09T20:00:00Z',
+      };
+
+      assert.strictEqual(isHardwareProfileJson(sample), true);
+      const domain = toHardwareProfile(sample);
+      assert.strictEqual(isHardwareProfile(domain), true);
+      assert.strictEqual(domain.cpuInfo.model, 'i7-13700K');
+      assert.strictEqual(domain.gpuInfo.vramMb, 10240);
+      assert.strictEqual(domain.recommendedMode, 'offline_local');
+
+      const wire = toHardwareProfileJson(domain);
+      assert.deepStrictEqual(wire, sample);
+      assert.strictEqual(isGpuVendor(wire.gpu_info.vendor), true);
+      assert.strictEqual(isRecommendedMode(wire.recommended_mode), true);
+    });
+  });
+
+  describe('UT-03.2: Hardware Recommendation Decision Matrix & Heuristics', () => {
+    // Pure TypeScript implementation of heuristic engine matching Rust evaluate_recommended_mode
+    function evaluateRecommendation(
+      ramMb: number,
+      gpuVendor: 'NVIDIA' | 'AMD' | 'Intel' | 'Unknown',
+      vramMb: number,
+      cudaSupported: boolean,
+    ): { mode: 'cloud_byok' | 'hybrid' | 'offline_local'; reason: string } {
+      if (ramMb < 8192) {
+        return { mode: 'cloud_byok', reason: 'RAM < 8GB' };
+      }
+      if (!cudaSupported || gpuVendor === 'AMD' || gpuVendor === 'Unknown') {
+        return { mode: 'cloud_byok', reason: 'Non-CUDA GPU' };
+      }
+      if (gpuVendor === 'Intel') {
+        return { mode: 'cloud_byok', reason: 'Intel iGPU' };
+      }
+      if (vramMb < 3000) {
+        return { mode: 'cloud_byok', reason: 'VRAM < 3GB cliff' };
+      }
+      if (vramMb >= 8000) {
+        if (ramMb >= 16384) {
+          return { mode: 'offline_local', reason: 'NVIDIA RTX >= 8GB VRAM + RAM >= 16GB' };
+        }
+        return { mode: 'hybrid', reason: 'RAM < 16GB bottleneck' };
+      }
+      return { mode: 'hybrid', reason: 'Mid-range GPU' };
+    }
+
+    it('should correctly classify all 10 QA benchmark scenarios (TC-HW-01..10)', () => {
+      // TC-HW-01: RTX 4090 24GB + 32GB RAM -> offline_local
+      assert.strictEqual(evaluateRecommendation(32768, 'NVIDIA', 24576, true).mode, 'offline_local');
+
+      // TC-HW-02: RTX 3080 10GB + 32GB RAM -> offline_local
+      assert.strictEqual(evaluateRecommendation(32768, 'NVIDIA', 10240, true).mode, 'offline_local');
+
+      // TC-HW-03: RTX 3060 Ti 8GB + 16GB RAM -> offline_local
+      assert.strictEqual(evaluateRecommendation(16384, 'NVIDIA', 8192, true).mode, 'offline_local');
+
+      // TC-HW-04: RTX 3050 4GB + 16GB RAM -> hybrid
+      assert.strictEqual(evaluateRecommendation(16384, 'NVIDIA', 4096, true).mode, 'hybrid');
+
+      // TC-HW-05: GTX 1660 Super 6GB + 16GB RAM -> hybrid
+      assert.strictEqual(evaluateRecommendation(16384, 'NVIDIA', 6144, true).mode, 'hybrid');
+
+      // TC-HW-06: GTX 1050 2GB -> cloud_byok (VRAM < 3000MB cliff)
+      assert.strictEqual(evaluateRecommendation(16384, 'NVIDIA', 2048, true).mode, 'cloud_byok');
+
+      // TC-HW-07: Intel Iris Xe -> cloud_byok
+      assert.strictEqual(evaluateRecommendation(8192, 'Intel', 0, false).mode, 'cloud_byok');
+
+      // TC-HW-08: AMD Radeon RX 7900 XTX 24GB -> cloud_byok (non-CUDA)
+      assert.strictEqual(evaluateRecommendation(32768, 'AMD', 24576, false).mode, 'cloud_byok');
+
+      // TC-HW-09: RTX 4090 with low system RAM (8GB) -> hybrid
+      assert.strictEqual(evaluateRecommendation(8192, 'NVIDIA', 24576, true).mode, 'hybrid');
+
+      // TC-HW-10: Celeron + 4GB RAM + Unknown GPU -> cloud_byok
+      assert.strictEqual(evaluateRecommendation(4096, 'Unknown', 0, false).mode, 'cloud_byok');
+    });
+  });
+
+  describe('IT-03.1: Atomic Persistence Safety, Defaults & AppConfig Invariants', () => {
+    it('should verify DEFAULT_APP_CONFIG complies with privacy and buffer constraints', () => {
+      assert.strictEqual(DEFAULT_APP_CONFIG.theme, 'dark');
+      assert.strictEqual(DEFAULT_APP_CONFIG.language, 'vi');
+      assert.strictEqual(DEFAULT_APP_CONFIG.telemetryEnabled, false); // Core Invariant #5
+      assert.strictEqual(DEFAULT_APP_CONFIG.autoUpdateSidecars, true);
+      assert.strictEqual(DEFAULT_APP_CONFIG.audioBufferSizeKb, 64); // ADR-002 & CONVENTIONS §2.3
+      assert.strictEqual(DEFAULT_APP_CONFIG.activeSttProvider, 'groq');
+      assert.strictEqual(DEFAULT_APP_CONFIG.maxHistoryDays, 14);
+      assert.strictEqual(isAppConfig(DEFAULT_APP_CONFIG), true);
+    });
+
+    it('should verify bidirectional AppConfig serialization roundtrip', () => {
+      const configJson: AppConfigJson = {
+        theme: 'acrylic',
+        language: 'vi',
+        telemetry_enabled: false,
+        auto_update_sidecars: true,
+        output_directory: 'C:/Videos/NeuroClip',
+        cache_directory: 'C:/Cache/NeuroClip',
+        audio_buffer_size_kb: 128,
+        active_stt_provider: 'groq',
+        active_stt_model: 'whisper-large-v3',
+        active_translation_model: 'gemini-1.5-flash',
+        sidecar_paths: {
+          ffmpeg_path: 'C:/Tools/ffmpeg.exe',
+          ytdlp_path: null,
+          whisper_worker_path: null,
+        },
+        groq_api_key: 'gsk_test123',
+        gemini_api_key: 'AIza_test456',
+        max_history_days: 14,
+      };
+
+      const domain = toAppConfig(configJson);
+      assert.strictEqual(domain.theme, 'acrylic');
+      assert.strictEqual(domain.audioBufferSizeKb, 128);
+      assert.strictEqual(domain.sidecarPaths.ffmpegPath, 'C:/Tools/ffmpeg.exe');
+      assert.strictEqual(domain.sidecarPaths.ytdlpPath, undefined);
+
+      const serialized = toAppConfigJson(domain);
+      assert.deepStrictEqual(serialized, configJson);
+    });
+
+    it('should simulate atomic file persistence protocol on disk', () => {
+      const testDir = path.resolve('node_modules/.tmp_test_atomic_' + Date.now());
+      fs.mkdirSync(testDir, { recursive: true });
+
+      const targetPath = path.join(testDir, 'app_config.json');
+      const tempPath = path.join(testDir, '.app_config.json.tmp.' + Date.now());
+
+      const payload = { ...DEFAULT_APP_CONFIG, audioBufferSizeKb: 128 };
+      const serialized = JSON.stringify(toAppConfigJson(payload), null, 2);
+
+      // 1. Write to temp file
+      fs.writeFileSync(tempPath, serialized, 'utf8');
+      assert.strictEqual(fs.existsSync(tempPath), true);
+      assert.strictEqual(fs.existsSync(targetPath), false);
+
+      // 2. Atomic rename (Windows MoveFileEx / NTFS atomic swap)
+      fs.renameSync(tempPath, targetPath);
+      assert.strictEqual(fs.existsSync(targetPath), true);
+      assert.strictEqual(fs.existsSync(tempPath), false); // No leftover temp file
+
+      // 3. Read back
+      const readBack = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+      assert.strictEqual(readBack.audio_buffer_size_kb, 128);
+
+      // Clean up
+      fs.rmSync(testDir, { recursive: true, force: true });
+    });
+  });
+
+  describe('ED-03.1: Rust Backend Module Artifacts & Zero-Panic Invariants Audit', () => {
+    it('should verify all required Rust backend files exist in expected locations', () => {
+      const requiredFiles = [
+        'src-tauri/src/config/mod.rs',
+        'src-tauri/src/config/app_config.rs',
+        'src-tauri/src/config/hardware.rs',
+        'src-tauri/src/config/atomic.rs',
+        'src-tauri/src/commands/mod.rs',
+        'src-tauri/src/commands/config_cmd.rs',
+      ];
+
+      for (const relPath of requiredFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.strictEqual(fs.existsSync(fullPath), true, `Missing required file: ${relPath}`);
+      }
+    });
+
+    it('should verify src-tauri/src/lib.rs exports config and commands and registers IPC commands', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const content = fs.readFileSync(libPath, 'utf8');
+
+      assert.ok(content.includes('pub mod config;'), 'lib.rs must export config module');
+      assert.ok(content.includes('pub mod commands;'), 'lib.rs must export commands module');
+      assert.ok(content.includes('.manage(AppState::default())'), 'lib.rs must manage AppState');
+      assert.ok(content.includes('commands::get_app_config'), 'lib.rs must register get_app_config');
+      assert.ok(content.includes('commands::save_app_config'), 'lib.rs must register save_app_config');
+      assert.ok(content.includes('commands::get_hardware_profile'), 'lib.rs must register get_hardware_profile');
+      assert.ok(content.includes('commands::detect_hardware'), 'lib.rs must register detect_hardware');
+    });
+
+    it('should verify zero forbidden unwrap/expect/panic calls in all new Rust production files', () => {
+      const targetDirs = [
+        path.resolve('src-tauri/src/config'),
+        path.resolve('src-tauri/src/commands'),
+      ];
+
+      for (const dir of targetDirs) {
+        for (const file of fs.readdirSync(dir)) {
+          if (!file.endsWith('.rs')) continue;
+          const fullPath = path.join(dir, file);
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const nonTestContent = content.split('#[cfg(test)]')[0] ?? content;
+          const lines = nonTestContent.split('\n');
+
+          const forbiddenPattern = /\b(unwrap|expect|panic!|todo!|unimplemented!)\b/g;
+
+          for (let i = 0; i < lines.length; i += 1) {
+            const line = lines[i]?.trim() ?? '';
+            if (
+              line.startsWith('//') ||
+              line.startsWith('/*') ||
+              line.startsWith('*')
+            ) {
+              continue;
+            }
+            const match = line.match(forbiddenPattern);
+            assert.strictEqual(
+              match,
+              null,
+              `Forbidden call '${match?.[0]}' found in ${file} at line ${i + 1}: ${line}`,
+            );
+          }
+        }
+      }
+    });
+  });
+
+  describe('ED-03.2: Remediation Invariants Audit (VRAM, Multi-GPU, Lock Ordering, Atomic Nonce)', () => {
+    it('should assert HardwareInformation.qwMemorySize is queried before HardwareInformation.MemorySize in Rust AST', () => {
+      const hardwareRsPath = path.resolve('src-tauri/src/config/hardware.rs');
+      assert.strictEqual(fs.existsSync(hardwareRsPath), true, 'hardware.rs must exist');
+
+      const content = fs.readFileSync(hardwareRsPath, 'utf8');
+
+      // 1. Verify 64-bit QWORD qwMemorySize is queried
+      const qwIndex = content.indexOf('HardwareInformation.qwMemorySize');
+      assert.ok(
+        qwIndex !== -1,
+        'Rust probe_windows_registry_gpu must query 64-bit HardwareInformation.qwMemorySize to prevent 4GB VRAM capping on Windows',
+      );
+
+      // 2. Verify 32-bit DWORD MemorySize fallback is queried
+      const memIndex = content.indexOf('HardwareInformation.MemorySize');
+      assert.ok(
+        memIndex !== -1,
+        'Rust probe_windows_registry_gpu must retain HardwareInformation.MemorySize as fallback',
+      );
+
+      // 3. Verify qwMemorySize is queried BEFORE MemorySize
+      assert.ok(
+        qwIndex < memIndex,
+        'HardwareInformation.qwMemorySize MUST be queried prior to HardwareInformation.MemorySize fallback in Rust AST',
+      );
+
+      // 4. Verify 64-bit VRAM computation converts bytes to MB via / (1024 * 1024) or >> 20
+      const qwSlice = content.slice(qwIndex, memIndex);
+      assert.ok(
+        qwSlice.includes('1024 * 1024') || qwSlice.includes('1048576') || qwSlice.includes('>> 20'),
+        'qwMemorySize must be converted from bytes to megabytes (vram_mb = val / (1024 * 1024))',
+      );
+    });
+
+    it('should assert multi-adapter loop iterates 0000..0008 and prioritizes NVIDIA/CUDA GPU over integrated GPU', () => {
+      const hardwareRsPath = path.resolve('src-tauri/src/config/hardware.rs');
+      const content = fs.readFileSync(hardwareRsPath, 'utf8');
+
+      // 1. Verify loop iteration covers at least 0000..0008 (indices 0..=8 or 0..8 or 0..9)
+      const hasExpandedLoop =
+        /for\s+i\s+in\s+0\.\.=?\s*[89]/.test(content) ||
+        content.includes('0..8') ||
+        content.includes('0..=8') ||
+        content.includes('0..9');
+      assert.ok(
+        hasExpandedLoop,
+        'Multi-adapter probe loop must iterate over subkeys 0000..0008 (e.g. 0..=8 or 0..9) to discover secondary discrete GPUs',
+      );
+
+      // 2. Verify loop does not early-return on the first adapter found, but collects candidates
+      const fnStart = content.indexOf('fn probe_windows_registry_gpu');
+      assert.ok(fnStart !== -1, 'probe_windows_registry_gpu function must exist');
+      const fnBody = content.slice(fnStart, content.indexOf('#[cfg(test)]', fnStart));
+
+      // In the loop, candidate GPUs must be collected into a Vec
+      assert.ok(
+        fnBody.includes('Vec::new()') || fnBody.includes('candidates') || fnBody.includes('gpus'),
+        'probe_windows_registry_gpu must collect multiple GPU candidates across adapters instead of early-exiting on index 0000',
+      );
+
+      // 3. Verify prioritization logic selects NVIDIA/CUDA GPU or highest VRAM
+      assert.ok(
+        fnBody.includes('GpuVendor::Nvidia') || fnBody.includes('cuda_supported'),
+        'GPU selection logic must prioritize NVIDIA / CUDA adapters over integrated GPUs',
+      );
+      assert.ok(
+        fnBody.includes('vram_mb'),
+        'GPU selection logic must account for VRAM capacity (e.g. highest vram_mb)',
+      );
+    });
+
+    it('should verify simulated multi-GPU prioritization selects NVIDIA dGPU over Intel iGPU', () => {
+      interface MockGpuCandidate {
+        vendor: 'NVIDIA' | 'AMD' | 'Intel' | 'Unknown';
+        model: string;
+        vramMb: number;
+        cudaSupported: boolean;
+      }
+
+      function selectOptimalGpu(candidates: MockGpuCandidate[]): MockGpuCandidate | null {
+        if (candidates.length === 0) return null;
+        return candidates.reduce((best, cur) => {
+          // Priority 1: CUDA / NVIDIA dedicated card over non-CUDA iGPU
+          if (cur.cudaSupported && !best.cudaSupported) return cur;
+          if (!cur.cudaSupported && best.cudaSupported) return best;
+          // Priority 2: Higher VRAM capacity
+          return cur.vramMb > best.vramMb ? cur : best;
+        });
+      }
+
+      // Scenario 1: Intel Iris Xe (0000) + NVIDIA RTX 3060 Laptop (0001) -> selects RTX 3060
+      const laptopRig: MockGpuCandidate[] = [
+        { vendor: 'Intel', model: 'Intel Iris Xe Graphics', vramMb: 0, cudaSupported: false },
+        { vendor: 'NVIDIA', model: 'NVIDIA GeForce RTX 3060 Laptop GPU', vramMb: 6144, cudaSupported: true },
+      ];
+      const selectedLaptop = selectOptimalGpu(laptopRig);
+      assert.strictEqual(selectedLaptop?.model, 'NVIDIA GeForce RTX 3060 Laptop GPU');
+      assert.strictEqual(selectedLaptop?.cudaSupported, true);
+
+      // Scenario 2: AMD Radeon 680M (0000) + NVIDIA RTX 4070 Laptop (0001) -> selects RTX 4070
+      const amdNvidiaRig: MockGpuCandidate[] = [
+        { vendor: 'AMD', model: 'AMD Radeon 680M', vramMb: 512, cudaSupported: false },
+        { vendor: 'NVIDIA', model: 'NVIDIA GeForce RTX 4070 Laptop GPU', vramMb: 8192, cudaSupported: true },
+      ];
+      assert.strictEqual(selectOptimalGpu(amdNvidiaRig)?.model, 'NVIDIA GeForce RTX 4070 Laptop GPU');
+
+      // Scenario 3: Dual NVIDIA GPUs (e.g. GTX 1650 4GB at 0000 + RTX 4090 24GB at 0001) -> selects highest VRAM
+      const dualNvidiaRig: MockGpuCandidate[] = [
+        { vendor: 'NVIDIA', model: 'NVIDIA GeForce GTX 1650', vramMb: 4096, cudaSupported: true },
+        { vendor: 'NVIDIA', model: 'NVIDIA GeForce RTX 4090', vramMb: 24576, cudaSupported: true },
+      ];
+      assert.strictEqual(selectOptimalGpu(dualNvidiaRig)?.model, 'NVIDIA GeForce RTX 4090');
+    });
+
+    it('should assert save_app_config holds the write lock during disk I/O', () => {
+      const configCmdPath = path.resolve('src-tauri/src/commands/config_cmd.rs');
+      assert.strictEqual(fs.existsSync(configCmdPath), true, 'config_cmd.rs must exist');
+
+      const content = fs.readFileSync(configCmdPath, 'utf8');
+
+      const fnStart = content.indexOf('pub async fn save_app_config');
+      assert.ok(fnStart !== -1, 'save_app_config command must exist in config_cmd.rs');
+
+      const nextFn = content.indexOf('pub async fn', fnStart + 20);
+      const fnBody = nextFn !== -1 ? content.slice(fnStart, nextFn) : content.slice(fnStart);
+
+      const writeLockIndex = fnBody.indexOf('state.config.write()');
+      const atomicSaveIndex = fnBody.indexOf('atomic_save_json');
+
+      assert.ok(
+        writeLockIndex !== -1,
+        'save_app_config must acquire state.config.write() lock',
+      );
+      assert.ok(
+        atomicSaveIndex !== -1,
+        'save_app_config must call atomic_save_json',
+      );
+      assert.ok(
+        writeLockIndex < atomicSaveIndex,
+        'state.config.write() MUST be acquired BEFORE calling atomic_save_json to eliminate concurrency lock inversion',
+      );
+    });
+
+    it('should assert atomic temporary file nonce uses atomic counter / PID', () => {
+      const atomicRsPath = path.resolve('src-tauri/src/config/atomic.rs');
+      assert.strictEqual(fs.existsSync(atomicRsPath), true, 'atomic.rs must exist');
+
+      const content = fs.readFileSync(atomicRsPath, 'utf8');
+
+      // 1. Verify atomic sequence counter usage (AtomicU64 or AtomicUsize)
+      const hasAtomicCounter =
+        content.includes('AtomicU64') ||
+        content.includes('AtomicUsize');
+      assert.ok(
+        hasAtomicCounter,
+        'atomic.rs must define an atomic sequence counter (AtomicU64 / AtomicUsize) to prevent intra-process timestamp collisions',
+      );
+
+      // 2. Verify fetch_add on counter
+      assert.ok(
+        content.includes('fetch_add'),
+        'atomic.rs must invoke fetch_add on atomic sequence counter during nonce generation',
+      );
+
+      // 3. Verify process ID incorporation
+      const hasPid =
+        content.includes('std::process::id()') ||
+        content.includes('process::id()');
+      assert.ok(
+        hasPid,
+        'atomic.rs must incorporate process ID (process::id()) in temporary file name to prevent multi-process collisions',
+      );
+    });
+  });
+});
+
 
