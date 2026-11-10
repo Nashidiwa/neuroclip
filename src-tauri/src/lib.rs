@@ -11,6 +11,12 @@
 pub mod commands;
 pub mod config;
 pub mod error;
+pub mod logging;
+
+/// Backward-compatibility and architectural alias for core logging subsystem.
+pub mod core {
+    pub use crate::logging;
+}
 
 pub use commands::AppState;
 pub use config::{
@@ -19,6 +25,10 @@ pub use config::{
 pub use error::{
     codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
+};
+pub use logging::{
+    is_neuroclip_log_file, prune_logs, redact_secret, redact_secrets_in_text, resolve_log_dir,
+    LogEntry, PruneReport, RedactingWriter, RetentionPolicy,
 };
 
 pub const DEFAULT_WINDOW_WIDTH: f64 = 1280.0;
@@ -35,6 +45,10 @@ pub fn ping() -> Result<String, AppError> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Err(err) = logging::init_logging() {
+        eprintln!("Failed to initialize logging: {err}");
+    }
+
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
@@ -43,7 +57,10 @@ pub fn run() {
             commands::get_app_config,
             commands::save_app_config,
             commands::get_hardware_profile,
-            commands::detect_hardware
+            commands::detect_hardware,
+            commands::get_recent_logs,
+            commands::clear_logs,
+            commands::log_frontend_event
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

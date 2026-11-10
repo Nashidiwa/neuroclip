@@ -21,6 +21,14 @@ import {
   toAppConfigJson,
   isAppConfig,
 } from '../services/config/settings.ts';
+import {
+  redactSecret,
+  sanitizeLogString,
+  sanitizeLogContext,
+  toLogEntry,
+  toLogLevel,
+  isLogEntryJson,
+} from '../services/logging/index.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -926,6 +934,253 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
         hasPid,
         'atomic.rs must incorporate process ID (process::id()) in temporary file name to prevent multi-process collisions',
       );
+    });
+  });
+});
+
+describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Subsystem', () => {
+  describe('UT-04.1: Canonical Secret Redaction (Happy Path)', () => {
+    it('should mask API keys of length > 8 preserving prefix 4 and suffix 4 with [REDACTED]', () => {
+      const groqKey = 'gsk_1234567890abcdef12345678';
+      assert.strictEqual(
+        redactSecret(groqKey),
+        'gsk_[REDACTED]5678',
+        'Groq key must be redacted to gsk_[REDACTED]5678',
+      );
+
+      const geminiKey = 'AIzaSyD987654321abcdef1234567890';
+      assert.strictEqual(
+        redactSecret(geminiKey),
+        'AIza[REDACTED]7890',
+        'Gemini key must be redacted to AIza[REDACTED]7890',
+      );
+
+      const openaiKey = 'sk-proj-abcdefghijklmnopqrstuvwxyz123456';
+      assert.strictEqual(
+        redactSecret(openaiKey),
+        'sk-p[REDACTED]3456',
+        'OpenAI key must be redacted to sk-p[REDACTED]3456',
+      );
+    });
+  });
+
+  describe('UT-04.2: Edge Cases (Short Keys & Boundaries)', () => {
+    it('should mask keys <= 8 characters completely as [REDACTED]', () => {
+      assert.strictEqual(redactSecret(''), '[REDACTED]', 'Empty string must return [REDACTED]');
+      assert.strictEqual(redactSecret('short'), '[REDACTED]', '5-char string must return [REDACTED]');
+      assert.strictEqual(redactSecret('12345678'), '[REDACTED]', '8-char boundary string must return [REDACTED]');
+    });
+
+    it('should correctly redact 9-character boundary string', () => {
+      assert.strictEqual(
+        redactSecret('123456789'),
+        '1234[REDACTED]6789',
+        '9-char string must preserve 4-char prefix and 4-char suffix',
+      );
+    });
+  });
+
+  describe('UT-04.3: Multi-Provider Secret Scanning & Sanitization', () => {
+    it('should sanitize all supported providers without leaking raw secret tokens', () => {
+      const groq = 'gsk_abcdef1234567890fedcba';
+      const gemini = 'AIzaSyD987654321abcdef1234567890';
+      const openai = 'sk-proj-abcdefghijklmnopqrstuvwxyz123456';
+      const twitchAuth = 'auth-token=1234567890abcdef1234';
+      const twitchOauth = 'oauth:1234567890abcdef1234';
+      const bearer = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6';
+
+      const combinedText = `
+        Config:
+        groq=${groq}
+        gemini=${gemini}
+        openai=${openai}
+        twitch_auth=${twitchAuth}
+        twitch_oauth=${twitchOauth}
+        auth_hdr=${bearer}
+      `;
+
+      const sanitized = sanitizeLogString(combinedText);
+
+      // Verify zero occurrences of raw secret strings
+      assert.strictEqual(sanitized.includes(groq), false, 'Must not contain raw Groq key');
+      assert.strictEqual(sanitized.includes(gemini), false, 'Must not contain raw Gemini key');
+      assert.strictEqual(sanitized.includes(openai), false, 'Must not contain raw OpenAI key');
+      assert.strictEqual(sanitized.includes('1234567890abcdef1234'), false, 'Must not contain raw Twitch token');
+      assert.strictEqual(sanitized.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6'), false, 'Must not contain raw Bearer token');
+
+      // Verify presence of sanitized tokens
+      assert.ok(sanitized.includes('gsk_[REDACTED]dcba'));
+      assert.ok(sanitized.includes('AIza[REDACTED]7890'));
+      assert.ok(sanitized.includes('sk-p[REDACTED]3456'));
+      assert.ok(sanitized.includes('auth-token=[REDACTED]'));
+      assert.ok(sanitized.includes('oaut[REDACTED]1234'));
+      assert.ok(sanitized.includes('Bearer [REDACTED]'));
+    });
+  });
+
+  describe('ED-04.1: Rust Backend Module Artifacts & Zero-Panic Invariants Audit', () => {
+    it('should verify all required Rust logging files exist in expected locations', () => {
+      const requiredFiles = [
+        'src-tauri/src/logging/mod.rs',
+        'src-tauri/src/logging/secrets.rs',
+        'src-tauri/src/logging/rotation.rs',
+        'src-tauri/src/commands/log_cmd.rs',
+      ];
+
+      for (const relPath of requiredFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.strictEqual(fs.existsSync(fullPath), true, `File ${relPath} must exist on disk`);
+      }
+    });
+
+    it('should verify src-tauri/src/lib.rs exports logging and registers IPC commands', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const content = fs.readFileSync(libPath, 'utf8');
+
+      assert.ok(content.includes('pub mod logging;'), 'lib.rs must export pub mod logging;');
+      assert.ok(content.includes('pub mod core {'), 'lib.rs must export pub mod core module alias');
+      assert.ok(content.includes('pub use crate::logging;'), 'lib.rs core module must re-export logging');
+      assert.ok(content.includes('commands::get_recent_logs'), 'lib.rs must register get_recent_logs command');
+      assert.ok(content.includes('commands::clear_logs'), 'lib.rs must register clear_logs command');
+      assert.ok(content.includes('commands::log_frontend_event'), 'lib.rs must register log_frontend_event command');
+      assert.ok(content.includes('logging::init_logging()'), 'lib.rs must initialize logging in run()');
+    });
+
+    it('should verify src-tauri/Cargo.toml includes regex = "1.10"', () => {
+      const cargoPath = path.resolve('src-tauri/Cargo.toml');
+      const content = fs.readFileSync(cargoPath, 'utf8');
+      assert.ok(content.includes('regex = "1.10"'), 'Cargo.toml must declare regex = "1.10"');
+    });
+
+    it('should verify zero forbidden unwrap/expect/panic in all new Rust logging files', () => {
+      const loggingFiles = [
+        'src-tauri/src/logging/mod.rs',
+        'src-tauri/src/logging/secrets.rs',
+        'src-tauri/src/logging/rotation.rs',
+        'src-tauri/src/commands/log_cmd.rs',
+      ];
+
+      for (const relPath of loggingFiles) {
+        const fullPath = path.resolve(relPath);
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const testIndex = content.indexOf('#[cfg(test)]');
+        const prodContent = testIndex !== -1 ? content.slice(0, testIndex) : content;
+
+        assert.strictEqual(
+          prodContent.includes('.unwrap()'),
+          false,
+          `Forbidden .unwrap() found in production code of ${relPath}`,
+        );
+        assert.strictEqual(
+          prodContent.includes('.expect('),
+          false,
+          `Forbidden .expect() found in production code of ${relPath}`,
+        );
+        assert.strictEqual(
+          prodContent.includes('panic!('),
+          false,
+          `Forbidden panic!() found in production code of ${relPath}`,
+        );
+      }
+    });
+  });
+
+  describe('IT-04.1: Rust Streaming Redaction & Log Retention AST Checks', () => {
+    it('should assert RedactingWriter intercepts write and runs redact_secrets_in_text', () => {
+      const secretsPath = path.resolve('src-tauri/src/logging/secrets.rs');
+      const content = fs.readFileSync(secretsPath, 'utf8');
+
+      assert.ok(content.includes('pub struct RedactingWriter<W: Write>'), 'Must define RedactingWriter');
+      assert.ok(content.includes('impl<W: Write> Write for RedactingWriter<W>'), 'Must implement Write for RedactingWriter');
+      assert.ok(content.includes('redact_secrets_in_text'), 'RedactingWriter must call redact_secrets_in_text');
+    });
+
+    it('should assert RetentionPolicy constants match SSOT specifications (14 days, 50MB ceiling, 30MB low-water mark)', () => {
+      const rotationPath = path.resolve('src-tauri/src/logging/rotation.rs');
+      const content = fs.readFileSync(rotationPath, 'utf8');
+
+      assert.ok(content.includes('max_age_days: 14'), 'RetentionPolicy default max_age_days must be 14');
+      assert.ok(
+        content.includes('50 * 1024 * 1024'),
+        'RetentionPolicy default max_dir_size_bytes must be 50MB (50 * 1024 * 1024)',
+      );
+      assert.ok(
+        content.includes('30 * 1024 * 1024'),
+        'RetentionPolicy default target_dir_size_bytes must be 30MB (30 * 1024 * 1024)',
+      );
+    });
+
+    it('should assert resolve_log_dir supports NEUROCLIP_LOG_DIR environment override', () => {
+      const modPath = path.resolve('src-tauri/src/logging/mod.rs');
+      const content = fs.readFileSync(modPath, 'utf8');
+
+      assert.ok(
+        content.includes('NEUROCLIP_LOG_DIR'),
+        'resolve_log_dir must check NEUROCLIP_LOG_DIR for isolated test directories',
+      );
+      assert.ok(
+        content.includes('.try_init()'),
+        'init_logging_with_dir must use .try_init() to eliminate multi-init test collisions',
+      );
+    });
+  });
+
+  describe('IT-04.2: Frontend Logging Contracts & Wire Mapping Invariants', () => {
+    it('should verify all required frontend logging source files exist', () => {
+      const frontendFiles = [
+        'src/services/logging/types.ts',
+        'src/services/logging/redactor.ts',
+        'src/services/logging/logger.ts',
+        'src/services/logging/index.ts',
+        'src/stores/useLogStore.ts',
+      ];
+
+      for (const relPath of frontendFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.strictEqual(fs.existsSync(fullPath), true, `Frontend file ${relPath} must exist on disk`);
+      }
+    });
+
+    it('should verify LogEntryJson and LogEntry type guards and converters', () => {
+      const validJson = {
+        timestamp: '2026-11-10T04:15:30.123Z',
+        level: 'WARN',
+        target: 'neuroclip::ingestion',
+        message: 'Network retry 2/3',
+        fields: { vodId: '98765' },
+        line: 88,
+        file: 'ingestion.rs',
+      };
+
+      assert.strictEqual(isLogEntryJson(validJson), true, 'Valid LogEntryJson must pass type guard');
+      assert.strictEqual(isLogEntryJson({ bad: 'payload' }), false, 'Malformed payload must be rejected');
+
+      const domain = toLogEntry(validJson);
+      assert.strictEqual(domain.level, 'warn', 'Wire WARN must normalize to lowercase warn');
+      assert.strictEqual(domain.target, 'neuroclip::ingestion');
+      assert.strictEqual(domain.message, 'Network retry 2/3');
+      assert.strictEqual(domain.line, 88);
+      assert.strictEqual(domain.file, 'ingestion.rs');
+      assert.ok(domain.id.startsWith('log-'));
+
+      assert.strictEqual(toLogLevel('ERROR'), 'error');
+      assert.strictEqual(toLogLevel('DEBUG'), 'debug');
+      assert.strictEqual(toLogLevel('UNKNOWN'), 'info');
+    });
+
+    it('should verify sanitizeLogContext handles complex nested objects without throwing', () => {
+      const context = {
+        key: 'gsk_1234567890abcdef12345678',
+        meta: {
+          sub: 'AIzaSyD987654321abcdef1234567890',
+        },
+      };
+
+      const sanitized = sanitizeLogContext(context);
+      assert.ok(sanitized);
+      assert.strictEqual(sanitized['key'], 'gsk_[REDACTED]5678');
+      const meta = sanitized['meta'] as Record<string, unknown>;
+      assert.strictEqual(meta['sub'], 'AIza[REDACTED]7890');
     });
   });
 });
