@@ -11,6 +11,7 @@
 pub mod commands;
 pub mod config;
 pub mod error;
+pub mod ingestion;
 pub mod logging;
 
 #[path = "core/storage.rs"]
@@ -30,6 +31,10 @@ pub use core::storage;
 pub use error::{
     codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
+};
+pub use ingestion::{
+    AudioChunk, AudioEnergyWindow, AudioRingBuffer, AudioStreamValidator, BrowserType,
+    CookieSource, IngestOptions, IngestProgressPayload, VodManifest, VodMetadata,
 };
 pub use logging::{
     is_neuroclip_log_file, prune_logs, redact_secret, redact_secrets_in_text, resolve_log_dir,
@@ -69,7 +74,12 @@ pub fn run() {
             commands::check_preflight_storage,
             commands::initialize_storage,
             commands::initialize_project,
-            commands::clean_expired_cache
+            commands::clean_expired_cache,
+            commands::start_vod_ingestion,
+            commands::cancel_vod_ingestion,
+            commands::probe_vod,
+            commands::get_vod_manifest,
+            commands::extract_pcm_stream
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

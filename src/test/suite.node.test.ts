@@ -39,6 +39,14 @@ import {
   toCacheCleanupResult,
 } from '../services/ipc/storage.ts';
 import { MIN_REQUIRED_DISK_SPACE_MB } from '../stores/useProjectStore.ts';
+import {
+  type VodManifestJson,
+  type IngestProgressEvent,
+  toVodManifest,
+  isVodManifestJson,
+  isVodMetadataJson,
+  isIngestProgressEvent,
+} from '../services/ipc/ingestion.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -1374,5 +1382,305 @@ describe('TASK-M4-05 Test Suite: Storage Preflight Check, Cache Management & Pro
     });
   });
 });
+
+describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction Pipeline', () => {
+  describe('UT-06.1 & UT-06.2: Ingestion Domain Contracts & Schema 5.2 Validation', () => {
+    const vodManifestSchema = {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      title: 'VodManifest',
+      type: 'object',
+      required: [
+        'vod_id',
+        'source_type',
+        'title',
+        'duration_seconds',
+        'audio_path',
+        'created_at',
+      ],
+      properties: {
+        vod_id: { type: 'string' },
+        source_type: {
+          type: 'string',
+          enum: ['twitch_vod', 'youtube_vod', 'local_file'],
+        },
+        original_url: { type: ['string', 'null'] },
+        title: { type: 'string' },
+        streamer: { type: ['string', 'null'] },
+        duration_seconds: { type: 'number' },
+        audio_path: { type: 'string' },
+        chat_file_path: { type: ['string', 'null'] },
+        video_stream_url: { type: ['string', 'null'] },
+        local_video_path: { type: ['string', 'null'] },
+        created_at: { type: 'string' },
+      },
+      additionalProperties: true,
+    };
+
+    const ajv = new Ajv();
+    const validate = ajv.compile(vodManifestSchema);
+
+    it('UT-06.1 (Happy Path): should validate valid Schema 5.2 vod_manifest.json with all 6 required fields', () => {
+      const validPayload: VodManifestJson = {
+        vod_id: 'vod_neuro_singing_2026',
+        source_type: 'youtube_vod',
+        original_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        title: 'Neuro-sama AI Karaoke Marathon',
+        streamer: 'Vedal987',
+        duration_seconds: 28800.0, // 8 hours
+        audio_path: 'C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache\\vod_neuro_audio.m4a',
+        created_at: '2026-11-10T12:00:00Z',
+      };
+
+      const isValid = validate(validPayload);
+      assert.strictEqual(isValid, true, JSON.stringify(validate.errors));
+      assert.strictEqual(isVodManifestJson(validPayload), true);
+
+      const domain = toVodManifest(validPayload);
+      assert.strictEqual(domain.vodId, 'vod_neuro_singing_2026');
+      assert.strictEqual(domain.sourceType, 'youtube_vod');
+      assert.strictEqual(domain.durationSeconds, 28800.0);
+      assert.strictEqual(domain.title, 'Neuro-sama AI Karaoke Marathon');
+      assert.strictEqual(domain.streamer, 'Vedal987');
+      assert.strictEqual(domain.audioPath, validPayload.audio_path);
+    });
+
+    it('UT-06.2 (Failure Path): should reject malformed payloads missing required fields or invalid source_type', () => {
+      const missingDuration = {
+        vod_id: 'vod_1',
+        source_type: 'twitch_vod',
+        title: 'Stream',
+        audio_path: '/path/audio.aac',
+        created_at: '2026-11-10T12:00:00Z',
+      };
+      assert.strictEqual(validate(missingDuration), false);
+      assert.strictEqual(isVodManifestJson(missingDuration), false);
+
+      const invalidSource = {
+        vod_id: 'vod_2',
+        source_type: 'unknown_streaming_service',
+        title: 'Stream',
+        duration_seconds: 120,
+        audio_path: '/path/audio.aac',
+        created_at: '2026-11-10T12:00:00Z',
+      };
+      assert.strictEqual(validate(invalidSource), false);
+      assert.strictEqual(isVodManifestJson(invalidSource), false);
+
+      const missingAudioPath = {
+        vod_id: 'vod_3',
+        source_type: 'local_file',
+        title: 'Stream',
+        duration_seconds: 120,
+        created_at: '2026-11-10T12:00:00Z',
+      };
+      assert.strictEqual(validate(missingAudioPath), false);
+      assert.strictEqual(isVodManifestJson(missingAudioPath), false);
+    });
+
+    it('should verify IngestProgressEvent type guard and properties', () => {
+      const event: IngestProgressEvent = {
+        taskId: 'vod_123',
+        stage: 'downloading_audio',
+        percent: 45.2,
+        speedKbps: 5120.0,
+        etaSec: 42,
+      };
+      assert.strictEqual(isIngestProgressEvent(event), true);
+      assert.strictEqual(isIngestProgressEvent(null), false);
+      assert.strictEqual(isIngestProgressEvent({ percent: '45.2' }), false);
+    });
+
+    it('should verify VodMetadata type guard for probe responses', () => {
+      const validMeta = {
+        id: 'dQw4w9WgXcQ',
+        title: 'Neuro stream',
+        uploader: 'vedal987',
+        duration: 3600,
+        is_live: false,
+      };
+      assert.strictEqual(isVodMetadataJson(validMeta), true);
+      assert.strictEqual(isVodMetadataJson({ title: 'Only Title' }), false);
+    });
+  });
+
+  describe('ED-06.1: Clippy Zero-Panic & Static Rust Invariants Audit for Ingestion', () => {
+    it('should verify zero forbidden unwrap/expect/panic in all Rust ingestion files', () => {
+      const ingestionFiles = [
+        'src-tauri/src/ingestion/mod.rs',
+        'src-tauri/src/ingestion/cookies.rs',
+        'src-tauri/src/ingestion/buffer.rs',
+        'src-tauri/src/ingestion/validator.rs',
+        'src-tauri/src/ingestion/streamer.rs',
+        'src-tauri/src/commands/ingest_cmd.rs',
+      ];
+
+      for (const relPath of ingestionFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.ok(fs.existsSync(fullPath), `Ingestion file ${relPath} must exist on disk`);
+
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const testIndex = content.indexOf('#[cfg(test)]');
+        const prodContent = testIndex !== -1 ? content.slice(0, testIndex) : content;
+
+        assert.strictEqual(
+          prodContent.includes('.unwrap()'),
+          false,
+          `Forbidden .unwrap() found in production code of ${relPath}`,
+        );
+        assert.strictEqual(
+          prodContent.includes('.expect('),
+          false,
+          `Forbidden .expect() found in production code of ${relPath}`,
+        );
+        assert.strictEqual(
+          prodContent.includes('panic!('),
+          false,
+          `Forbidden panic!() found in production code of ${relPath}`,
+        );
+      }
+    });
+  });
+
+  describe('IT-06.1: Audio-First Invariant, FFmpeg Pipe & Bounded Buffer AST Checks', () => {
+    it('should assert FFmpeg command builder enforces 16kHz Mono PCM flags and pipe output', () => {
+      const streamerPath = path.resolve('src-tauri/src/ingestion/streamer.rs');
+      const content = fs.readFileSync(streamerPath, 'utf8');
+
+      // Flags: -vn -sn -dn -f s16le -ac 1 -ar 16000 pipe:1
+      assert.ok(content.includes('"-vn"'), 'Must disable video track (-vn)');
+      assert.ok(content.includes('"-sn"'), 'Must disable subtitle track (-sn)');
+      assert.ok(content.includes('"-dn"'), 'Must disable data stream (-dn)');
+      assert.ok(content.includes('"-f"'), 'Must specify format (-f)');
+      assert.ok(content.includes('"s16le"'), 'Must enforce signed 16-bit little-endian (s16le)');
+      assert.ok(content.includes('"16000"'), 'Must enforce 16kHz sampling rate');
+      assert.ok(content.includes('"pipe:1"'), 'Must stream over pipe stdout (pipe:1)');
+    });
+
+    it('should assert Bounded Queue limits channel capacity and chunk size (low RAM footprint <= 5MB)', () => {
+      const bufferPath = path.resolve('src-tauri/src/ingestion/buffer.rs');
+      const content = fs.readFileSync(bufferPath, 'utf8');
+
+      assert.ok(
+        content.includes('DEFAULT_CHUNK_SIZE_BYTES: usize = 64 * 1024'),
+        'DEFAULT_CHUNK_SIZE_BYTES must be 64KB',
+      );
+      assert.ok(
+        content.includes('DEFAULT_QUEUE_CAPACITY: usize = 16'),
+        'DEFAULT_QUEUE_CAPACITY must be 16 chunks (~1MB RAM footprint)',
+      );
+      assert.ok(
+        content.includes('MAX_PIPELINE_RAM_CAP_BYTES: usize = 5 * 1024 * 1024'),
+        'MAX_PIPELINE_RAM_CAP_BYTES must be capped at 5MB',
+      );
+    });
+
+    it('should assert AudioStreamValidator handles carry-over byte and 44-byte WAV header', () => {
+      const validatorPath = path.resolve('src-tauri/src/ingestion/validator.rs');
+      const content = fs.readFileSync(validatorPath, 'utf8');
+
+      assert.ok(content.includes('carry_byte: Option<u8>'), 'Must maintain carry_byte state for odd bytes');
+      assert.ok(content.includes('WAV_HEADER_SIZE: usize = 44'), 'Must define 44-byte WAV header size');
+      assert.ok(content.includes('b"RIFF"'), 'Must detect RIFF header');
+      assert.ok(content.includes('b"WAVE"'), 'Must detect WAVE magic bytes');
+    });
+
+    it('should assert AudioRingBuffer implements circular sliding window without heap reallocation', () => {
+      const bufferPath = path.resolve('src-tauri/src/ingestion/buffer.rs');
+      const content = fs.readFileSync(bufferPath, 'utf8');
+
+      assert.ok(content.includes('pub struct AudioRingBuffer'), 'Must define AudioRingBuffer');
+      assert.ok(content.includes('push_samples'), 'Must implement push_samples');
+      assert.ok(content.includes('pop_samples'), 'Must implement pop_samples');
+      assert.ok(content.includes('peek_samples'), 'Must implement peek_samples');
+    });
+  });
+
+  describe('ED-06.2: Anti-Bot Defense, Cookie Arguments & UA Rotation AST Checks', () => {
+    it('should assert yt-dlp cookie arguments builder supports browser and file cookies', () => {
+      const cookiesPath = path.resolve('src-tauri/src/ingestion/cookies.rs');
+      const content = fs.readFileSync(cookiesPath, 'utf8');
+
+      assert.ok(content.includes('--cookies-from-browser'), 'Must support --cookies-from-browser');
+      assert.ok(content.includes('--cookies'), 'Must support --cookies file argument');
+      assert.ok(content.includes('Chrome'), 'Must support Chrome');
+      assert.ok(content.includes('Firefox'), 'Must support Firefox');
+      assert.ok(content.includes('Edge'), 'Must support Edge');
+    });
+
+    it('should assert Desktop User-Agent rotation pool targets modern Windows 10/11 environments', () => {
+      const cookiesPath = path.resolve('src-tauri/src/ingestion/cookies.rs');
+      const content = fs.readFileSync(cookiesPath, 'utf8');
+
+      assert.ok(content.includes('Windows NT 10.0; Win64; x64'), 'Must target Windows 10/11 64-bit');
+      assert.ok(content.includes('get_rotated_desktop_user_agent'), 'Must provide UA rotation mechanism');
+    });
+  });
+
+  describe('ED-06.3: Dual-layer Process Lifecycle & Live Stream Guardrail AST Checks', () => {
+    it('should assert Dual-Layer Process Lifecycle: kill_on_drop, ChildProcessGuard, and Windows Job Object', () => {
+      const streamerPath = path.resolve('src-tauri/src/ingestion/streamer.rs');
+      const content = fs.readFileSync(streamerPath, 'utf8');
+
+      assert.ok(content.includes('kill_on_drop(true)'), 'Command must set kill_on_drop(true)');
+      assert.ok(content.includes('pub struct ChildProcessGuard'), 'Must define ChildProcessGuard');
+      assert.ok(content.includes('start_kill()'), 'ChildProcessGuard drop must call start_kill()');
+      assert.ok(content.includes('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'), 'Must configure JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE');
+      assert.ok(content.includes('assign_child_to_job_guard'), 'Must assign spawned processes to Windows Job Object');
+      assert.ok(content.includes('assign_process'), 'WindowsJobObjectGuard must implement assign_process');
+      assert.ok(content.includes('assign_child_process'), 'WindowsJobObjectGuard must implement assign_child_process');
+    });
+
+    it('should assert fast live stream rejection guardrail checks is_live flag', () => {
+      const streamerPath = path.resolve('src-tauri/src/ingestion/streamer.rs');
+      const content = fs.readFileSync(streamerPath, 'utf8');
+
+      assert.ok(content.includes('is_live'), 'Must inspect is_live metadata flag');
+      assert.ok(
+        content.includes('LiveStreamUnsupported'),
+        'Must return LiveStreamUnsupported for active live streams',
+      );
+    });
+
+    it('should assert pre-flight storage check enforces 5GB threshold before starting ingestion', () => {
+      const streamerPath = path.resolve('src-tauri/src/ingestion/streamer.rs');
+      const content = fs.readFileSync(streamerPath, 'utf8');
+
+      assert.ok(
+        content.includes('check_disk_space'),
+        'Must call check_disk_space prior to launching download',
+      );
+    });
+  });
+
+  describe('IT-06.2: Module Wiring & Command Registration in lib.rs', () => {
+    it('should assert src-tauri/src/lib.rs exports ingestion module and registers IPC commands', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const content = fs.readFileSync(libPath, 'utf8');
+
+      assert.ok(content.includes('pub mod ingestion;'), 'lib.rs must declare pub mod ingestion');
+      assert.ok(
+        content.includes('commands::start_vod_ingestion'),
+        'lib.rs must register start_vod_ingestion command',
+      );
+      assert.ok(
+        content.includes('commands::cancel_vod_ingestion'),
+        'lib.rs must register cancel_vod_ingestion command',
+      );
+      assert.ok(
+        content.includes('commands::probe_vod'),
+        'lib.rs must register probe_vod command',
+      );
+      assert.ok(
+        content.includes('commands::get_vod_manifest'),
+        'lib.rs must register get_vod_manifest command',
+      );
+      assert.ok(
+        content.includes('commands::extract_pcm_stream'),
+        'lib.rs must register extract_pcm_stream command',
+      );
+    });
+  });
+});
+
 
 
