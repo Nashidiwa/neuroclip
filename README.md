@@ -21,9 +21,10 @@
 
 [Overview](#-tổng-quan-dự-án) •
 [v1 Status](#-implementation-status-v1) •
-[Implemented Features](#-tính-năng-đã-triển-khai-task-1---task-6) •
-[Development Roadmap](#-development-roadmap-v1-task-7---task-32) •
-[Architecture](#-architecture--tech-stack) •
+[Implemented Features](#-current-implementation) •
+[Development Roadmap](#️-lộ-trình-phát-triển-v1-milestone-roadmap) •
+[Progress](#-tiến-độ-milestone)
+[Architecture](#️-architecture--tech-stack) •
 [Install & Run](#-yêu-cầu-môi-trường--setup) •
 [Folder Structure](#-folder-structure) •
 [Contribution](#-contributing--governance) •
@@ -72,155 +73,104 @@ Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô h�
 
 ---
 
-## ⚡ Tính năng đã triển khai (Task 1 - Task 6)
+## ⚡ Current Implementation
 
-Mã nguồn của 6 tasks đầu tiên đã hoàn thành và được kiểm thử toàn diện qua 508 bài kiểm tra tự động:
+6 tasks đầu tiên đã hoàn thành và được kiểm thử toàn diện qua **508 test tự động** (433 Vitest + 75 Node runner):
 
-### 1. Tauri v2 Desktop Foundation & Acrylic/Mica Dark Theme (`TASK-M4-01`)
-- **Native Windows Shell**: Khởi chạy trên nền tảng Tauri v2 WebView2 với mức tiêu thụ RAM tĩnh $\le 90\text{MB}$ khi chạy không tải.
-- **Neuro-sama Design System**: Bảng màu Dark Theme lấy cảm hứng từ nhân vật:
-  - Nền chính: `#12131C` (Primary Dark), Nền phụ: `#1A1C28`, Thẻ chứa: `#24273A`, Viền: `#2E324A`
-  - Accent Neuro (Hồng pastel): `#FFB6C1`
-  - Accent Evil (Đỏ tươi): `#FF0055`
-  - Accent Vedal (Xanh lá rùa): `#98FB98`
-  - Accent Guest (Hổ phách): `#FFA726` | Accent Chat (Tím nhạt): `#B388FF`
-- **Tùy biến cửa sổ**: Kích thước mặc định $1280 \times 800$ (kích thước tối thiểu $1024 \times 640$), hỗ trợ hiệu ứng Windows Acrylic / Mica material với cơ chế Fallback an toàn về Solid Color `#12131C` trên các bản Windows 10 cũ.
-
-### 2. Unified Error Handling & Type-Safe IPC Error Protocol (`TASK-M4-02`)
-- **Phân cấp lỗi toàn diện (Rust Backend)**: Triển khai enum `AppError` bằng `thiserror` với 39 mã lỗi canonical cố định (`ERR_INGEST_*`, `ERR_STT_*`, `ERR_HIGHLIGHT_*`, `ERR_TRANSLATE_*`, `ERR_EXPORT_*`, `ERR_STORAGE_*`, `ERR_CONFIG_*`).
-- **Zero-Panic Invariant**: Áp dụng nghiêm ngặt các deny rule của Clippy (`clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`) trên toàn bộ crate backend; 100% các Tauri IPC command trả về `Result<T, AppError>`.
-- **Đóng gói bao bì IPC Type-Safe**: Tự động chuyển đổi sang giao diện `IpcErrorResponse` cho TypeScript Frontend, đi kèm catalog mô tả tiếng Việt chi tiết và phân loại lỗi có thể phục hồi (`isRecoverableError`).
-- **Giao diện phòng thủ React**: Bộ component `ErrorBoundary` và `ErrorBanner` hiển thị chi tiết kỹ thuật có thể thu gọn, tính năng sao chép lỗi 1-chạm vào Clipboard và nút kích hoạt thử lại (Retry).
-
-### 3. Shared Types, Hardware Profiling & Atomic Config Management (`TASK-M4-03`)
-- **Khảo sát phần cứng không nghẽn luồng**: Truy vấn thông số CPU cores, RAM khả dụng và GPU rời qua Windows Registry (`qwMemorySize`) trong vòng $\le 200\text{ms}$. Loại bỏ hoàn toàn lỗi tràn số VRAM 4095MB trên Windows và tự động ưu tiên card đồ họa NVIDIA CUDA rời trên hệ thống Optimus đa GPU.
-- **Tuân thủ Data Contract Schema 5.1**: Sinh dữ liệu `hardware_profile.json` và phân loại tự động 3 chế độ vận hành: `cloud_byok`, `hybrid`, `offline_local`.
-- **Ghi cấu hình đĩa nguyên tử (Atomic File Persistence)**: Ghi file cấu hình tạm thời với chuỗi entropy ngẫu nhiên (`pid`, `nonce`, `seq`), thực hiện `sync_all()` xả bộ nhớ đệm ổ cứng và đổi tên file nguyên tử ở cấp hệ điều hành (Atomic OS Rename), ngăn chặn triệt để nguy cơ file JSON bị 0-byte khi máy tính bị sập nguồn đột ngột.
-- **Frontend Reactive Store**: Module Zustand `useSettingsStore` với cập nhật lạc quan (optimistic updates), cơ chế khóa chống lưu trùng lặp (save re-entrancy guard) và đồng bộ cấu hình qua IPC command có bảo vệ bằng `RwLock`.
-
-### 4. Structured NDJSON Logging, Rotation & Privacy Secret Redaction (`TASK-M4-04`)
-- **Structured NDJSON Tracing**: Hạ tầng ghi log bất đồng bộ không gây nghẽn luồng sử dụng `tracing` và `tracing-appender`, tự động xoay vòng file hàng ngày (`neuroclip-YYYY-MM-DD.log`).
-- **Khử trùng thông tin nhạy cảm hai lớp (Dual-Layer Secret Redaction)**: Tự động quét regex và làm mờ (`[REDACTED]`) các chuỗi khóa API nhạy cảm trước khi ghi ra đĩa hoặc chuyển qua IPC:
-  - Groq API Key (`gsk_*`), Google Gemini Key (`AIza*`), OpenAI Key (`sk-*`), Twitch OAuth tokens.
-- **Bảo vệ dung lượng đĩa tự động**: Giới hạn thời gian lưu trữ tối đa 14 ngày; tự động dọn dẹp các tệp log cũ nhất xuống dưới 30MB khi tổng dung lượng thư mục log vượt quá ngưỡng trần 50MB.
-- **Frontend Log Viewer**: Hàng đợi FIFO đệm log phía client (tự động xả khi đạt 25 bản ghi hoặc debounce 500ms, lập tức gửi nếu gặp sự kiện `ERROR`) và bộ đệm xoay vòng 1,000 dòng (`useLogStore`) hỗ trợ tìm kiếm và lọc mức độ nghiêm trọng.
-
-### 5. Storage Pre-flight Check & Project Cache Management (`TASK-M4-05`)
-- **Kiểm tra dung lượng đĩa trước khi tải**: Gọi trực tiếp Win32 kernel API `GetDiskFreeSpaceExW` kèm duyệt cây thư mục tổ tiên (Ancestor Traversal) với thời gian phản hồi $\le 1\text{ms}$ (không chạy tiến trình shell phụ).
-- **Ngưỡng chặn an toàn 5GB (5120MB)**: Ngăn chặn tác vụ tải và trả về mã lỗi `ERR_INGEST_DISK_FULL` khi dung lượng ổ đĩa không đủ, bảo vệ hệ điều hành không bị đóng băng do tràn đĩa.
-- **Không gian dự án cách ly**: Tự động quản lý cấu trúc thư mục tại `%LOCALAPPDATA%/NeuroClip/projects/<project_id>/` và thư mục đệm `cache/`, áp dụng thuật toán chuẩn hóa chống tấn công tràn đường dẫn (Path Traversal Sanitization).
-- **Dọn dẹp bộ nhớ đệm thông minh**: Tự động thanh lọc các tệp tạm `.tmp` và `.wav` cũ hơn 7 ngày mà tuyệt đối bảo vệ các tệp dự án cốt lõi (`.json`, `.ass`, `.srt`, `.mp4`). Quản lý trạng thái bằng `useProjectStore` với monotonic sequence counter chống xung đột race condition.
-
-### 6. Audio-First FFmpeg 16kHz PCM Ingestion Pipeline (`TASK-M4-06`)
-- **Thu nạp luồng âm thanh không tải video**: Tích hợp `yt-dlp` và `ffmpeg` trích xuất luồng âm thanh trực tuyến từ URL Twitch VOD / YouTube VOD, tiết kiệm $\ge 98.5\%$ dung lượng mạng và ổ đĩa (VOD 8 tiếng 30GB video chuyển thành ~400MB audio AAC).
-- **Transcoding trực tiếp sang 16kHz Mono PCM s16le**: Chuyển đổi định dạng âm thanh chuẩn hóa cho Whisper qua đường ống pipe `stdout` thời gian thực mà không ghi file trung gian dung lượng lớn.
-- **Áp lực ngược giới hạn bộ nhớ (Bounded Backpressure)**: Hàng đợi `BoundedAudioQueue` giới hạn 16 khối $\times$ 64KB (~1MB RAM trần), áp lực trực tiếp lên pipe của hệ điều hành để hãm tốc độ giải mã của FFmpeg khớp với tốc độ tiêu thụ downstream.
-- **Diệt trừ tiến trình ma (Zero Zombie Processes)**: Kết hợp cơ chế Tokio `kill_on_drop` với Windows Job Objects (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`), cam kết 100% tiến trình con `ffmpeg.exe` và `yt-dlp.exe` bị hủy sạch trong $\le 300\text{ms}$ khi NeuroClip bị tắt hoặc crash đột ngột.
-- **Bảo toàn ranh giới mẫu âm thanh**: Module `AudioStreamValidator` lưu vết byte lẻ (carry-over byte) để bảo toàn ranh giới mẫu 2-byte PCM và tự động loại bỏ 44-byte WAV header mà không làm hỏng dữ liệu thô.
-- **Cơ chế chống chặn bot YouTube**: Hỗ trợ nạp cookie trực tiếp từ trình duyệt (`--cookies-from-browser chrome/firefox/edge`), đọc tệp `cookies.txt` và xoay vòng User-Agent desktop Windows 10/11.
-- **Chặn phát trực tiếp sớm**: Phát hiện và từ chối các luồng livestream chưa kết thúc (`is_live == true`) trong $\le 500\text{ms}$ với mã `ERR_INGEST_LIVE_STREAM_UNSUPPORTED`, ngăn nguy cơ ghi âm vô tận làm tràn ổ đĩa.
-- **Giao diện Ingestion Dashboard**: Màn hình `IngestionDashboard` và store `useIngestionStore` cho phép dán URL, thăm dò metadata (tiêu đề, thời lượng, streamer), theo dõi thanh tiến độ tải 1Hz và xuất tệp giao kèo `vod_manifest.json` tuân thủ JSON Schema 5.2.
+- **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
+  - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
+  - Giao diện Dark Theme lấy cảm hứng từ nhân vật Neuro-sama (`#12131C`, `#1A1C28`, Accent Pink `#FFB6C1`, Evil `#FF0055`, Vedal `#98FB98`), hỗ trợ hiệu ứng Acrylic/Mica và tự động fallback về màu đặc an toàn.
+- **Xử lý lỗi hợp nhất & Giao thức IPC (`TASK-M4-02`)**:
+  - Enum `AppError` (`thiserror`) chuẩn hóa 39 mã lỗi định danh (`ERR_*`), thực thi chính sách zero-panic tĩnh trên Rust backend.
+  - Tự động đóng gói `IpcErrorResponse` cho TypeScript kèm giải thích tiếng Việt và phân loại lỗi có thể phục hồi; React `ErrorBoundary` và `ErrorBanner` hiển thị thông báo thân thiện và nút thử lại (Retry).
+- **Thăm dò phần cứng & Quản lý cấu hình nguyên tử (`TASK-M4-03`)**:
+  - Truy vấn CPU, RAM và GPU VRAM rời qua Windows Registry (`qwMemorySize`) trong $\le 200\text{ms}$, triệt tiêu lỗi tràn số 4095MB VRAM và tương thích chuẩn Schema 5.1 (`hardware_profile.json`).
+  - Ghi cấu hình đĩa nguyên tử (Atomic OS Rename + `sync_all()`) chống mất dữ liệu hoặc hỏng file JSON khi sập nguồn đột ngột; quản lý cấu hình bằng `useSettingsStore` có khóa chống ghi đè đồng thời.
+- **Ghi log cấu trúc & Che giấu thông tin nhạy cảm (`TASK-M4-04`)**:
+  - Structured NDJSON logging bất đồng bộ bằng `tracing`, tự động xoay vòng file hàng ngày (`neuroclip-YYYY-MM-DD.log`), lưu tối đa 14 ngày và giới hạn thư mục log $\le 50\text{MB}$.
+  - Bộ lọc bảo mật 2 lớp tự động che giấu (`[REDACTED]`) các API Key (Groq `gsk_*`, Gemini `AIza*`, OpenAI `sk-*`) và Twitch OAuth Token trước khi ghi đĩa hoặc gửi qua IPC; UI Log Viewer có hàng đợi FIFO và ring-buffer 1,000 dòng.
+- **Kiểm tra dung lượng đĩa & Bộ nhớ đệm dự án (`TASK-M4-05`)**:
+  - Gọi Win32 kernel `GetDiskFreeSpaceExW` trực tiếp ($\le 1\text{ms}$); chặn tác vụ tải và trả về mã `ERR_INGEST_DISK_FULL` khi ổ đĩa còn dưới 5GB trống để bảo vệ hệ điều hành.
+  - Quản lý không gian làm việc dự án cách ly tại `%LOCALAPPDATA%/NeuroClip/`, chuẩn hóa chống path traversal và tự động dọn dẹp cache `.tmp`/`.wav` an toàn mà không ảnh hưởng tệp dự án cốt lõi (`.json`, `.ass`, `.srt`, `.mp4`).
+- **Pipeline Audio-First Ingestion (`TASK-M4-06`)**:
+  - Thu nạp luồng âm thanh trực tiếp từ URL Twitch/YouTube VOD bằng `yt-dlp` và transcode sang 16kHz mono PCM qua FFmpeg stdout pipe, tiết kiệm $\ge 98.5\%$ dung lượng mạng và ổ đĩa (VOD 8h 30GB video chỉ tiêu tốn ~400MB audio).
+  - Áp dụng hàng đợi `BoundedAudioQueue` giới hạn RAM $\le 1\text{MB}$, cơ chế diệt tiến trình con triệt để (Tokio `kill_on_drop` + Windows Job Object) đảm bảo 0 zombie process khi tắt app; hỗ trợ nạp cookie trình duyệt và xoay vòng User-Agent chống bot YouTube; màn hình `IngestionDashboard` theo dõi tiến độ tải thời gian thực.
 
 ---
 
-## 🗺️ Development Roadmap (v1): Task 7 - Task 32
+## 🗺️ Lộ trình phát triển (v1 Milestone Roadmap)
 
-Toàn bộ 26 tasks còn lại của phiên bản v1 đã được đặc tả chi tiết trong `docs/TASK_BOARD.md` và `docs/ARCHITECTURE.md`:
+Toàn bộ 32 tasks của v1 được tổ chức thành 9 Milestones tuần tự. Quá trình phát triển tuân thủ luồng dữ liệu đầu-cuối:
 
 ```mermaid
 flowchart LR
-    subgraph M42 ["M4.2: Ingestion & Chat"]
-        T07["Task 07: Local Video Importer"]
-        T08["Task 08: Twitch Chat GQL Parser"]
+    subgraph M41 ["M4.1: Foundation"]
+        F1["Shell & IPC"]
+        F2["Config & Logs"]
     end
 
-    subgraph M43 ["M4.3: Intelligence & Highlights"]
-        T09["Task 09: Z-Score Chat Velocity"]
-        T10["Task 10: Swarm Emote Engine"]
-        T11["Task 11: Audio RMS Peak Detector"]
-        T12["Task 12: Multimodal Fusion & 4.5s Lag"]
-        T13["Task 13: Precision Range Slicer"]
+    subgraph M42 ["M4.2: Ingestion & Chat"]
+        I1["Audio-First Stream"]
+        I2["Chat Replay Parser"]
+    end
+
+    subgraph M43 ["M4.3: Highlights"]
+        H1["Z-Score & Emotes"]
+        H2["Audio RMS & Slicing"]
     end
 
     subgraph M44 ["M4.4: STT & VAD"]
-        T14["Task 14: Silero VAD & Loudnorm"]
-        T15["Task 15: Groq Whisper Client"]
-        T16["Task 16: Local Faster-Whisper INT8"]
+        S1["Silero VAD"]
+        S2["Groq & Faster-Whisper"]
     end
 
-    subgraph M45 ["M4.5: Localization & Translation"]
-        T17["Task 17: Gemini Theatrical Framing"]
-        T18["Task 18: Lore Dictionary & Diarization"]
-        T19["Task 19: Smart VN Line-Breaker"]
+    subgraph M45 ["M4.5: Vietsub & Lore"]
+        L1["Theatrical Framing"]
+        L2["Swarm Lore & Diarization"]
     end
 
-    subgraph M46 ["M4.6: Subtitle Studio UI"]
-        T20["Task 20: Subtitle Studio Player"]
-        T21["Task 21: Virtualized Segment List"]
-        T22["Task 22: Numpad Style Switcher"]
-        T23["Task 23: Visual CPS Warning Lights"]
+    subgraph M46 ["M4.6: Subtitle Studio"]
+        U1["Timeline Player"]
+        U2["Numpad Styling & CPS"]
     end
 
-    subgraph M47 ["M4.7: Export Engine"]
-        T24["Task 24: Aegisub .ASS / .SRT Export"]
-        T25["Task 25: CapCut PC Draft Generator"]
-        T26["Task 26: Premiere Pro XML Export"]
+    subgraph M47 ["M4.7: NLE Export"]
+        E1["CapCut PC Draft"]
+        E2["Premiere XML & ASS"]
     end
 
     subgraph M48 ["M4.8: Integration"]
-        T27["Task 27: Hardware Probe Engine"]
-        T28["Task 28: Onboarding Wizard & DPAPI"]
-        T29["Task 29: Sidecar Auto-Updater"]
+        G1["Onboarding Wizard"]
+        G2["DPAPI Key Vault"]
     end
 
     subgraph M49 ["M4.9: Packaging"]
-        T30["Task 30: E2E Synthetic Test Harness"]
-        T31["Task 31: Low-End PC Benchmark"]
-        T32["Task 32: Windows NSIS/MSI Packaging"]
+        P1["E2E Benchmark"]
+        P2["NSIS/MSI Installer"]
     end
 
-    M42 --> M43 --> M44 --> M45 --> M46 --> M47 --> M48 --> M49
+    M41 --> M42 --> M43 --> M44 --> M45 --> M46 --> M47 --> M48 --> M49
 ```
 
-### Chi tiết các Milestone tiếp theo:
-- **Milestone M4.2: Luồng thu nạp mở rộng & Phân tích Chat**
-  - **TASK-M4-07**: Trình nhập khẩu video cục bộ từ OBS (`.mp4`, `.mkv`) qua giao thức tùy biến `neuroclip-asset://`.
-  - **TASK-M4-08**: Bộ tải và phân tích dữ liệu lịch sử Twitch Chat Replay JSON qua GQL endpoint (`chat_events.json` Schema 5.3).
-- **Milestone M4.3: Động cơ trí tuệ phát hiện Highlight đa phương thức**
-  - **TASK-M4-09**: Thuật toán tính điểm tốc độ chat Z-Score hiệu chỉnh kèm ngưỡng sàn tin nhắn ($X \ge 15$ tin nhắn / 5 giây, $\epsilon = 0.5$).
-  - **TASK-M4-10**: Động cơ chấm điểm trọng số Emote đặc thù văn hóa Neuro Swarm (*KEKW, Tutel, Dinking, Aware, Clueless, Erm*).
-  - **TASK-M4-11**: Bộ quét đỉnh biên độ năng lượng âm thanh (Audio RMS Peak Detector) làm cứu cánh khi VOD bị tắt chat.
-  - **TASK-M4-12**: Hợp nhất đa phương thức, tự động bù độ trễ phát trực tiếp 4.5 giây ($t_{event} = t_{chat} - 4.5s - 10s$).
-  - **TASK-M4-13**: Bộ tải phân đoạn video chính xác không tải thừa (Lossless Precision Range Slicer qua HTTP Range Request).
-- **Milestone M4.4: Động cơ nhận diện giọng nói & Tách thoại (STT & VAD)**
-  - **TASK-M4-14**: Tiền xử lý âm thanh lọc khoảng lặng Silero VAD và bộ lọc chuẩn hóa biên độ FFmpeg `loudnorm` limiter chống vỡ tiếng hét.
-  - **TASK-M4-15**: Máy khách Groq Whisper Cloud API (Whisper Large-v3, chia nhỏ chunk $<25$MB, Karaoke Mode `condition_on_previous_text=False` phá vỡ lặp từ ảo giác).
-  - **TASK-M4-16**: Trình xử lý ngoại tuyến Faster-Whisper INT8 dự phòng trên máy khi mất mạng.
-- **Milestone M4.5: Bản địa hóa, Ngữ cảnh Lore & Dịch thuật Vietsub**
-  - **TASK-M4-17**: Máy khách Google Gemini 1.5 Flash đóng gói Prompt kịch bản sân khấu ("Theatrical Framing", `BLOCK_NONE`), bảo lưu câu gốc khi gặp kiểm duyệt nhạy cảm.
-  - **TASK-M4-18**: Từ điển thuật ngữ Neuro Lore, ma trận đại từ xưng hô (Vedal: Rùa/Bố, Neuro: Con gái, Evil: Em gái) và tự động gán vai ngữ cảnh.
-  - **TASK-M4-19**: Động cơ ngắt dòng thông minh tiếng Việt bảo toàn từ ghép và tối ưu hóa tốc độ đọc (CPS $\le 20$).
-- **Milestone M4.6: Trình soạn thảo phụ đề tinh gọn (Lean Subtitle Studio UI)**
-  - **TASK-M4-20**: Màn hình biên tập Subtitle Studio và khung xem video đồng bộ mốc thời gian Timeline.
-  - **TASK-M4-21**: Danh sách phụ đề ảo hóa (Virtualized Segment List) duy trì 60 FPS mượt mà.
-  - **TASK-M4-22**: Bàn phím số 1-chạm đổi phong cách nhân vật (`1`: Vedal, `2`: Neuro, `3`: Evil, `4`: Collab, `5`: Chat).
-  - **TASK-M4-23**: Đèn cảnh báo tốc độ đọc trực quan và trợ lý phím tắt nới rộng thời gian (`A`/`D` dịch $\pm 100\text{ms}$).
-- **Milestone M4.7: Phân hệ xuất bản đa nền tảng & Tích hợp NLE**
-  - **TASK-M4-24**: Bộ xuất phụ đề chuẩn Aegisub (`.ass` mã màu phong cách) và phụ đề quốc tế (`.srt`).
-  - **TASK-M4-25**: Bộ sinh thư mục dự án CapCut PC Draft JSON (`draft_content.json`) kèm chiến lược phòng thủ kép (**Dual Export Safeguard** luôn sinh kèm `.ass` và `.srt`).
-  - **TASK-M4-26**: Bộ xuất dòng thời gian Adobe Premiere Pro XML & Final Cut Pro 7 XML.
-- **Milestone M4.8: Khởi động lần đầu, Bảo mật Keyring & Quản lý Sidecars**
-  - **TASK-M4-27**: Tích hợp UI đề xuất cấu hình phần cứng thông minh từ `HardwareProbeEngine`.
-  - **TASK-M4-28**: Giao diện First-Run Onboarding Wizard và lưu trữ an toàn API key vào Windows Credential Locker (DPAPI).
-  - **TASK-M4-29**: Bộ quản lý và tự động cập nhật ngầm `yt-dlp` từ GitHub Releases khi YouTube đổi thuật toán.
-- **Milestone M4.9: Kiểm thử End-to-End & Đóng gói bộ cài Windows**
-  - **TASK-M4-30**: Bộ kiểm thử tự động tích hợp toàn tuyến (E2E Synthetic Pipeline Harness).
-  - **TASK-M4-31**: Bộ đánh giá hiệu năng và tải nặng trên máy tính cấu hình yếu (Low-End PC Stress Benchmark).
-  - **TASK-M4-32**: Pipeline đóng gói bộ cài đặt Windows NSIS và MSI chính thức.
+### 🚀 Tiến độ Milestone
+
+| Cột mốc | Phân hệ / Mục tiêu | Key Deliverables | Trạng thái |
+|:---|:---|:---|:---:|
+| **M4.1** | **Nền tảng cốt lõi (Foundation)** | Tauri v2 Acrylic Shell, Giao thức IPC Error, Win32 Hardware Profiler, Tracing NDJSON & Secret Redaction | <kbd>ĐÃ HOÀN THÀNH</kbd> |
+| **M4.2** | **Thu nạp VOD & Phân tích Chat** | Audio-First 16kHz PCM streamer, Pre-flight disk check 5GB, Local video asset streamer, Twitch GQL chat parser | <kbd>ĐANG THỰC HIỆN</kbd> (2/4) |
+| **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | ⏳ *Kế hoạch* |
+| **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD, FFmpeg loudnorm limiter, Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | ⏳ *Kế hoạch* |
+| **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing (`BLOCK_NONE`), Từ điển Swarm Lore, Ma trận xưng hô nhân vật, Smart line-breaker | ⏳ *Kế hoạch* |
+| **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline, Virtualized subtitle list 60fps, Bàn phím số 1-chạm đổi màu nhân vật, Đèn cảnh báo CPS | ⏳ *Kế hoạch* |
+| **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | ⏳ *Kế hoạch* |
+| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | ⏳ *Kế hoạch* |
+| **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | ⏳ *Kế hoạch* |
+
+> 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 32 tasks (TASK-M4-01 đến TASK-M4-32) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
 
 ---
 
-## 🏗️ ARchitecture & Tech Stack
+## 🏗️ Architecture & Tech Stack
 
 Hệ thống được tổ chức thành 4 phân tầng độc lập theo tài liệu kiến trúc chuẩn `docs/ARCHITECTURE.md`:
 
