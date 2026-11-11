@@ -17,13 +17,11 @@
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Tests: 433 Vitest + 75 Node](https://img.shields.io/badge/Tests-433%20Vitest%20%2B%2075%20Node%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
-[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(6%2F32%20Tasks)-orange?style=flat-square)](#-implementation-status-v1)
+[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(6%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
-[v1 Status](#-implementation-status-v1) •
-[Implemented Features](#-current-implementation) •
-[Development Roadmap](#️-lộ-trình-phát-triển-v1-milestone-roadmap) •
-[Progress](#-tiến-độ-milestone)
+[Current Implementation](#-current-implementation) •
+[Milestone Roadmap](#️-lộ-trình-phát-triển-v1-milestone-roadmap) •
 [Architecture](#️-architecture--tech-stack) •
 [Install & Run](#-yêu-cầu-môi-trường--setup) •
 [Folder Structure](#-folder-structure) •
@@ -49,7 +47,7 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 
 ---
 
-## 📊 Implementation Status (v1)
+## ⚡ Current Implementation
 
 Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
 
@@ -58,24 +56,7 @@ Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô h�
 433 Vitest Tests Passing • 75 Node Native Runner Tests Passing • Zero Unhandled Panics
 ```
 
-| Nhóm Milestone | Phạm vi công việc | Số Task | Trạng thái |
-|:---|:---|:---:|:---:|
-| **M4.1: Foundation** | Shell Tauri v2, Giao thức mã lỗi IPC, Profiling phần cứng, Logging cấu trúc & Redaction | 4 / 4 | <kbd>ĐÃ HOÀN THÀNH (DONE)</kbd> |
-| **M4.2: Ingestion & Chat** | Pre-flight disk check, Streamer Audio-First 16kHz PCM, Local Video Import, Twitch Chat Replay | 2 / 4 | <kbd>ĐANG THỰC HIỆN (2/4 DONE)</kbd> |
-| **M4.3: Intelligence & Highlights** | Thuật toán Z-Score Chat, Emote Swarm Scorer, Audio RMS Peak, Multimodal Fusion, Range Slicer | 0 / 5 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **M4.4: STT & VAD** | Silero VAD & Loudnorm Limiter, Groq Whisper Client, Faster-Whisper INT8 Worker | 0 / 3 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **M4.5: Localization & Translation** | Gemini Flash Theatrical Framing, Từ điển Lore & Phân vai, Smart Vietnamese Line-Breaker | 0 / 3 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **M4.6: Lean Subtitle Studio UI** | Timeline Video Player, Virtualized Subtitle List, Numpad Style Switcher, CPS Warning Lights | 0 / 4 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **M4.7: Export Engine** | Aegisub .ASS / .SRT Exporter, CapCut PC Draft Generator, Premiere Pro / FCP7 XML Exporter | 0 / 3 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **M4.8: System Integration** | Hardware Probe Engine, First-Run Onboarding Wizard, Managed Sidecars Auto-Updater | 0 / 3 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **M4.9: E2E & Packaging** | E2E Synthetic Test Harness, Low-End PC Benchmark, Windows NSIS / MSI Packaging Pipeline | 0 / 3 | <kbd>KẾ HOẠCH (PENDING)</kbd> |
-| **TỔNG CỘNG** | **Toàn bộ 9 Milestones thuộc giai đoạn v1 MVP** | **6 / 32** | **v1 In Progress** |
-
----
-
-## ⚡ Current Implementation
-
-6 tasks đầu tiên đã hoàn thành và được kiểm thử toàn diện qua **508 test tự động** (433 Vitest + 75 Node runner):
+6 tasks nền tảng đầu tiên đã hoàn thành và được kiểm thử toàn diện:
 
 - **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
   - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
@@ -152,19 +133,20 @@ flowchart LR
     M41 --> M42 --> M43 --> M44 --> M45 --> M46 --> M47 --> M48 --> M49
 ```
 
-### 🚀 Tiến độ Milestone
+### 🚀 Bảng tiến độ Milestone & Hạng mục bàn giao (Deliverables Matrix)
 
-| Cột mốc | Phân hệ / Mục tiêu | Key Deliverables | Trạng thái |
-|:---|:---|:---|:---:|
-| **M4.1** | **Nền tảng cốt lõi (Foundation)** | Tauri v2 Acrylic Shell, Giao thức IPC Error, Win32 Hardware Profiler, Tracing NDJSON & Secret Redaction | <kbd>ĐÃ HOÀN THÀNH</kbd> |
-| **M4.2** | **Thu nạp VOD & Phân tích Chat** | Audio-First 16kHz PCM streamer, Pre-flight disk check 5GB, Local video asset streamer, Twitch GQL chat parser | <kbd>ĐANG THỰC HIỆN</kbd> (2/4) |
-| **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | ⏳ *Kế hoạch* |
-| **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD, FFmpeg loudnorm limiter, Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | ⏳ *Kế hoạch* |
-| **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing (`BLOCK_NONE`), Từ điển Swarm Lore, Ma trận xưng hô nhân vật, Smart line-breaker | ⏳ *Kế hoạch* |
-| **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline, Virtualized subtitle list 60fps, Bàn phím số 1-chạm đổi màu nhân vật, Đèn cảnh báo CPS | ⏳ *Kế hoạch* |
-| **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | ⏳ *Kế hoạch* |
-| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | ⏳ *Kế hoạch* |
-| **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | ⏳ *Kế hoạch* |
+| Cột mốc | Phân hệ / Mục tiêu | Key Deliverables | Tasks | Trạng thái |
+|:---|:---|:---|:---:|:---:|
+| **M4.1** | **Nền tảng cốt lõi (Foundation)** | Tauri v2 Acrylic Shell, Giao thức IPC Error, Win32 Hardware Profiler, Tracing NDJSON & Secret Redaction | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
+| **M4.2** | **Thu nạp VOD & Phân tích Chat** | Audio-First 16kHz PCM streamer, Pre-flight disk check 5GB, Local video asset streamer, Twitch GQL chat parser | **2 / 4** | <kbd>ĐANG THỰC HIỆN</kbd> |
+| **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | **0 / 5** | ⏳ *Planned* |
+| **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD, FFmpeg loudnorm limiter, Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | **0 / 3** | ⏳ *Planned* |
+| **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing (`BLOCK_NONE`), Từ điển Swarm Lore, Ma trận xưng hô nhân vật, Smart line-breaker | **0 / 3** | ⏳ *Planned* |
+| **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline, Virtualized subtitle list 60fps, Bàn phím số 1-chạm đổi màu nhân vật, Đèn cảnh báo CPS | **0 / 4** | ⏳ *Planned* |
+| **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | **0 / 3** | ⏳ *Planned* |
+| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | **0 / 3** | ⏳ *Planned* |
+| **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | **0 / 3** | ⏳ *Planned* |
+| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **6 / 32** | **18.75% Complete** |
 
 > 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 32 tasks (TASK-M4-01 đến TASK-M4-32) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
 
@@ -377,10 +359,10 @@ neuroclip/
    - Bảo mật: 100% các chuỗi API Key và Auth Token phải được lọc qua bộ khử trùng `redact_secret` trước khi lưu vết.
 
 ### Nếu bạn đóng góp với sự hỗ trợ của AI Agents
-NeuroClip hiện đang duy trì **Multi-Agent Operating Constitution** quy định tại [`AGENTS.md`](AGENTS.md), chúng tôi khuyến khích sử dụng chế độ Multi-Agent (hay Teamwork) để hỗ trợ phát triển, bổ sung pipeline dành cho Agent đơn thông thường sẽ được cập nhật sau. Nếu bạn sử dụng Agent đơn, hãy tùy chỉnh pipeline theo cách mà bạn tự thấy làm việc hiệu quả và chính xác nhất, nhưng bắt buộc phải nạp đầy đủ `docs/`. Đối với Multi-Agent, hãy lưu ý tuân thủ thêm:
+NeuroClip hiện đang duy trì **Multi-Agent Operating Constitution** quy định tại [`AGENTS.md`](AGENTS.md), chúng tôi khuyến khích sử dụng chế độ Multi-Agent (hay Teamwork) để hỗ trợ phát triển, bổ sung pipeline dành cho Agent đơn thông thường sẽ được cập nhật sau. Nếu bạn sử dụng Agent đơn, hãy tùy chỉnh pipeline theo cách mà bạn tự thấy làm việc hiệu quả và chính xác nhất, nhưng bắt buộc phải nạp đầy đủ `docs/`. Đối với Agents, hãy lưu ý tuân thủ thêm:
 
 3. **Zero-Guesswork Policy**: Tuyệt đối không suy đoán khi gặp các ngã rẽ kiến trúc hoặc quyết định công nghệ. Mọi giải pháp phân vân đều phải lập RFC trong `docs/adr/` và chờ phản hồi chính thức từ Product Owner.
-4. **Quy tắc Gate Checks**: Mã nguồn chỉ được triển khai khi đã vượt qua các cổng phê duyệt kiểm định nghiêm ngặt từ `@lead-architect`, `@tech-lead` và `@qa-reviewer`.
+4. (Multi-Agent) **Quy tắc Gate Checks**: Mã nguồn chỉ được triển khai khi đã vượt qua các cổng phê duyệt kiểm định nghiêm ngặt từ `@lead-architect`, `@tech-lead` và `@qa-reviewer`.
 
 
 Bạn muốn đóng góp tính năng mới hoặc báo cáo lỗi? Vui lòng đối chiếu kỹ [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) trước khi gửi Pull Request.
