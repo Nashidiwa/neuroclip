@@ -5,6 +5,7 @@ pub mod config_cmd;
 pub mod ingest_cmd;
 pub mod log_cmd;
 pub mod storage_cmd;
+pub mod stt_cmd;
 
 pub use chat_cmd::{
     __cmd__get_chat_events, __cmd__get_chat_velocity_heatmap, __cmd__start_chat_extraction,
@@ -37,4 +38,11 @@ pub use storage_cmd::{
     __tauri_command_name_clean_expired_cache, __tauri_command_name_initialize_project,
     __tauri_command_name_initialize_storage, check_preflight_storage, clean_expired_cache,
     initialize_project, initialize_storage,
+};
+pub use stt_cmd::{
+    __cmd__export_subtitles_ass, __cmd__export_subtitles_srt,
+    __cmd__start_whisper_transcription, __cmd__verify_stt_model,
+    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_srt,
+    __tauri_command_name_start_whisper_transcription, __tauri_command_name_verify_stt_model,
+    export_subtitles_ass, export_subtitles_srt, start_whisper_transcription, verify_stt_model,
 };

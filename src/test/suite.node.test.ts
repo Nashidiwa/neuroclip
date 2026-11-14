@@ -1737,6 +1737,73 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.ok(typesContent.includes('normalizeChatEvent'), 'Must export normalizeChatEvent');
     });
   });
+
+  describe('TASK-M4-08: Whisper Local STT & Transcription Pipeline Contracts', () => {
+    it('should assert Schema 5.5 / 5.6 STT modules exist in Backend Rust', () => {
+      const modelMgrPath = path.resolve('src-tauri/src/stt/model_manager.rs');
+      const sidecarPath = path.resolve('src-tauri/src/stt/whisper_sidecar.rs');
+      const parserPath = path.resolve('src-tauri/src/stt/transcript_parser.rs');
+      const exportPath = path.resolve('src-tauri/src/stt/subtitle_export.rs');
+      const vadPath = path.resolve('src-tauri/src/stt/vad_bridge.rs');
+      const cmdPath = path.resolve('src-tauri/src/commands/stt_cmd.rs');
+
+      assert.ok(fs.existsSync(modelMgrPath), 'model_manager.rs must exist');
+      assert.ok(fs.existsSync(sidecarPath), 'whisper_sidecar.rs must exist');
+      assert.ok(fs.existsSync(parserPath), 'transcript_parser.rs must exist');
+      assert.ok(fs.existsSync(exportPath), 'subtitle_export.rs must exist');
+      assert.ok(fs.existsSync(vadPath), 'vad_bridge.rs must exist');
+      assert.ok(fs.existsSync(cmdPath), 'stt_cmd.rs must exist');
+
+      const parserContent = fs.readFileSync(parserPath, 'utf8');
+      assert.ok(parserContent.includes('pub struct WordTiming'), 'Must define WordTiming');
+      assert.ok(parserContent.includes('pub struct TranscriptSegment'), 'Must define TranscriptSegment');
+      assert.ok(parserContent.includes('pub struct TranscriptSegmentsContainer'), 'Must define TranscriptSegmentsContainer');
+
+      const exportContent = fs.readFileSync(exportPath, 'utf8');
+      assert.ok(exportContent.includes('generate_ass_script'), 'Must define generate_ass_script');
+      assert.ok(exportContent.includes('generate_srt_script'), 'Must define generate_srt_script');
+      assert.ok(exportContent.includes('pub struct SubtitleProject'), 'Must define SubtitleProject');
+    });
+
+    it('should assert Tauri IPC STT commands are registered in lib.rs', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const content = fs.readFileSync(libPath, 'utf8');
+
+      assert.ok(
+        content.includes('commands::start_whisper_transcription'),
+        'Must register start_whisper_transcription command',
+      );
+      assert.ok(
+        content.includes('commands::verify_stt_model'),
+        'Must register verify_stt_model command',
+      );
+      assert.ok(
+        content.includes('commands::export_subtitles_ass'),
+        'Must register export_subtitles_ass command',
+      );
+      assert.ok(
+        content.includes('commands::export_subtitles_srt'),
+        'Must register export_subtitles_srt command',
+      );
+    });
+
+    it('should assert Frontend TypeScript transcript types and IPC clients exist', () => {
+      const typesPath = path.resolve('src/types/transcript.ts');
+      const ipcPath = path.resolve('src/services/ipc/stt.ts');
+      const storePath = path.resolve('src/stores/useTranscriptStore.ts');
+
+      assert.ok(fs.existsSync(typesPath), 'src/types/transcript.ts must exist');
+      assert.ok(fs.existsSync(ipcPath), 'src/services/ipc/stt.ts must exist');
+      assert.ok(fs.existsSync(storePath), 'src/stores/useTranscriptStore.ts must exist');
+
+      const typesContent = fs.readFileSync(typesPath, 'utf8');
+      assert.ok(typesContent.includes('isWordTimingJson'), 'Must export isWordTimingJson guard');
+      assert.ok(typesContent.includes('isTranscriptSegmentJson'), 'Must export isTranscriptSegmentJson guard');
+      assert.ok(typesContent.includes('isTranscriptSegmentsContainerJson'), 'Must export isTranscriptSegmentsContainerJson guard');
+      assert.ok(typesContent.includes('isSubtitleProjectJson'), 'Must export isSubtitleProjectJson guard');
+      assert.ok(typesContent.includes('normalizeTranscriptSegment'), 'Must export normalizeTranscriptSegment');
+    });
+  });
 });
 
 

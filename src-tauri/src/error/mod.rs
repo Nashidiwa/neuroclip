@@ -100,6 +100,25 @@ pub enum SttError {
 
     #[error("Lỗi mô hình VAD hoặc xử lý âm thanh: {0}")]
     VadProcessingFailed(String),
+
+    #[error("Không tìm thấy tệp mô hình Whisper tại '{path}'")]
+    ModelNotFound { path: String },
+
+    #[error("Xác thực tính toàn vẹn SHA-256 thất bại cho mô hình '{path}': mong đợi '{expected_sha256}', thực tế '{actual_sha256}'")]
+    ModelIntegrityFailed {
+        path: String,
+        expected_sha256: String,
+        actual_sha256: String,
+    },
+
+    #[error("Tiến trình Whisper sidecar thất bại: {details}")]
+    SidecarExecutionFailed { details: String },
+
+    #[error("Phân tích dữ liệu bóc băng thất bại: {0}")]
+    ParserFailed(String),
+
+    #[error("Mốc thời gian bóc băng không hợp lệ: {0}")]
+    InvalidTimestamp(String),
 }
 
 /// Translation and contextual diarization errors (Google Gemini 1.5 Flash).
@@ -229,6 +248,11 @@ impl AppError {
                 SttError::InsufficientVram { .. } => codes::ERR_STT_VRAM_INSUFFICIENT,
                 SttError::InvalidApiKey => codes::ERR_STT_INVALID_API_KEY,
                 SttError::VadProcessingFailed(_) => codes::ERR_STT_VAD_FAILED,
+                SttError::ModelNotFound { .. } => codes::ERR_STT_MODEL_NOT_FOUND,
+                SttError::ModelIntegrityFailed { .. } => codes::ERR_STT_MODEL_INTEGRITY_FAILED,
+                SttError::SidecarExecutionFailed { .. } => codes::ERR_STT_SIDECAR_FAILED,
+                SttError::ParserFailed(_) => codes::ERR_STT_PARSER_FAILED,
+                SttError::InvalidTimestamp(_) => codes::ERR_STT_INVALID_TIMESTAMP,
             },
             AppError::Translation(err) => match err {
                 TranslationError::SafetyFilterTriggered(_) => codes::ERR_TRANSLATE_SAFETY_FILTER,
@@ -291,7 +315,12 @@ impl AppError {
             AppError::Stt(err) => match err {
                 SttError::RateLimitExceeded(_)
                 | SttError::InsufficientVram { .. }
-                | SttError::VadProcessingFailed(_) => true,
+                | SttError::VadProcessingFailed(_)
+                | SttError::ModelNotFound { .. }
+                | SttError::ModelIntegrityFailed { .. }
+                | SttError::SidecarExecutionFailed { .. }
+                | SttError::ParserFailed(_)
+                | SttError::InvalidTimestamp(_) => true,
                 SttError::PayloadTooLarge { .. } | SttError::InvalidApiKey => false,
             },
             AppError::Translation(err) => match err {

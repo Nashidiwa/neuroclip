@@ -14,6 +14,7 @@ pub mod config;
 pub mod error;
 pub mod ingestion;
 pub mod logging;
+pub mod stt;
 
 /// Backward-compatibility and architectural alias for core logging subsystem.
 pub mod core {
@@ -41,6 +42,18 @@ pub use ingestion::{
 pub use logging::{
     is_neuroclip_log_file, prune_logs, redact_secret, redact_secrets_in_text, resolve_log_dir,
     LogEntry, PruneReport, RedactingWriter, RetentionPolicy,
+};
+pub use stt::{
+    align_segments_with_vad, calculate_cps, compute_file_sha256, create_subtitle_project,
+    default_speaker_styles, escape_ass_text, find_catalog_entry, format_ass_timecode,
+    format_srt_timecode, generate_ass_script, generate_srt_script, is_special_token,
+    map_speaker_to_ass_style, parse_timestamp_to_seconds, parse_whisper_json_full,
+    parse_whisper_stdout_line, resolve_models_dir, resolve_whisper_binary,
+    run_whisper_transcription, verify_model, ModelCatalogEntry, ModelInfo, SpeakerStyle,
+    SpeechInterval, SttProgressPayload, SubtitleProject, TranscriptSegment,
+    TranscriptSegmentsContainer, WhisperSidecarConfig, WordTiming, BOUNDARY_SNAP_TOLERANCE_SEC,
+    CONFIDENCE_FLAG_THRESHOLD, CPS_FLAG_THRESHOLD, DEFAULT_SPEAKER_ID, MIN_SEGMENT_DURATION_SEC,
+    MODEL_CATALOG, SHA256_CHUNK_SIZE, WORD_GAP_SPLIT_THRESHOLD_SEC,
 };
 
 /// Health check ping/pong command adhering to Result<T, AppError> contract
@@ -83,7 +96,11 @@ pub fn run() {
             commands::extract_pcm_stream,
             commands::start_chat_extraction,
             commands::get_chat_events,
-            commands::get_chat_velocity_heatmap
+            commands::get_chat_velocity_heatmap,
+            commands::start_whisper_transcription,
+            commands::verify_stt_model,
+            commands::export_subtitles_ass,
+            commands::export_subtitles_srt
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {
