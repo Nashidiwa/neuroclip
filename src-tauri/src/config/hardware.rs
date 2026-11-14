@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::HardwareError;
 
 /// GPU vendor enumeration conforming strictly to Schema 5.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum GpuVendor {
     #[serde(rename = "NVIDIA")]
     Nvidia,
@@ -17,28 +17,18 @@ pub enum GpuVendor {
     #[serde(rename = "Intel")]
     Intel,
     #[serde(rename = "Unknown")]
+    #[default]
     Unknown,
 }
 
-impl Default for GpuVendor {
-    fn default() -> Self {
-        Self::Unknown
-    }
-}
-
 /// Execution mode recommendation matching Schema 5.1 enum values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RecommendedMode {
+    #[default]
     CloudByok,
     Hybrid,
     OfflineLocal,
-}
-
-impl Default for RecommendedMode {
-    fn default() -> Self {
-        Self::CloudByok
-    }
 }
 
 /// CPU hardware specifications.
@@ -370,8 +360,10 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
                 let safe_len = (data_len as usize).min(data_buf.len());
                 if let Some(slice) = data_buf.get(..safe_len) {
                     let u16_slice: Vec<u16> = slice
-                        .chunks_exact(2)
-                        .map(|c| u16::from_ne_bytes([c[0], c[1]]))
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|&c| u16::from_ne_bytes(c))
                         .take_while(|&c| c != 0)
                         .collect();
                     model_str = String::from_utf16_lossy(&u16_slice).trim().to_string();

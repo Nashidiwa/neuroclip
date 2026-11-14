@@ -18,7 +18,7 @@ const MAX_LOG_LIMIT: usize = 1_000;
 fn extract_log_date(path: &std::path::Path) -> Option<&str> {
     let name = path.file_name()?.to_str()?;
     let stripped = name.strip_prefix("neuroclip")?;
-    let trimmed = stripped.trim_start_matches(|c| c == '-' || c == '.');
+    let trimmed = stripped.trim_start_matches(['-', '.']);
     if trimmed.len() >= 10 {
         let bytes = trimmed.as_bytes();
         let is_date = bytes[0..4].iter().all(u8::is_ascii_digit)
@@ -50,9 +50,10 @@ pub async fn get_recent_logs(
 
     // Locate candidate log files
     let read_dir = fs::read_dir(&log_dir).map_err(|err| {
-        AppError::Storage(StorageError::DirectoryCreationFailed(format!(
-            "Failed to read log directory: {err}"
-        )))
+        AppError::Storage(StorageError::DirectoryCreationFailed {
+            path: log_dir.display().to_string(),
+            details: format!("Failed to read log directory: {err}"),
+        })
     })?;
 
     let mut log_files: Vec<PathBuf> = Vec::new();

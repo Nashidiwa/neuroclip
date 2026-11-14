@@ -3,14 +3,14 @@
 //! Complies with docs/CONVENTIONS.md (zero-panic invariant, Result<T, AppError>).
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Emitter;
 use tokio_util::sync::CancellationToken;
 
 use crate::core::storage::{check_disk_space, resolve_cache_dir, resolve_projects_dir};
-use crate::error::{AppError, IngestError, StorageError};
-use crate::ingestion::cookies::{parse_browser_type, BrowserType, CookieSource};
+use crate::error::{AppError, StorageError};
+use crate::ingestion::cookies::{parse_browser_type, CookieSource};
 use crate::ingestion::streamer::{
     compute_audio_energy_stream, detect_source_type, download_audio_stream, generate_vod_manifest,
     probe_vod_metadata, AudioEnergyWindow, IngestOptions, IngestProgressPayload, VodManifest,
@@ -305,6 +305,7 @@ pub async fn extract_pcm_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ingestion::cookies::BrowserType;
 
     #[test]
     fn test_resolve_cookie_source() {

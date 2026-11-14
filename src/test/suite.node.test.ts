@@ -1680,6 +1680,63 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       );
     });
   });
+
+  describe('TASK-M4-07: YouTube Live Chat / Twitch VOD Chat Extraction & Normalizer Contracts', () => {
+    it('should assert Schema 5.3 Chat Parser & Heatmap modules exist in Backend Rust', () => {
+      const parserPath = path.resolve('src-tauri/src/ingestion/chat_parser.rs');
+      const twitchPath = path.resolve('src-tauri/src/ingestion/twitch_gql.rs');
+      const ytPath = path.resolve('src-tauri/src/ingestion/youtube_chat.rs');
+      const cmdPath = path.resolve('src-tauri/src/commands/chat_cmd.rs');
+
+      assert.ok(fs.existsSync(parserPath), 'chat_parser.rs must exist');
+      assert.ok(fs.existsSync(twitchPath), 'twitch_gql.rs must exist');
+      assert.ok(fs.existsSync(ytPath), 'youtube_chat.rs must exist');
+      assert.ok(fs.existsSync(cmdPath), 'chat_cmd.rs must exist');
+
+      const parserContent = fs.readFileSync(parserPath, 'utf8');
+      assert.ok(parserContent.includes('pub struct ChatEvent'), 'Must define ChatEvent');
+      assert.ok(parserContent.includes('pub struct ChatEventsContainer'), 'Must define ChatEventsContainer');
+      assert.ok(parserContent.includes('pub struct ChatDensityPoint'), 'Must define ChatDensityPoint');
+      assert.ok(parserContent.includes('pub struct ChatHeatmapResponse'), 'Must define ChatHeatmapResponse');
+      assert.ok(parserContent.includes('NEURO_SWARM_EMOTES'), 'Must define Swarm emote dictionary');
+      assert.ok(parserContent.includes('StreamingChatNormalizer'), 'Must define StreamingChatNormalizer');
+    });
+
+    it('should assert Tauri IPC chat commands are registered in lib.rs', () => {
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const content = fs.readFileSync(libPath, 'utf8');
+
+      assert.ok(
+        content.includes('commands::start_chat_extraction'),
+        'Must register start_chat_extraction command',
+      );
+      assert.ok(
+        content.includes('commands::get_chat_events'),
+        'Must register get_chat_events command',
+      );
+      assert.ok(
+        content.includes('commands::get_chat_velocity_heatmap'),
+        'Must register get_chat_velocity_heatmap command',
+      );
+    });
+
+    it('should assert Frontend TypeScript chat types and IPC clients exist', () => {
+      const typesPath = path.resolve('src/types/chat.ts');
+      const ipcPath = path.resolve('src/services/ipc/chat.ts');
+      const storePath = path.resolve('src/stores/useChatStore.ts');
+
+      assert.ok(fs.existsSync(typesPath), 'src/types/chat.ts must exist');
+      assert.ok(fs.existsSync(ipcPath), 'src/services/ipc/chat.ts must exist');
+      assert.ok(fs.existsSync(storePath), 'src/stores/useChatStore.ts must exist');
+
+      const typesContent = fs.readFileSync(typesPath, 'utf8');
+      assert.ok(typesContent.includes('isChatEventJson'), 'Must export isChatEventJson guard');
+      assert.ok(typesContent.includes('isChatEventsContainerJson'), 'Must export isChatEventsContainerJson guard');
+      assert.ok(typesContent.includes('isChatDensityPointJson'), 'Must export isChatDensityPointJson guard');
+      assert.ok(typesContent.includes('isChatHeatmapResponseJson'), 'Must export isChatHeatmapResponseJson guard');
+      assert.ok(typesContent.includes('normalizeChatEvent'), 'Must export normalizeChatEvent');
+    });
+  });
 });
 
 

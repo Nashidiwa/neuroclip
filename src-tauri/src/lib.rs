@@ -7,6 +7,7 @@
 #![deny(clippy::unimplemented)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 pub mod commands;
 pub mod config;
@@ -14,13 +15,11 @@ pub mod error;
 pub mod ingestion;
 pub mod logging;
 
-#[path = "core/storage.rs"]
-pub mod storage;
-
 /// Backward-compatibility and architectural alias for core logging subsystem.
 pub mod core {
     pub use crate::logging;
-    pub use crate::storage;
+    #[path = "storage.rs"]
+    pub mod storage;
 }
 
 pub use commands::AppState;
@@ -33,25 +32,27 @@ pub use error::{
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
 };
 pub use ingestion::{
-    AudioChunk, AudioEnergyWindow, AudioRingBuffer, AudioStreamValidator, BrowserType,
-    CookieSource, IngestOptions, IngestProgressPayload, VodManifest, VodMetadata,
+    extract_message_emotes, is_neuro_swarm_emote, parse_raw_chat_line, AudioChunk,
+    AudioEnergyWindow, AudioRingBuffer, AudioStreamValidator, BrowserType, ChatDensityPoint,
+    ChatEvent, ChatEventsContainer, ChatHeatmapContainer, ChatHeatmapResponse, CookieSource,
+    HeatmapWindow, IngestOptions, IngestProgressPayload, StreamingChatNormalizer, VodManifest,
+    VodMetadata, NEURO_SWARM_EMOTES,
 };
 pub use logging::{
     is_neuroclip_log_file, prune_logs, redact_secret, redact_secrets_in_text, resolve_log_dir,
     LogEntry, PruneReport, RedactingWriter, RetentionPolicy,
 };
 
+/// Health check ping/pong command adhering to Result<T, AppError> contract
+pub fn ping() -> Result<String, AppError> {
+    commands::ping()
+}
+
 pub const DEFAULT_WINDOW_WIDTH: f64 = 1280.0;
 pub const DEFAULT_WINDOW_HEIGHT: f64 = 800.0;
 pub const MIN_WINDOW_WIDTH: f64 = 1024.0;
 pub const MIN_WINDOW_HEIGHT: f64 = 640.0;
 pub const SOLID_BACKGROUND_FALLBACK: &str = "#12131C";
-
-/// Health check ping/pong command adhering to Result<T, AppError> contract
-#[tauri::command]
-pub fn ping() -> Result<String, AppError> {
-    Ok("pong".to_string())
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -63,7 +64,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
-            ping,
+            commands::ping,
             commands::get_app_config,
             commands::save_app_config,
             commands::get_hardware_profile,
@@ -79,7 +80,10 @@ pub fn run() {
             commands::cancel_vod_ingestion,
             commands::probe_vod,
             commands::get_vod_manifest,
-            commands::extract_pcm_stream
+            commands::extract_pcm_stream,
+            commands::start_chat_extraction,
+            commands::get_chat_events,
+            commands::get_chat_velocity_heatmap
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

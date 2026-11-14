@@ -376,7 +376,7 @@ mod tests {
         wav[36..40].copy_from_slice(b"data");
 
         let s1 = 1234i16.to_le_bytes();
-        let s2 = -5678i16.to_le_bytes();
+        let s2 = (-5678i16).to_le_bytes();
         wav.extend_from_slice(&s1);
         wav.extend_from_slice(&s2);
 

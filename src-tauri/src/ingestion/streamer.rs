@@ -14,7 +14,7 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::storage::{check_disk_space, resolve_cache_dir, resolve_projects_dir, MIN_REQUIRED_DISK_SPACE_MB};
+use crate::core::storage::check_disk_space;
 use crate::error::{AppError, IngestError, SidecarError};
 use crate::ingestion::buffer::{
     create_bounded_audio_channel, AudioChunk, AudioRingBuffer, DEFAULT_CHUNK_SIZE_BYTES,
@@ -152,7 +152,7 @@ impl WindowsJobObjectGuard {
 
         unsafe {
             let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if job.is_null() {
+            if job == 0 {
                 return Err(std::io::Error::last_os_error());
             }
 
@@ -189,7 +189,7 @@ impl WindowsJobObjectGuard {
 
     /// Assign a spawned tokio child process to this Job Object by PID using Win32 OpenProcess.
     pub fn assign_child_process(&self, child: &tokio::process::Child) -> Result<(), std::io::Error> {
-        if self.job_handle.is_null() {
+        if self.job_handle == 0 {
             return Ok(());
         }
         use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
@@ -198,7 +198,7 @@ impl WindowsJobObjectGuard {
         if let Some(pid) = child.id() {
             unsafe {
                 let handle = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
-                if handle.is_null() {
+                if handle == 0 {
                     return Err(std::io::Error::last_os_error());
                 }
                 let res = self.assign_process(handle);
@@ -218,7 +218,7 @@ impl WindowsJobObjectGuard {
 impl Drop for WindowsJobObjectGuard {
     fn drop(&mut self) {
         unsafe {
-            if !self.job_handle.is_null() {
+            if self.job_handle != 0 {
                 windows_sys::Win32::Foundation::CloseHandle(self.job_handle);
             }
         }
@@ -261,10 +261,7 @@ pub fn get_global_job_guard() -> Result<&'static WindowsJobObjectGuard, std::io:
 
     match opt.as_ref() {
         Some(guard) => Ok(guard),
-        None => Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Windows Job Object is unavailable",
-        )),
+        None => Err(std::io::Error::other("Windows Job Object is unavailable")),
     }
 }
 
@@ -818,10 +815,7 @@ pub async fn compute_audio_energy_stream(
                         v * v
                     }).sum();
                     let rms = (sum_sq / win_size as f64).sqrt();
-                    let peak = match scratch.iter().copied().map(i16::saturating_abs).max() {
-                        Some(p) => p,
-                        None => 0,
-                    };
+                    let peak = scratch.iter().copied().map(i16::saturating_abs).max().unwrap_or_default();
                     let ts = window_index as f64 * (win_size as f64 / 16000.0);
 
                     windows.push(AudioEnergyWindow {
@@ -853,10 +847,7 @@ pub async fn compute_audio_energy_stream(
                 v * v
             }).sum();
             let rms = (sum_sq / popped as f64).sqrt();
-            let peak = match final_scratch.iter().copied().map(i16::saturating_abs).max() {
-                Some(p) => p,
-                None => 0,
-            };
+            let peak = final_scratch.iter().copied().map(i16::saturating_abs).max().unwrap_or_default();
             let ts = window_index as f64 * (win_size as f64 / 16000.0);
 
             windows.push(AudioEnergyWindow {
@@ -873,6 +864,7 @@ pub async fn compute_audio_energy_stream(
 
 
 /// Create and persist `vod_manifest.json` compliant with Schema 5.2 into the project directory.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_vod_manifest(
     vod_id: &str,
     source_type: &str,

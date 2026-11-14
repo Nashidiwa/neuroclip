@@ -158,8 +158,8 @@ mod tests {
         let config = AppConfig::default();
         assert_eq!(config.theme, "dark");
         assert_eq!(config.language, "vi");
-        assert_eq!(config.telemetry_enabled, false);
-        assert_eq!(config.auto_update_sidecars, true);
+        assert!(!config.telemetry_enabled);
+        assert!(config.auto_update_sidecars);
         assert_eq!(config.audio_buffer_size_kb, 64);
         assert_eq!(config.active_stt_provider, "groq");
         assert_eq!(config.max_history_days, 14);
@@ -168,8 +168,10 @@ mod tests {
 
     #[test]
     fn test_validation_fails_on_zero_buffer_size() {
-        let mut config = AppConfig::default();
-        config.audio_buffer_size_kb = 0;
+        let config = AppConfig {
+            audio_buffer_size_kb: 0,
+            ..Default::default()
+        };
         let res = config.validate();
         assert!(matches!(res, Err(ConfigError::InvalidValue { .. })));
     }

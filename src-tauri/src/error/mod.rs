@@ -455,7 +455,7 @@ mod tests {
 
         let response = internal_err.to_ipc_response();
         assert_eq!(response.code, "ERR_INTERNAL_ERROR");
-        assert_eq!(response.recoverable, false);
+        assert!(!response.recoverable);
         assert_eq!(response.details, Some("Database connection lost".to_string()));
     }
 
@@ -470,7 +470,7 @@ mod tests {
         let parsed: IpcErrorResponse = serde_json::from_str(&json)?;
 
         assert_eq!(parsed.code, "ERR_INGEST_DISK_FULL");
-        assert_eq!(parsed.recoverable, true);
+        assert!(parsed.recoverable);
         assert!(parsed.message.contains("5000MB"));
         assert!(parsed.message.contains("1200MB"));
         assert_eq!(parsed.details, None);

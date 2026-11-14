@@ -16,10 +16,8 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let path = resolve_config_file_path();
-        let config = match crate::config::atomic::atomic_load_json::<AppConfig>(&path) {
-            Ok(c) => c,
-            Err(_) => AppConfig::default(),
-        };
+        let config = crate::config::atomic::atomic_load_json::<AppConfig>(&path)
+            .unwrap_or_default();
 
         Self {
             config: RwLock::new(config),
@@ -89,6 +87,12 @@ pub async fn detect_hardware(
     *guard = Some(profile.clone());
 
     Ok(profile)
+}
+
+/// Health check ping/pong command adhering to Result<T, AppError> contract
+#[tauri::command]
+pub fn ping() -> Result<String, AppError> {
+    Ok("pong".to_string())
 }
 
 #[cfg(test)]

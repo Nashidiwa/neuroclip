@@ -108,10 +108,10 @@ pub fn prune_logs(log_dir: &Path, policy: &RetentionPolicy) -> Result<PruneRepor
     }
 
     let read_dir = fs::read_dir(log_dir).map_err(|err| {
-        StorageError::DirectoryCreationFailed(format!(
-            "Failed to read log directory '{}': {err}",
-            log_dir.display()
-        ))
+        StorageError::DirectoryCreationFailed {
+            path: log_dir.display().to_string(),
+            details: format!("Failed to read log directory: {err}"),
+        }
     })?;
 
     let now = SystemTime::now();
@@ -176,7 +176,7 @@ pub fn prune_logs(log_dir: &Path, policy: &RetentionPolicy) -> Result<PruneRepor
 
     if total_size > policy.max_dir_size_bytes {
         // Sort oldest first by modification time
-        active_files.sort_by(|a, b| a.modified_time.cmp(&b.modified_time));
+        active_files.sort_by_key(|f| f.modified_time);
 
         for file in active_files {
             if total_size <= policy.target_dir_size_bytes {
