@@ -16,8 +16,8 @@
 [![React: v18.3](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests: 433 Vitest + 75 Node](https://img.shields.io/badge/Tests-433%20Vitest%20%2B%2075%20Node%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
-[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(6%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
+[![Tests: 467 Vitest + 81 Node + 137 Rust](https://img.shields.io/badge/Tests-467%20Vitest%20%2B%2081%20Node%20%2B%20137%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
+[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(8%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
 [Current Implementation](#-current-implementation) •
@@ -52,11 +52,11 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
 
 ```text
-[██████░░░░░░░░░░░░░░░░░░░░░░░░░░] 6 / 32 Tasks Hoàn thành (18.75% v1 Core)
-433 Vitest Tests Passing • 75 Node Native Runner Tests Passing • Zero Unhandled Panics
+[████████░░░░░░░░░░░░░░░░░░░░░░░░] 8 / 32 Tasks Hoàn thành (25.0% v1 Core)
+467 Vitest Tests Passing • 81 Node Native Runner Tests Passing • 137 Rust Tests Passing • Zero Unhandled Panics
 ```
 
-6 tasks nền tảng đầu tiên đã hoàn thành và được kiểm thử toàn diện:
+Toàn bộ 8 tasks thuộc 2 Milestones nền tảng đầu tiên (M4.1 & M4.2) đã hoàn thành và được kiểm thử toàn diện:
 
 - **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
   - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
@@ -76,6 +76,14 @@ Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô h�
 - **Pipeline Audio-First Ingestion (`TASK-M4-06`)**:
   - Thu nạp luồng âm thanh trực tiếp từ URL Twitch/YouTube VOD bằng `yt-dlp` và transcode sang 16kHz mono PCM qua FFmpeg stdout pipe, tiết kiệm $\ge 98.5\%$ dung lượng mạng và ổ đĩa (VOD 8h 30GB video chỉ tiêu tốn ~400MB audio).
   - Áp dụng hàng đợi `BoundedAudioQueue` giới hạn RAM $\le 1\text{MB}$, cơ chế diệt tiến trình con triệt để (Tokio `kill_on_drop` + Windows Job Object) đảm bảo 0 zombie process khi tắt app; hỗ trợ nạp cookie trình duyệt và xoay vòng User-Agent chống bot YouTube; màn hình `IngestionDashboard` theo dõi tiến độ tải thời gian thực.
+- **Bóc tách & Chuẩn hóa Chat trực tuyến (`TASK-M4-07`)**:
+  - Thu nạp lịch sử chat từ Twitch GQL (phân trang cursor) và YouTube Live Chat qua `yt-dlp` stream parser.
+  - Chuẩn hóa toàn bộ tin nhắn theo Schema 5.3 canonical `ChatMessage` với từ điển 25+ biểu cảm Swarm (`KEKW`, `Tutel`, `Gymbag`, `neuroHeart`...), hỗ trợ trích xuất streaming 2 lượt NDJSON đệm 64KB giữ heap delta $< 4\text{MB}$ khi xử lý 500,000 tin nhắn.
+  - Thuật toán Chat Heatmap cửa sổ trượt 10s tích hợp bộ lọc spam bot ($\le 3$ tin/tác giả/10s), chống tràn heap bằng giới hạn $10^7\text{s}$ ($\le 4\text{MB}$ RAM), cơ chế soft fallback (ERR-05) sang Audio RMS trong $< 1\text{ms}$ khi chat bị tắt hoặc lỗi.
+- **Whisper Local STT & Pipeline Phụ đề (`TASK-M4-08`)**:
+  - Giám sát tiến trình sidecar `whisper.cpp` (`main.exe`) ngoại tuyến bằng Windows Job Object và Tokio cancellation token (0 zombie process).
+  - Quản lý danh mục mô hình lượng tử hóa Q5_K GGUF (`tiny.en` đến `large-v3-turbo`) với thuật toán stream SHA-256 đệm 64KB (đỉnh heap $< 128\text{KB}$); chuẩn hóa timestamp chuẩn từng từ (word-level) theo Schema 5.5 `transcript_segments.json` và kiểm định tốc độ đọc CPS.
+  - Xuất phụ đề đa định dạng: Advanced SubStation Alpha (`.ass` v4.00+) với bảng màu nhận diện thương hiệu VTuber (Neuro `#B6B6FF`, Evil `#FF0000`, Vedal `#66CC66`, Guest `#FFCC33`, Chat `#CCCCCC`) và SubRip (`.srt`). Cầu nối Silero VAD căn chỉnh ranh giới khoảng lặng dung sai $\pm 250\text{ms}$.
 
 ---
 
@@ -138,7 +146,7 @@ flowchart LR
 | Cột mốc | Phân hệ / Mục tiêu | Key Deliverables | Tasks | Trạng thái |
 |:---|:---|:---|:---:|:---:|
 | **M4.1** | **Nền tảng cốt lõi (Foundation)** | Tauri v2 Acrylic Shell, Giao thức IPC Error, Win32 Hardware Profiler, Tracing NDJSON & Secret Redaction | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
-| **M4.2** | **Thu nạp VOD & Phân tích Chat** | Audio-First 16kHz PCM streamer, Pre-flight disk check 5GB, Local video asset streamer, Twitch GQL chat parser | **2 / 4** | <kbd>ĐANG THỰC HIỆN</kbd> |
+| **M4.2** | **Thu nạp VOD, Chat & Bóc băng STT** | Pre-flight disk check 5GB, Audio-First 16kHz PCM streamer, Chat replay normalizer & heatmap, Whisper local STT | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | **0 / 5** | ⏳ *Planned* |
 | **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD, FFmpeg loudnorm limiter, Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | **0 / 3** | ⏳ *Planned* |
 | **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing (`BLOCK_NONE`), Từ điển Swarm Lore, Ma trận xưng hô nhân vật, Smart line-breaker | **0 / 3** | ⏳ *Planned* |
@@ -146,7 +154,7 @@ flowchart LR
 | **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | **0 / 3** | ⏳ *Planned* |
 | **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | **0 / 3** | ⏳ *Planned* |
 | **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | **0 / 3** | ⏳ *Planned* |
-| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **6 / 32** | **18.75% Complete** |
+| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **8 / 32** | **25.0% Complete** |
 
 > 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 32 tasks (TASK-M4-01 đến TASK-M4-32) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
 
@@ -222,8 +230,8 @@ graph TD
 | **UI & Styling** | [Tailwind CSS 3.4](https://tailwindcss.com/), `clsx`, `tailwind-merge`, [Lucide Icons](https://lucide.dev/) | Hệ thống thiết kế Dark Theme Neuro-sama với Acrylic/Mica backdrop. |
 | **State Management** | [Zustand](https://github.com/pmndrs/zustand) | Quản lý trạng thái client nhẹ, chống race condition bằng sequence counters. |
 | **Build & Tooling** | [Vite 4.3](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
-| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`) | 508 bài kiểm tra tự động (Unit, Integration, Contract, Adversarial Stress). |
-| **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch. |
+| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | 685 bài kiểm tra tự động (467 Vitest + 81 Node + 137 Cargo Rust tests). |
+| **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest), `whisper.cpp` (`main.exe`) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch/YouTube, bóc băng giọng nói local Q5_K. |
 
 ### Data Contracts & JSON Schemas (SSOT):
 Mọi dữ liệu trao đổi giữa Rust Backend và TypeScript Frontend đều tuân thủ các schema tĩnh quy định tại Mục 5 `docs/ARCHITECTURE.md`:
@@ -272,11 +280,14 @@ npm run dev
 Dự án áp dụng quy chuẩn kiểm thử nghiêm ngặt, bao gồm cả các kịch bản tấn công dồn dập (Adversarial Stress Testing):
 
 ```powershell
-# Chạy bộ test tích hợp bằng Node.js Native Test Runner (75 tests)
+# Chạy bộ test tích hợp bằng Node.js Native Test Runner (81 tests)
 npm test
 
-# Chạy toàn bộ 433 bài kiểm thử bằng Vitest (Unit, Component, Adversarial)
+# Chạy toàn bộ 467 bài kiểm thử bằng Vitest (Unit, Component, Adversarial)
 npm run test:vitest
+
+# Chạy toàn bộ 137 bài kiểm thử Rust backend
+cd src-tauri && cargo test --offline -- --test-threads=1
 
 # Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant)
 npm run typecheck
@@ -314,23 +325,25 @@ neuroclip/
 ├── src/                        # FRONTEND TYPESCRIPT & REACT SPA
 │   ├── components/             # React UI Components
 │   │   ├── common/             # ErrorBoundary, ErrorBanner, Buttons dùng chung
-│   │   └── dashboard/          # IngestionDashboard, Video Dropzone, Metadata Preview
+│   │   └── dashboard/          # IngestionDashboard, ChatDashboard, Video Dropzone, Metadata Preview
 │   ├── services/               # Tầng dịch vụ kết nối và gọi IPC
 │   │   ├── config/             # Hardware probing client, App settings client
-│   │   ├── ipc/                # IPC Error envelope, Ingestion IPC, Storage IPC
+│   │   ├── ipc/                # IPC Error envelope, Ingestion IPC, Chat IPC, STT IPC, Storage IPC
 │   │   └── logging/            # Client logging service, Token redactor, Logger store bridge
-│   ├── stores/                 # Zustand Stores (useIngestionStore, useProjectStore, useLogStore...)
+│   ├── stores/                 # Zustand Stores (useIngestionStore, useChatStore, useTranscriptStore, useProjectStore...)
 │   ├── styles/                 # Theme tokens, globals.css, Neuro-sama color palettes
+│   ├── types/                  # TypeScript Data Contracts (chat.ts, transcript.ts, hardware.ts...)
 │   └── test/                   # Test Suites (Adversarial stress tests, Unit tests, Node runner)
 ├── src-tauri/                  # BACKEND RUST CORE (TAURI V2 NATIVE)
 │   ├── icons/                  # Bộ biểu tượng ứng dụng đa kích thước cho Windows
 │   ├── src/                    # Mã nguồn Rust
-│   │   ├── commands/           # Các hàm Tauri IPC Command (`config_cmd`, `ingest_cmd`, `storage_cmd`...)
+│   │   ├── commands/           # Các hàm Tauri IPC Command (`chat_cmd`, `stt_cmd`, `ingest_cmd`, `storage_cmd`...)
 │   │   ├── config/             # Quản lý cấu hình nguyên tử (atomic file writes) & Hardware probe
 │   │   ├── core/               # Quản lý lưu trữ đĩa (Win32 FreeSpace) & Thư mục dự án
-│   │   ├── error/              # Cây lỗi phân cấp `AppError` và 39 mã lỗi `ERR_*`
-│   │   ├── ingestion/          # Động cơ Audio-First streaming, BoundedQueue, Cookie/UA rotation
+│   │   ├── error/              # Cây lỗi phân cấp `AppError` và danh mục mã lỗi `ERR_*`
+│   │   ├── ingestion/          # Động cơ Audio-First streaming, Chat Replay parser, BoundedQueue, Cookie/UA rotation
 │   │   ├── logging/            # Hạ tầng Tracing NDJSON, xoay vòng log, lọc secret redaction
+│   │   ├── stt/                # Whisper.cpp sidecar supervisor, Q5_K GGUF model manager, ASS/SRT exporter, VAD bridge
 │   │   ├── lib.rs              # Khởi tạo AppState, đăng ký IPC handlers, clippy denies
 │   │   └── main.rs             # Điểm vào thực thi ứng dụng Windows desktop
 │   ├── Cargo.toml              # Khai báo crate dependencies, target Windows Win32 APIs
