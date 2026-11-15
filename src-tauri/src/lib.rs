@@ -35,9 +35,14 @@ pub use error::{
 };
 pub use highlight::{
     bin_chat_events, bin_chat_events_default, bin_chat_events_from_file, bucket_chat_events,
-    calculate_adjusted_zscore, compute_chat_velocity_series, compute_chat_velocity_series_default,
-    compute_chat_velocity_series_from_events, compute_chat_velocity_series_from_file, compute_zscore,
-    ChatBucket, ChatVelocityPoint, DEFAULT_BASELINE_WINDOW_SEC, DEFAULT_BUCKET_WIDTH_SEC,
+    calculate_adjusted_zscore, calculate_emote_ratio, clean_word_token,
+    compute_chat_velocity_series, compute_chat_velocity_series_default,
+    compute_chat_velocity_series_from_events, compute_chat_velocity_series_from_file,
+    compute_emote_density_series, compute_emote_density_series_default,
+    compute_emote_density_series_from_file, compute_zscore, default_swarm_dictionary,
+    extract_message_tokens, extract_swarm_emotes, is_swarm_emote, ChatBucket, ChatVelocityPoint,
+    EmoteDensityPoint, SwarmDictionary, SwarmEmoteCategory, SwarmEmoteDefinition,
+    DEFAULT_BASELINE_WINDOW_SEC, DEFAULT_BUCKET_WIDTH_SEC, MAX_TOP_EMOTES_PER_BUCKET,
     MESSAGE_FLOOR_THRESHOLD, SMOOTHING_EPSILON, SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
 };
 pub use ingestion::{

@@ -1,15 +1,28 @@
 //! NeuroClip Multimodal Highlight Detection Subsystem
 //!
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>),
-//! `docs/ARCHITECTURE.md` §4.3 & §5.3, and `docs/TASK_BOARD.md` TASK-M4-09.
+//! `docs/ARCHITECTURE.md` §4.3 & §5.3, and `docs/TASK_BOARD.md` TASK-M4-09 & TASK-M4-10.
 
 pub mod bucket;
+pub mod emote_filter;
+pub mod swarm_dict;
 pub mod zscore;
 
 pub use bucket::{
     bin_chat_events, bin_chat_events_default, bin_chat_events_from_file, bucket_chat_events,
     ChatBucket, DEFAULT_BUCKET_WIDTH_SEC, MAX_ALLOWED_BUCKETS, MAX_CHAT_TIMESTAMP_SEC,
     SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
+};
+
+pub use emote_filter::{
+    calculate_emote_ratio, clean_word_token, compute_emote_density_series,
+    compute_emote_density_series_default, compute_emote_density_series_from_file,
+    extract_message_tokens, extract_swarm_emotes, is_swarm_emote, EmoteDensityPoint,
+    MAX_TOP_EMOTES_PER_BUCKET,
+};
+
+pub use swarm_dict::{
+    default_swarm_dictionary, SwarmDictionary, SwarmEmoteCategory, SwarmEmoteDefinition,
 };
 
 pub use zscore::{

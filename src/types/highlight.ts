@@ -15,6 +15,7 @@ export const DEFAULT_BASELINE_WINDOW_SEC = 60.0;
 export const SMOOTHING_EPSILON = 0.5;
 export const MESSAGE_FLOOR_THRESHOLD = 15;
 export const SPAM_BOT_MAX_MESSAGES_PER_AUTHOR = 3;
+export const MAX_TOP_EMOTES_PER_BUCKET = 5;
 
 // ---------------------------------------------------------------------------
 // Wire JSON Types (Schema 5.3 Rust Serialization)
@@ -39,6 +40,23 @@ export interface ChatVelocitySeriesResponseJson {
   readonly baseline_window_sec: number;
   readonly total_buckets: number;
   readonly points: readonly ChatVelocityPointJson[];
+}
+
+export interface EmoteDensityPointJson {
+  readonly timestamp_sec: number;
+  readonly top_emotes: readonly string[];
+  readonly e_ratio: number;
+  readonly total_tokens?: number | undefined;
+  readonly emote_count?: number | undefined;
+  readonly swarm_count?: number | undefined;
+  readonly weighted_score?: number | undefined;
+}
+
+export interface EmoteDensitySeriesResponseJson {
+  readonly vod_id?: string | undefined;
+  readonly bucket_width_sec: number;
+  readonly total_buckets: number;
+  readonly points: readonly EmoteDensityPointJson[];
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +97,37 @@ export interface ChatVelocitySeriesResponse {
   readonly vod_id?: string | undefined;
   readonly bucket_width_sec: number;
   readonly baseline_window_sec: number;
+  readonly total_buckets: number;
+}
+
+export interface EmoteDensityPoint {
+  readonly timestampSec: number;
+  readonly topEmotes: readonly string[];
+  readonly eRatio: number;
+  readonly totalTokens: number;
+  readonly emoteCount: number;
+  readonly swarmCount: number;
+  readonly weightedScore: number;
+
+  // Snake_case aliases matching Rust JSON contract
+  readonly timestamp_sec: number;
+  readonly top_emotes: readonly string[];
+  readonly e_ratio: number;
+  readonly total_tokens: number;
+  readonly emote_count: number;
+  readonly swarm_count: number;
+  readonly weighted_score: number;
+}
+
+export interface EmoteDensitySeriesResponse {
+  readonly vodId?: string | undefined;
+  readonly bucketWidthSec: number;
+  readonly totalBuckets: number;
+  readonly points: readonly EmoteDensityPoint[];
+
+  // Snake_case aliases
+  readonly vod_id?: string | undefined;
+  readonly bucket_width_sec: number;
   readonly total_buckets: number;
 }
 
@@ -194,6 +243,73 @@ export function normalizeChatVelocityPoint(raw: ChatVelocityPointJson): ChatVelo
   };
 }
 
+export function isEmoteDensityPointJson(val: unknown): val is EmoteDensityPointJson {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['timestamp_sec'] === 'number' &&
+    Number.isFinite(obj['timestamp_sec']) &&
+    Array.isArray(obj['top_emotes']) &&
+    obj['top_emotes'].every((item) => typeof item === 'string') &&
+    typeof obj['e_ratio'] === 'number' &&
+    Number.isFinite(obj['e_ratio']) &&
+    obj['e_ratio'] >= 0.0 &&
+    obj['e_ratio'] <= 1.0 &&
+    (obj['total_tokens'] === undefined ||
+      (typeof obj['total_tokens'] === 'number' && Number.isInteger(obj['total_tokens']) && obj['total_tokens'] >= 0)) &&
+    (obj['emote_count'] === undefined ||
+      (typeof obj['emote_count'] === 'number' && Number.isInteger(obj['emote_count']) && obj['emote_count'] >= 0)) &&
+    (obj['weighted_score'] === undefined ||
+      (typeof obj['weighted_score'] === 'number' && Number.isFinite(obj['weighted_score']) && obj['weighted_score'] >= 0))
+  );
+}
+
+export function isEmoteDensityPoint(val: unknown): val is EmoteDensityPoint {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['timestampSec'] === 'number' &&
+    Array.isArray(obj['topEmotes']) &&
+    typeof obj['eRatio'] === 'number' &&
+    typeof obj['totalTokens'] === 'number' &&
+    typeof obj['emoteCount'] === 'number' &&
+    typeof obj['weightedScore'] === 'number' &&
+    typeof obj['timestamp_sec'] === 'number' &&
+    Array.isArray(obj['top_emotes']) &&
+    typeof obj['e_ratio'] === 'number' &&
+    typeof obj['total_tokens'] === 'number' &&
+    typeof obj['emote_count'] === 'number' &&
+    typeof obj['weighted_score'] === 'number'
+  );
+}
+
+export function normalizeEmoteDensityPoint(raw: EmoteDensityPointJson): EmoteDensityPoint {
+  const count = raw.emote_count ?? raw.swarm_count ?? 0;
+  const tokens = raw.total_tokens ?? 0;
+  const weighted = raw.weighted_score ?? 0.0;
+  return {
+    timestampSec: raw.timestamp_sec,
+    topEmotes: Object.freeze([...raw.top_emotes]),
+    eRatio: raw.e_ratio,
+    totalTokens: tokens,
+    emoteCount: count,
+    swarmCount: count,
+    weightedScore: weighted,
+
+    timestamp_sec: raw.timestamp_sec,
+    top_emotes: Object.freeze([...raw.top_emotes]),
+    e_ratio: raw.e_ratio,
+    total_tokens: tokens,
+    emote_count: count,
+    swarm_count: count,
+    weighted_score: weighted,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Pure Client-Side Math Helpers
 // ---------------------------------------------------------------------------
@@ -219,4 +335,20 @@ export function calculateAdjustedZScore(
   }
   const z = (count - mean) / denom;
   return Number.isFinite(z) ? z : 0.0;
+}
+
+/**
+ * Pure client-side validation of unweighted Emote Swarm Ratio:
+ * If totalTokens <= 0 => 0.0
+ * Else => clamp(emoteCount / totalTokens, 0.0, 1.0)
+ */
+export function calculateEmoteRatio(emoteCount: number, totalTokens: number): number {
+  if (!Number.isFinite(totalTokens) || totalTokens <= 0) {
+    return 0.0;
+  }
+  if (!Number.isFinite(emoteCount) || emoteCount <= 0) {
+    return 0.0;
+  }
+  const ratio = emoteCount / totalTokens;
+  return Math.min(1.0, Math.max(0.0, Number.isFinite(ratio) ? ratio : 0.0));
 }

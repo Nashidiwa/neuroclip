@@ -50,18 +50,25 @@ import {
 import {
   type ChatBucketJson,
   type ChatVelocityPointJson,
+  type EmoteDensityPointJson,
+  type EmoteDensityPoint,
   isChatBucketJson,
   isChatBucket,
   isChatVelocityPointJson,
   isChatVelocityPoint,
+  isEmoteDensityPointJson,
+  isEmoteDensityPoint,
   normalizeChatBucket,
   normalizeChatVelocityPoint,
+  normalizeEmoteDensityPoint,
   calculateAdjustedZScore,
+  calculateEmoteRatio,
   DEFAULT_BUCKET_WIDTH_SEC,
   DEFAULT_BASELINE_WINDOW_SEC,
   SMOOTHING_EPSILON,
   MESSAGE_FLOOR_THRESHOLD,
   SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
+  MAX_TOP_EMOTES_PER_BUCKET,
 } from '../types/highlight.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
@@ -1948,6 +1955,130 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.strictEqual(DEFAULT_BASELINE_WINDOW_SEC, 60.0);
       assert.strictEqual(SMOOTHING_EPSILON, 0.5);
       assert.strictEqual(MESSAGE_FLOOR_THRESHOLD, 15);
+      assert.strictEqual(SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, 3);
+    });
+  });
+
+  describe('TASK-M4-10 Test Suite: Neuro Swarm Emote Density Filtering Engine', () => {
+    it('should assert Rust highlight emote modules, contracts, and integration tests exist', () => {
+      const dictPath = path.resolve('src-tauri/src/highlight/swarm_dict.rs');
+      const filterPath = path.resolve('src-tauri/src/highlight/emote_filter.rs');
+      const modPath = path.resolve('src-tauri/src/highlight/mod.rs');
+      const testPath = path.resolve('src-tauri/tests/highlight_emote_filter_test.rs');
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+
+      assert.ok(fs.existsSync(dictPath), 'swarm_dict.rs must exist');
+      assert.ok(fs.existsSync(filterPath), 'emote_filter.rs must exist');
+      assert.ok(fs.existsSync(modPath), 'highlight/mod.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'highlight_emote_filter_test.rs must exist');
+
+      const libContent = fs.readFileSync(libPath, 'utf8');
+      assert.ok(libContent.includes('SwarmDictionary'), 'lib.rs must export SwarmDictionary');
+      assert.ok(libContent.includes('SwarmEmoteCategory'), 'lib.rs must export SwarmEmoteCategory');
+      assert.ok(libContent.includes('SwarmEmoteDefinition'), 'lib.rs must export SwarmEmoteDefinition');
+      assert.ok(libContent.includes('EmoteDensityPoint'), 'lib.rs must export EmoteDensityPoint');
+      assert.ok(libContent.includes('compute_emote_density_series'), 'lib.rs must export compute_emote_density_series');
+      assert.ok(libContent.includes('extract_swarm_emotes'), 'lib.rs must export extract_swarm_emotes');
+      assert.ok(libContent.includes('is_swarm_emote'), 'lib.rs must export is_swarm_emote');
+
+      const dictContent = fs.readFileSync(dictPath, 'utf8');
+      assert.ok(dictContent.includes('pub struct SwarmDictionary'), 'swarm_dict.rs must define SwarmDictionary');
+      assert.ok(dictContent.includes('pub enum SwarmEmoteCategory'), 'swarm_dict.rs must define SwarmEmoteCategory');
+      assert.ok(dictContent.includes('pub struct SwarmEmoteDefinition'), 'swarm_dict.rs must define SwarmEmoteDefinition');
+
+      const filterContent = fs.readFileSync(filterPath, 'utf8');
+      assert.ok(filterContent.includes('pub struct EmoteDensityPoint'), 'emote_filter.rs must define EmoteDensityPoint');
+      assert.ok(filterContent.includes('MAX_TOP_EMOTES_PER_BUCKET'), 'emote_filter.rs must define MAX_TOP_EMOTES_PER_BUCKET');
+      assert.ok(filterContent.includes('calculate_emote_ratio'), 'emote_filter.rs must define calculate_emote_ratio');
+      assert.ok(filterContent.includes('extract_message_tokens'), 'emote_filter.rs must define extract_message_tokens');
+    });
+
+    it('should assert zero-panic invariant in Rust highlight emote library code (CONVENTIONS.md §2.4)', () => {
+      const filesToAudit = [
+        path.resolve('src-tauri/src/highlight/swarm_dict.rs'),
+        path.resolve('src-tauri/src/highlight/emote_filter.rs'),
+        path.resolve('src-tauri/src/highlight/mod.rs'),
+      ];
+
+      for (const filePath of filesToAudit) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const nonTestCode = content.split('#[cfg(test)]')[0] ?? '';
+
+        assert.strictEqual(
+          nonTestCode.includes('.unwrap('),
+          false,
+          `Forbidden .unwrap() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('.expect('),
+          false,
+          `Forbidden .expect() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('panic!('),
+          false,
+          `Forbidden panic!() found in non-test code: ${filePath}`,
+        );
+      }
+    });
+
+    it('should validate Frontend TypeScript contracts, type guards, and normalizer (src/types/highlight.ts)', () => {
+      const typesPath = path.resolve('src/types/highlight.ts');
+      assert.ok(fs.existsSync(typesPath), 'src/types/highlight.ts must exist');
+
+      // Test EmoteDensityPointJson guard
+      const validPoint: EmoteDensityPointJson = {
+        timestamp_sec: 10.0,
+        top_emotes: ['KEKW', 'Tutel', '💀'],
+        e_ratio: 0.50,
+        total_tokens: 50,
+        emote_count: 25,
+        weighted_score: 1.8,
+      };
+      assert.strictEqual(isEmoteDensityPointJson(validPoint), true);
+      assert.strictEqual(isEmoteDensityPointJson({ timestamp_sec: -1, e_ratio: 1.5 }), false);
+      assert.strictEqual(isEmoteDensityPointJson(null), false);
+      assert.strictEqual(isEmoteDensityPointJson(undefined), false);
+
+      const normalized: EmoteDensityPoint = normalizeEmoteDensityPoint(validPoint);
+      assert.strictEqual(normalized.timestampSec, 10.0);
+      assert.deepStrictEqual(normalized.topEmotes, ['KEKW', 'Tutel', '💀']);
+      assert.strictEqual(normalized.eRatio, 0.50);
+      assert.strictEqual(normalized.totalTokens, 50);
+      assert.strictEqual(normalized.emoteCount, 25);
+      assert.strictEqual(normalized.swarmCount, 25);
+      assert.strictEqual(normalized.weightedScore, 1.8);
+
+      // Snake_case aliases matching Rust JSON contract
+      assert.strictEqual(normalized.timestamp_sec, 10.0);
+      assert.deepStrictEqual(normalized.top_emotes, ['KEKW', 'Tutel', '💀']);
+      assert.strictEqual(normalized.e_ratio, 0.50);
+      assert.strictEqual(normalized.total_tokens, 50);
+      assert.strictEqual(normalized.emote_count, 25);
+      assert.strictEqual(normalized.swarm_count, 25);
+      assert.strictEqual(normalized.weighted_score, 1.8);
+
+      assert.strictEqual(isEmoteDensityPoint(normalized), true);
+    });
+
+    it('should verify pure mathematical invariants: UT-10.1, UT-10.2, UT-10.3', () => {
+      // UT-10.3: Emote ratio formula: 50 tokens, 25 swarm emotes => 0.50 (50%)
+      const ratio50 = calculateEmoteRatio(25, 50);
+      assert.strictEqual(ratio50, 0.50);
+
+      // Edge case: 0 tokens => 0.0 (no division by zero)
+      assert.strictEqual(calculateEmoteRatio(0, 0), 0.0);
+      assert.strictEqual(calculateEmoteRatio(10, 0), 0.0);
+      assert.strictEqual(calculateEmoteRatio(0, 50), 0.0);
+
+      // Clamping invariant in [0.0, 1.0]
+      assert.strictEqual(calculateEmoteRatio(60, 50), 1.0);
+      assert.strictEqual(calculateEmoteRatio(50, 50), 1.0);
+      assert.strictEqual(calculateEmoteRatio(-5, 50), 0.0);
+
+      // Assert constants match specifications
+      assert.strictEqual(DEFAULT_BUCKET_WIDTH_SEC, 5.0);
+      assert.strictEqual(MAX_TOP_EMOTES_PER_BUCKET, 5);
       assert.strictEqual(SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, 3);
     });
   });
