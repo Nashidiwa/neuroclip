@@ -96,7 +96,7 @@ Toàn bộ 13 tasks thuộc 3 Milestones nền tảng đầu tiên (M4.1, M4.2 &
 - **Hợp nhất đa phương thức & Bộ bù độ trễ livestream 4.5s (`TASK-M4-12`)**:
   - Công thức tính điểm hợp nhất đa kênh: $\text{Score} = (0.60 \cdot Z_{\text{norm}} + 0.25 \cdot E_{\text{ratio}} + 0.15 \cdot \text{RMS}_{\text{norm}}) \times 100.0$ (tự động fallback $1.0 \cdot \text{RMS}_{\text{norm}}$ khi không có chat).
   - Bù trễ CDN livestream $4.5\text{s}$ kết hợp Pre-roll Buffer $10.0\text{s} \implies$ clip luôn bắt đầu trước đỉnh chat $\ge 14.5\text{s}$; thuật toán phân cụm khoảng cách 30s và khử trùng lặp NMS $\le 50\%$.
-  - Cơ chế Dynamic Padding ở cuối VOD tự động co giãn Post-roll và bù vào Pre-roll bảo đảm clip luôn đạt $\ge 15.0\text{s}$ và $t_{\text{end}} \le \text{duration\_seconds}$ 100%, xuất `highlight_clusters.json` Schema 5.4 và giao diện `HighlightViewer.tsx`.
+  - Cơ chế Dynamic Padding ở cuối VOD tự động co giãn Post-roll và bù vào Pre-roll bảo đảm clip luôn đạt $\ge 15.0\text{s}$ và $t_{\text{end}} \le$ `duration_seconds` 100%, xuất `highlight_clusters.json` Schema 5.4 và giao diện `HighlightViewer.tsx`.
 - **Bộ tải phân đoạn video chính xác không tải thừa (`TASK-M4-13`)**:
   - FFmpeg input-seeking HTTP Range Request trực tiếp qua mạng từ URL m3u8 stream gốc trong `vod_manifest.json` (`-ss <start> -to <end>` đặt trước `-i`), cắt phân đoạn 90s trong $\le 10\text{s}$ với dung lượng chỉ 30MB–80MB (tiết kiệm $\ge 99\%$ băng thông mạng và dung lượng đĩa so với tải 30GB video).
   - Stream copy `-c copy` và `-avoid_negative_ts make_zero` đảm bảo không bị gián đoạn/đóng băng khung hình đầu tiên; tự động kiểm tra Keyframe alignment và audio/video drift $\le 50\text{ms}$; quản lý tiến trình an toàn qua Windows Job Object.
