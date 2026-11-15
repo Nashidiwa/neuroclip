@@ -24,6 +24,9 @@ export const ERROR_CODES = {
   INGEST_INVALID_URL: 'ERR_INGEST_INVALID_URL',
   INGEST_EXTRACTION_FAILED: 'ERR_INGEST_EXTRACTION_FAILED',
   INGEST_LIVE_STREAM_UNSUPPORTED: 'ERR_INGEST_LIVE_STREAM_UNSUPPORTED',
+  INGEST_SLICE_FAILED: 'ERR_INGEST_SLICE_FAILED',
+  INGEST_KEYFRAME_ALIGNMENT_FAILED: 'ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED',
+  INGEST_INVALID_TIME_RANGE: 'ERR_INGEST_INVALID_TIME_RANGE',
 
   // STT Errors
   STT_RATE_LIMIT: 'ERR_STT_RATE_LIMIT',
@@ -83,6 +86,9 @@ export const ERROR_CODES = {
   ERR_INGEST_INVALID_URL: 'ERR_INGEST_INVALID_URL',
   ERR_INGEST_EXTRACTION_FAILED: 'ERR_INGEST_EXTRACTION_FAILED',
   ERR_INGEST_LIVE_STREAM_UNSUPPORTED: 'ERR_INGEST_LIVE_STREAM_UNSUPPORTED',
+  ERR_INGEST_SLICE_FAILED: 'ERR_INGEST_SLICE_FAILED',
+  ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED: 'ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED',
+  ERR_INGEST_INVALID_TIME_RANGE: 'ERR_INGEST_INVALID_TIME_RANGE',
   ERR_STT_RATE_LIMIT: 'ERR_STT_RATE_LIMIT',
   ERR_STT_PAYLOAD_TOO_LARGE: 'ERR_STT_PAYLOAD_TOO_LARGE',
   ERR_STT_VRAM_INSUFFICIENT: 'ERR_STT_VRAM_INSUFFICIENT',
@@ -134,6 +140,12 @@ export const ERROR_MESSAGES_VI: Readonly<Record<string, string>> = Object.freeze
     'Không thể trích xuất stream từ liên kết này. Vui lòng kiểm tra lại URL.',
   [ERROR_CODES.INGEST_LIVE_STREAM_UNSUPPORTED]:
     'Luồng đang phát trực tiếp không được hỗ trợ trong phiên bản này (chỉ hỗ trợ VOD đã kết thúc).',
+  [ERROR_CODES.INGEST_SLICE_FAILED]:
+    'Lỗi trong quá trình cắt phân đoạn video.',
+  [ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED]:
+    'Lệch keyframe hoặc không đồng bộ âm thanh/hình ảnh vượt quá ngưỡng cho phép (50ms).',
+  [ERROR_CODES.INGEST_INVALID_TIME_RANGE]:
+    'Mốc thời gian cắt phân đoạn video không hợp lệ.',
   [ERROR_CODES.STT_RATE_LIMIT]:
     'Đã vượt quá giới hạn lượt gọi Groq STT API (Rate Limit 429). Vui lòng thử lại sau giây lát.',
   [ERROR_CODES.STT_PAYLOAD_TOO_LARGE]:
@@ -310,6 +322,16 @@ export function getFriendlyErrorMessage(errorOrCode: unknown): string {
     const directLookup = ERROR_MESSAGES_VI[errorOrCode];
     if (directLookup !== undefined) {
       return directLookup;
+    }
+  }
+
+  if (typeof errorOrCode === 'object' && errorOrCode !== null) {
+    const obj = errorOrCode as Record<string, unknown>;
+    if (typeof obj['code'] === 'string') {
+      const codeLookup = ERROR_MESSAGES_VI[obj['code']];
+      if (codeLookup !== undefined) {
+        return codeLookup;
+      }
     }
   }
 

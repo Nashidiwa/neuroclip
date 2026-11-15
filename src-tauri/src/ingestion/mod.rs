@@ -5,6 +5,7 @@
 pub mod buffer;
 pub mod chat_parser;
 pub mod cookies;
+pub mod range_slicer;
 pub mod streamer;
 pub mod twitch_gql;
 pub mod validator;
@@ -22,6 +23,13 @@ pub use chat_parser::{
 pub use cookies::{
     build_bot_defense_args, build_cookie_args, get_desktop_user_agents,
     get_rotated_desktop_user_agent, parse_browser_type, BrowserType, CookieSource,
+};
+pub use range_slicer::{
+    build_ffmpeg_range_slice_args, build_slice_ffmpeg_args, evaluate_keyframe_alignment,
+    execute_range_slice, parse_ffprobe_json, probe_keyframe_alignment, resolve_ffmpeg_binary,
+    resolve_ffprobe_binary, verify_stream_durations, FfprobeFormat, FfprobeOutput, FfprobeStream,
+    KeyframeAlignmentReport, RangeSliceRequest, SliceResult, MAX_INITIAL_PTS_DELAY_SEC,
+    MAX_KEYFRAME_DRIFT_MS, MIN_SLICING_DISK_SPACE_MB,
 };
 pub use streamer::{
     build_ffmpeg_file_args, build_ffmpeg_pipe_args, compute_audio_energy_stream, detect_source_type,

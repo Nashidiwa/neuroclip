@@ -59,7 +59,7 @@ pub enum AppError {
 }
 
 /// Ingestion subsystem errors (VOD download, streaming, chat extraction).
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq)]
 pub enum IngestError {
     #[error("Dung lượng ổ đĩa không đủ (cần tối thiểu {required_mb}MB, hiện có {available_mb}MB)")]
     DiskSpaceInsufficient { required_mb: u64, available_mb: u64 },
@@ -81,6 +81,15 @@ pub enum IngestError {
 
     #[error("Luồng đang phát trực tiếp không được hỗ trợ trong phiên bản này (chỉ hỗ trợ VOD đã kết thúc)")]
     LiveStreamUnsupported,
+
+    #[error("Lỗi cắt phân đoạn video: {0}")]
+    SliceFailed(String),
+
+    #[error("Lệch keyframe hoặc không đồng bộ âm thanh/hình ảnh vượt quá ngưỡng ({drift_ms:.1}ms > 50ms)")]
+    KeyframeAlignmentFailed { drift_ms: f64 },
+
+    #[error("Mốc thời gian cắt không hợp lệ: bắt đầu {start_sec:.2}s, kết thúc {end_sec:.2}s")]
+    InvalidTimeRange { start_sec: f64, end_sec: f64 },
 }
 
 /// Speech-to-Text subsystem errors (Groq Whisper Cloud & Faster-Whisper Local).
@@ -241,6 +250,11 @@ impl AppError {
                 IngestError::InvalidUrl(_) => codes::ERR_INGEST_INVALID_URL,
                 IngestError::ExtractionFailed(_) => codes::ERR_INGEST_EXTRACTION_FAILED,
                 IngestError::LiveStreamUnsupported => codes::ERR_INGEST_LIVE_STREAM_UNSUPPORTED,
+                IngestError::SliceFailed(_) => codes::ERR_INGEST_SLICE_FAILED,
+                IngestError::KeyframeAlignmentFailed { .. } => {
+                    codes::ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED
+                }
+                IngestError::InvalidTimeRange { .. } => codes::ERR_INGEST_INVALID_TIME_RANGE,
             },
             AppError::Stt(err) => match err {
                 SttError::RateLimitExceeded(_) => codes::ERR_STT_RATE_LIMIT,
@@ -309,8 +323,12 @@ impl AppError {
                 | IngestError::BotBlocked(_)
                 | IngestError::ChatReplayUnavailable
                 | IngestError::NetworkStreamDropped
-                | IngestError::ExtractionFailed(_) => true,
-                IngestError::InvalidUrl(_) | IngestError::LiveStreamUnsupported => false,
+                | IngestError::ExtractionFailed(_)
+                | IngestError::SliceFailed(_) => true,
+                IngestError::InvalidUrl(_)
+                | IngestError::LiveStreamUnsupported
+                | IngestError::KeyframeAlignmentFailed { .. }
+                | IngestError::InvalidTimeRange { .. } => false,
             },
             AppError::Stt(err) => match err {
                 SttError::RateLimitExceeded(_)
@@ -368,9 +386,20 @@ impl AppError {
     #[must_use]
     pub fn details(&self) -> Option<String> {
         match self {
-            AppError::Ingestion(IngestError::BotBlocked(details))
-            | AppError::Ingestion(IngestError::ExtractionFailed(details))
-            | AppError::Ingestion(IngestError::InvalidUrl(details)) => Some(details.clone()),
+            AppError::Ingestion(
+                IngestError::BotBlocked(details)
+                | IngestError::ExtractionFailed(details)
+                | IngestError::InvalidUrl(details)
+                | IngestError::SliceFailed(details),
+            ) => Some(details.clone()),
+
+            AppError::Ingestion(IngestError::KeyframeAlignmentFailed { drift_ms }) => {
+                Some(format!("drift: {drift_ms:.2}ms"))
+            }
+
+            AppError::Ingestion(IngestError::InvalidTimeRange { start_sec, end_sec }) => {
+                Some(format!("start: {start_sec:.2}s, end: {end_sec:.2}s"))
+            }
 
             AppError::Stt(SttError::RateLimitExceeded(details))
             | AppError::Stt(SttError::VadProcessingFailed(details)) => Some(details.clone()),

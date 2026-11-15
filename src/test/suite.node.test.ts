@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Ajv from 'ajv';
 import { loadTheme, resolveBackdropConfig, THEME_PALETTE, WINDOW_GEOMETRY } from '../styles/theme.ts';
-import { ERROR_CODES, ERROR_MESSAGES_VI, isIpcError, parseIpcError } from '../services/ipc/error.ts';
+import { ERROR_CODES, ERROR_MESSAGES_VI, getFriendlyErrorMessage, isIpcError, parseIpcError } from '../services/ipc/error.ts';
 import {
   type HardwareProfileJson,
   toHardwareProfile,
@@ -119,6 +119,23 @@ import {
   FUSION_AUDIO_ONLY_WEIGHT_RMS,
   DEFAULT_TOP_CLUSTERS_LIMIT,
 } from '../types/highlight.ts';
+import {
+  type SliceResultJson,
+  type SliceVideoSegmentRequest,
+  isSliceResultJson,
+  isSliceResult,
+  isSliceVideoSegmentRequestJson,
+  normalizeSliceResult,
+  toSliceResultJson,
+  toSliceVideoSegmentRequestJson,
+  calculateBandwidthSavings,
+  isKeyframeAligned,
+  MAX_KEYFRAME_DRIFT_MS,
+  MAX_INITIAL_PTS_DELAY_SEC,
+  MIN_SLICING_DISK_SPACE_MB,
+  FULL_VOD_REFERENCE_SIZE_MB,
+} from '../types/range_slicer.ts';
+import { sliceVideoSegment, cancelSliceVideoSegment } from '../services/ipc/slice.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -2516,7 +2533,215 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(DEFAULT_TOP_CLUSTERS_LIMIT, 20);
     });
   });
+
+  describe('TASK-M4-13 Test Suite: Lossless Precision Range Slicer', () => {
+    it('should verify file structure and integrity for Range Slicer subsystem', () => {
+      const root = path.resolve(import.meta.dirname, '../..');
+
+      // Rust Backend Files
+      const rangeSlicerRs = path.join(root, 'src-tauri/src/ingestion/range_slicer.rs');
+      const sliceCmdRs = path.join(root, 'src-tauri/src/commands/slice_cmd.rs');
+      const rangeSlicerTestRs = path.join(root, 'src-tauri/tests/range_slicer_test.rs');
+
+      assert.ok(fs.existsSync(rangeSlicerRs), 'range_slicer.rs must exist');
+      assert.ok(fs.existsSync(sliceCmdRs), 'slice_cmd.rs must exist');
+      assert.ok(fs.existsSync(rangeSlicerTestRs), 'range_slicer_test.rs must exist');
+
+      // Frontend TypeScript Files
+      const rangeSlicerTs = path.join(root, 'src/types/range_slicer.ts');
+      const sliceIpcTs = path.join(root, 'src/services/ipc/slice.ts');
+
+      assert.ok(fs.existsSync(rangeSlicerTs), 'range_slicer.ts must exist');
+      assert.ok(fs.existsSync(sliceIpcTs), 'slice.ts must exist');
+    });
+
+    it('should enforce zero-panic invariant in Rust production code for Range Slicer', () => {
+      const root = path.resolve(import.meta.dirname, '../..');
+      const filesToCheck = [
+        path.join(root, 'src-tauri/src/ingestion/range_slicer.rs'),
+        path.join(root, 'src-tauri/src/commands/slice_cmd.rs'),
+      ];
+
+      for (const filePath of filesToCheck) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const lines = content.split('\n');
+
+        lines.forEach((line, idx) => {
+          const trimmed = line.trim();
+          // Skip comments
+          if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
+            return;
+          }
+          assert.ok(
+            !line.includes('.unwrap('),
+            `Found .unwrap() at ${path.basename(filePath)}:${idx + 1}: ${line}`,
+          );
+          assert.ok(
+            !line.includes('.expect('),
+            `Found .expect() at ${path.basename(filePath)}:${idx + 1}: ${line}`,
+          );
+          assert.ok(
+            !line.includes('panic!('),
+            `Found panic!() at ${path.basename(filePath)}:${idx + 1}: ${line}`,
+          );
+        });
+      }
+    });
+
+    it('should validate type guards and normalizers for SliceResult and SliceVideoSegmentRequest', () => {
+      // 1. Snake_case payload (wire specification)
+      const rawSnakeWireResult: SliceResultJson = {
+        clip_path: 'C:/NeuroClip/projects/vod_1/clips/clip_1.mp4',
+        duration_seconds: 29.5,
+        file_size_bytes: 47185920, // ~45MB
+        video_duration: 29.533,
+        audio_duration: 29.515,
+        stream_drift_ms: 18.0,
+        keyframe_aligned: true,
+      };
+
+      assert.ok(isSliceResultJson(rawSnakeWireResult));
+      assert.ok(!isSliceResultJson(null));
+      assert.ok(!isSliceResultJson({ invalid: true }));
+
+      const domainFromSnake = normalizeSliceResult(rawSnakeWireResult);
+      assert.ok(isSliceResult(domainFromSnake));
+      assert.strictEqual(domainFromSnake.clipPath, rawSnakeWireResult.clip_path);
+      assert.strictEqual(domainFromSnake.clip_path, rawSnakeWireResult.clip_path);
+      assert.strictEqual(domainFromSnake.durationSeconds, 29.5);
+      assert.strictEqual(domainFromSnake.fileSizeBytes, 47185920);
+      assert.strictEqual(domainFromSnake.fileSizeMb, 45.0);
+      assert.strictEqual(domainFromSnake.streamDriftMs, 18.0);
+      assert.strictEqual(domainFromSnake.durationDeltaMs, 18.0);
+      assert.strictEqual(domainFromSnake.keyframeAligned, true);
+
+      // Wire roundtrip
+      const wireBack = toSliceResultJson(domainFromSnake);
+      assert.strictEqual(wireBack.clip_path, rawSnakeWireResult.clip_path);
+      assert.strictEqual(wireBack.duration_seconds, 29.5);
+      assert.strictEqual(wireBack.file_size_bytes, 47185920);
+      assert.strictEqual(wireBack.stream_drift_ms, 18.0);
+      assert.strictEqual(wireBack.keyframe_aligned, true);
+
+      // 2. CamelCase payload (dual property access support)
+      const rawCamelPayload = {
+        clipPath: 'C:/NeuroClip/projects/vod_2/clips/clip_2.mp4',
+        durationSeconds: 15.0,
+        fileSizeBytes: 20971520, // ~20MB
+        videoDuration: 15.01,
+        audioDuration: 15.02,
+        streamDriftMs: 10.0,
+        keyframeAligned: true,
+      };
+
+      assert.ok(isSliceResultJson(rawCamelPayload), 'isSliceResultJson must accept camelCase payload');
+      const domainFromCamel = normalizeSliceResult(rawCamelPayload);
+      assert.ok(isSliceResult(domainFromCamel), 'normalizeSliceResult must produce valid SliceResult from camelCase payload');
+      assert.strictEqual(domainFromCamel.clipPath, 'C:/NeuroClip/projects/vod_2/clips/clip_2.mp4');
+      assert.strictEqual(domainFromCamel.clip_path, 'C:/NeuroClip/projects/vod_2/clips/clip_2.mp4');
+      assert.strictEqual(domainFromCamel.durationSeconds, 15.0);
+      assert.strictEqual(domainFromCamel.fileSizeBytes, 20971520);
+      assert.strictEqual(domainFromCamel.fileSizeMb, 20.0);
+      assert.strictEqual(domainFromCamel.streamDriftMs, 10.0);
+      assert.strictEqual(domainFromCamel.keyframeAligned, true);
+
+      // Request normalizer
+      const requestDomain: SliceVideoSegmentRequest = {
+        vodId: 'vod_99',
+        startSec: 100.0,
+        endSec: 190.0,
+        clusterId: 'cluster_7',
+        outputFilename: 'my_clip.mp4',
+      };
+      const requestWire = toSliceVideoSegmentRequestJson(requestDomain);
+      assert.ok(isSliceVideoSegmentRequestJson(requestWire));
+      assert.strictEqual(requestWire.vod_id, 'vod_99');
+      assert.strictEqual(requestWire.start_sec, 100.0);
+      assert.strictEqual(requestWire.end_sec, 190.0);
+      assert.strictEqual(requestWire.cluster_id, 'cluster_7');
+      assert.strictEqual(requestWire.output_filename, 'my_clip.mp4');
+    });
+
+    it('should register and resolve Vietnamese messages for range slicer error codes', () => {
+      // Verify ERROR_CODES definitions
+      assert.strictEqual(ERROR_CODES.INGEST_SLICE_FAILED, 'ERR_INGEST_SLICE_FAILED');
+      assert.strictEqual(ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED, 'ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED');
+      assert.strictEqual(ERROR_CODES.INGEST_INVALID_TIME_RANGE, 'ERR_INGEST_INVALID_TIME_RANGE');
+
+      // Verify ERROR_MESSAGES_VI entries
+      assert.strictEqual(
+        ERROR_MESSAGES_VI[ERROR_CODES.INGEST_SLICE_FAILED],
+        'Lỗi trong quá trình cắt phân đoạn video.',
+      );
+      assert.strictEqual(
+        ERROR_MESSAGES_VI[ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED],
+        'Lệch keyframe hoặc không đồng bộ âm thanh/hình ảnh vượt quá ngưỡng cho phép (50ms).',
+      );
+      assert.strictEqual(
+        ERROR_MESSAGES_VI[ERROR_CODES.INGEST_INVALID_TIME_RANGE],
+        'Mốc thời gian cắt phân đoạn video không hợp lệ.',
+      );
+
+      // Verify getFriendlyErrorMessage returns localized messages instead of default fallback
+      const msgSlice = getFriendlyErrorMessage(ERROR_CODES.INGEST_SLICE_FAILED);
+      assert.strictEqual(msgSlice, 'Lỗi trong quá trình cắt phân đoạn video.');
+
+      const msgKeyframe = getFriendlyErrorMessage(ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED);
+      assert.strictEqual(
+        msgKeyframe,
+        'Lệch keyframe hoặc không đồng bộ âm thanh/hình ảnh vượt quá ngưỡng cho phép (50ms).',
+      );
+
+      const msgTimeRange = getFriendlyErrorMessage(ERROR_CODES.INGEST_INVALID_TIME_RANGE);
+      assert.strictEqual(msgTimeRange, 'Mốc thời gian cắt phân đoạn video không hợp lệ.');
+
+      // Also test with raw error object { code: 'ERR_INGEST_SLICE_FAILED' }
+      const fromObj = getFriendlyErrorMessage({ code: 'ERR_INGEST_SLICE_FAILED' });
+      assert.strictEqual(fromObj, 'Lỗi trong quá trình cắt phân đoạn video.');
+    });
+
+    it('should verify mathematical formulas and SLAs: AC-13.1, AC-13.2, AC-13.3, ED-13.1', () => {
+      // AC-13.2: Bandwidth Savings Calculation
+      // 70MB clip vs 30GB (30720MB) VOD:
+      // Savings = (1.0 - 70 / 30720) * 100 = 99.77% >= 99.0%
+      const savings70Mb = calculateBandwidthSavings(70 * 1024 * 1024, 30720 * 1024 * 1024);
+      assert.ok(savings70Mb >= 99.0, `Expected savings >= 99%, got ${savings70Mb}%`);
+      assert.strictEqual(savings70Mb, 99.77);
+
+      const savings50Mb = calculateBandwidthSavings(50 * 1024 * 1024, 30720 * 1024 * 1024);
+      assert.strictEqual(savings50Mb, 99.84);
+
+      const savings80Mb = calculateBandwidthSavings(80 * 1024 * 1024, 30720 * 1024 * 1024);
+      assert.strictEqual(savings80Mb, 99.74);
+
+      const savings30Mb = calculateBandwidthSavings(30 * 1024 * 1024, 30720 * 1024 * 1024);
+      assert.strictEqual(savings30Mb, 99.9);
+
+      // ED-13.1: Keyframe Alignment Check (<= 50ms)
+      assert.strictEqual(isKeyframeAligned(15.0, 0.0), true, '15ms drift must be aligned');
+      assert.strictEqual(isKeyframeAligned(50.0, 0.0), true, '50ms boundary drift must be aligned');
+      assert.strictEqual(isKeyframeAligned(50.1, 0.0), false, '50.1ms drift must exceed alignment');
+      assert.strictEqual(isKeyframeAligned(80.0, 0.0), false, '80ms drift must exceed alignment');
+
+      // AC-13.3: Initial Video Frame Presentation Delay (<= 50ms = 0.050s)
+      assert.strictEqual(isKeyframeAligned(10.0, 0.000), true, '0ms delay passes');
+      assert.strictEqual(isKeyframeAligned(10.0, 0.050), true, '50ms boundary delay passes');
+      assert.strictEqual(isKeyframeAligned(10.0, 0.120), false, '120ms freeze delay must fail');
+
+      // Constants verification
+      assert.strictEqual(MAX_KEYFRAME_DRIFT_MS, 50.0);
+      assert.strictEqual(MAX_INITIAL_PTS_DELAY_SEC, 0.050);
+      assert.strictEqual(MIN_SLICING_DISK_SPACE_MB, 500);
+      assert.strictEqual(FULL_VOD_REFERENCE_SIZE_MB, 30720);
+    });
+
+    it('should verify IPC service method signatures and export integrity', () => {
+      assert.strictEqual(typeof sliceVideoSegment, 'function');
+      assert.strictEqual(typeof cancelSliceVideoSegment, 'function');
+    });
+  });
 });
+
 
 
 

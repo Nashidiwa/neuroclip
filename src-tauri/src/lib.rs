@@ -24,7 +24,11 @@ pub mod core {
     pub mod storage;
 }
 
-pub use commands::AppState;
+pub use commands::{
+    cancel_slice_task_token, cancel_slice_video_segment, register_slice_task_token,
+    resolve_vod_project_dir, slice_video_segment, slice_video_segment_internal,
+    unregister_slice_task_token, AppState,
+};
 pub use config::{
     AppConfig, CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode, SidecarPaths,
 };
@@ -64,11 +68,15 @@ pub use highlight::{
     WEIGHT_AUDIO_RMS, WEIGHT_CHAT_Z, WEIGHT_EMOTE_RATIO,
 };
 pub use ingestion::{
-    extract_message_emotes, is_neuro_swarm_emote, parse_raw_chat_line, AudioChunk,
-    AudioEnergyWindow, AudioRingBuffer, AudioStreamValidator, BrowserType, ChatDensityPoint,
-    ChatEvent, ChatEventsContainer, ChatHeatmapContainer, ChatHeatmapResponse, CookieSource,
-    HeatmapWindow, IngestOptions, IngestProgressPayload, StreamingChatNormalizer, VodManifest,
-    VodMetadata, NEURO_SWARM_EMOTES,
+    build_ffmpeg_range_slice_args, build_slice_ffmpeg_args, evaluate_keyframe_alignment,
+    execute_range_slice, extract_message_emotes, is_neuro_swarm_emote, parse_ffprobe_json,
+    parse_raw_chat_line, probe_keyframe_alignment, resolve_ffmpeg_binary, resolve_ffprobe_binary,
+    verify_stream_durations, AudioChunk, AudioEnergyWindow, AudioRingBuffer, AudioStreamValidator,
+    BrowserType, ChatDensityPoint, ChatEvent, ChatEventsContainer, ChatHeatmapContainer,
+    ChatHeatmapResponse, CookieSource, FfprobeFormat, FfprobeOutput, FfprobeStream, HeatmapWindow,
+    IngestOptions, IngestProgressPayload, KeyframeAlignmentReport, RangeSliceRequest, SliceResult,
+    StreamingChatNormalizer, VodManifest, VodMetadata, MAX_INITIAL_PTS_DELAY_SEC,
+    MAX_KEYFRAME_DRIFT_MS, MIN_SLICING_DISK_SPACE_MB, NEURO_SWARM_EMOTES,
 };
 pub use logging::{
     is_neuroclip_log_file, prune_logs, redact_secret, redact_secrets_in_text, resolve_log_dir,
@@ -135,7 +143,9 @@ pub fn run() {
             commands::detect_highlights,
             commands::get_highlight_clusters,
             commands::toggle_highlight_bookmark,
-            commands::toggle_cluster_bookmark
+            commands::toggle_cluster_bookmark,
+            commands::slice_video_segment,
+            commands::cancel_slice_video_segment
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {
