@@ -16,8 +16,8 @@
 [![React: v18.3](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests: 467 Vitest + 81 Node + 137 Rust](https://img.shields.io/badge/Tests-467%20Vitest%20%2B%2081%20Node%20%2B%20137%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
-[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(8%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
+[![Tests: 485 Vitest + 104 Node + 202 Rust](https://img.shields.io/badge/Tests-485%20Vitest%20%2B%20104%20Node%20%2B%20202%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
+[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(13%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
 [Current Implementation](#-current-implementation) •
@@ -52,11 +52,11 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
 
 ```text
-[████████░░░░░░░░░░░░░░░░░░░░░░░░] 8 / 32 Tasks Hoàn thành (25.0% v1 Core)
-467 Vitest Tests Passing • 81 Node Native Runner Tests Passing • 137 Rust Tests Passing • Zero Unhandled Panics
+[█████████████░░░░░░░░░░░░░░░░░░░] 13 / 32 Tasks Hoàn thành (40.6% v1 Core)
+485 Vitest Tests Passing • 104 Node Native Runner Tests Passing • 202 Rust Tests Passing • Zero Unhandled Panics
 ```
 
-Toàn bộ 8 tasks thuộc 2 Milestones nền tảng đầu tiên (M4.1 & M4.2) đã hoàn thành và được kiểm thử toàn diện:
+Toàn bộ 13 tasks thuộc 3 Milestones nền tảng đầu tiên (M4.1, M4.2 & M4.3) đã hoàn thành và được kiểm thử toàn diện:
 
 - **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
   - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
@@ -84,6 +84,22 @@ Toàn bộ 8 tasks thuộc 2 Milestones nền tảng đầu tiên (M4.1 & M4.2) 
   - Giám sát tiến trình sidecar `whisper.cpp` (`main.exe`) ngoại tuyến bằng Windows Job Object và Tokio cancellation token (0 zombie process).
   - Quản lý danh mục mô hình lượng tử hóa Q5_K GGUF (`tiny.en` đến `large-v3-turbo`) với thuật toán stream SHA-256 đệm 64KB (đỉnh heap $< 128\text{KB}$); chuẩn hóa timestamp chuẩn từng từ (word-level) theo Schema 5.5 `transcript_segments.json` và kiểm định tốc độ đọc CPS.
   - Xuất phụ đề đa định dạng: Advanced SubStation Alpha (`.ass` v4.00+) với bảng màu nhận diện thương hiệu VTuber (Neuro `#B6B6FF`, Evil `#FF0000`, Vedal `#66CC66`, Guest `#FFCC33`, Chat `#CCCCCC`) và SubRip (`.srt`). Cầu nối Silero VAD căn chỉnh ranh giới khoảng lặng dung sai $\pm 250\text{ms}$.
+- **Thuật toán Chat Velocity Z-Score hiệu chỉnh (`TASK-M4-09`)**:
+  - Gom cụm thời gian cố định 5s ($W = 5.0\text{s}$), cơ chế trần chống spam bot $\le 3$ tin nhắn/tác giả/5s, tự động đệm liên tục toàn bộ VOD.
+  - Ngưỡng sàn tin nhắn $X(t) < 15 \implies Z_{\text{adj}} = 0.0$ triệt tiêu false positives trong các đoạn stream yên ắng; Z-score hiệu chỉnh với hằng số làm mịn $\epsilon = 0.5$ và cửa sổ trượt nền 60s $O(N)$ bằng Cumulative Prefix Sums số nguyên `u64`/`u128`.
+- **Động cơ trọng số Emote đặc thù văn hóa Neuro Swarm (`TASK-M4-10`)**:
+  - Bảng tra cứu FNV-1a zero-allocation với đệm stack `[u8; 64]` cho hơn 40 biểu cảm đặc thù (`Tutel`, `SOOP`, `Erm`, `Heart` / `<3`, `KEKW`, `LUL`, `💀`...), phân loại thành 3 nhóm văn hóa (`Humor`, `Surprise`, `SwarmLore`).
+  - Tokenizer phân ranh giới từ và dấu câu thông minh, tính tỷ lệ mật độ $E_{\text{ratio}}(t) \in [0.0, 1.0]$ theo khung 5s khớp 1:1 với chat velocity, trích xuất top 5 emotes mỗi bucket với tốc độ quét $\ge 900.000$ tokens/s.
+- **Bộ quét đỉnh năng lượng âm thanh streaming (`TASK-M4-11`)**:
+  - Tính toán RMS nguyên bản từ mẫu PCM 16-bit phân tích khối 500ms (8.000 samples @ 16kHz mono), kẹp sàn im lặng $-96.0\text{dBFS} \implies \text{RMS} = 0.0$ và chuẩn hóa theo biên độ sóng sin 1kHz.
+  - Baseline trượt 30s với $O(N)$ prefix sums; cơ chế nhận diện đỉnh kép (vọt $\ge 18\text{dB}$ so với nền hoặc $\ge 2.5\sigma$) kèm silence gating chống kích hoạt giả; xử lý streaming file audio 8 tiếng chỉ trong 2.76s với RAM đỉnh 3.96MB.
+- **Hợp nhất đa phương thức & Bộ bù độ trễ livestream 4.5s (`TASK-M4-12`)**:
+  - Công thức tính điểm hợp nhất đa kênh: $\text{Score} = (0.60 \cdot Z_{\text{norm}} + 0.25 \cdot E_{\text{ratio}} + 0.15 \cdot \text{RMS}_{\text{norm}}) \times 100.0$ (tự động fallback $1.0 \cdot \text{RMS}_{\text{norm}}$ khi không có chat).
+  - Bù trễ CDN livestream $4.5\text{s}$ kết hợp Pre-roll Buffer $10.0\text{s} \implies$ clip luôn bắt đầu trước đỉnh chat $\ge 14.5\text{s}$; thuật toán phân cụm khoảng cách 30s và khử trùng lặp NMS $\le 50\%$.
+  - Cơ chế Dynamic Padding ở cuối VOD tự động co giãn Post-roll và bù vào Pre-roll bảo đảm clip luôn đạt $\ge 15.0\text{s}$ và $t_{\text{end}} \le \text{duration\_seconds}$ 100%, xuất `highlight_clusters.json` Schema 5.4 và giao diện `HighlightViewer.tsx`.
+- **Bộ tải phân đoạn video chính xác không tải thừa (`TASK-M4-13`)**:
+  - FFmpeg input-seeking HTTP Range Request trực tiếp qua mạng từ URL m3u8 stream gốc trong `vod_manifest.json` (`-ss <start> -to <end>` đặt trước `-i`), cắt phân đoạn 90s trong $\le 10\text{s}$ với dung lượng chỉ 30MB–80MB (tiết kiệm $\ge 99\%$ băng thông mạng và dung lượng đĩa so với tải 30GB video).
+  - Stream copy `-c copy` và `-avoid_negative_ts make_zero` đảm bảo không bị gián đoạn/đóng băng khung hình đầu tiên; tự động kiểm tra Keyframe alignment và audio/video drift $\le 50\text{ms}$; quản lý tiến trình an toàn qua Windows Job Object.
 
 ---
 
@@ -147,14 +163,14 @@ flowchart LR
 |:---|:---|:---|:---:|:---:|
 | **M4.1** | **Nền tảng cốt lõi (Foundation)** | Tauri v2 Acrylic Shell, Giao thức IPC Error, Win32 Hardware Profiler, Tracing NDJSON & Secret Redaction | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.2** | **Thu nạp VOD, Chat & Bóc băng STT** | Pre-flight disk check 5GB, Audio-First 16kHz PCM streamer, Chat replay normalizer & heatmap, Whisper local STT | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
-| **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | **0 / 5** | ⏳ *Planned* |
+| **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | **5 / 5** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD, FFmpeg loudnorm limiter, Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | **0 / 3** | ⏳ *Planned* |
 | **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing (`BLOCK_NONE`), Từ điển Swarm Lore, Ma trận xưng hô nhân vật, Smart line-breaker | **0 / 3** | ⏳ *Planned* |
 | **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline, Virtualized subtitle list 60fps, Bàn phím số 1-chạm đổi màu nhân vật, Đèn cảnh báo CPS | **0 / 4** | ⏳ *Planned* |
 | **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | **0 / 3** | ⏳ *Planned* |
 | **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | **0 / 3** | ⏳ *Planned* |
 | **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | **0 / 3** | ⏳ *Planned* |
-| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **8 / 32** | **25.0% Complete** |
+| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **13 / 32** | **40.6% Complete** |
 
 > 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 32 tasks (TASK-M4-01 đến TASK-M4-32) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
 
@@ -230,7 +246,7 @@ graph TD
 | **UI & Styling** | [Tailwind CSS 3.4](https://tailwindcss.com/), `clsx`, `tailwind-merge`, [Lucide Icons](https://lucide.dev/) | Hệ thống thiết kế Dark Theme Neuro-sama với Acrylic/Mica backdrop. |
 | **State Management** | [Zustand](https://github.com/pmndrs/zustand) | Quản lý trạng thái client nhẹ, chống race condition bằng sequence counters. |
 | **Build & Tooling** | [Vite 4.3](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
-| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | 685 bài kiểm tra tự động (467 Vitest + 81 Node + 137 Cargo Rust tests). |
+| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | 791 bài kiểm tra tự động (485 Vitest + 104 Node + 202 Cargo Rust tests). |
 | **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest), `whisper.cpp` (`main.exe`) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch/YouTube, bóc băng giọng nói local Q5_K. |
 
 ### Data Contracts & JSON Schemas (SSOT):
@@ -280,13 +296,13 @@ npm run dev
 Dự án áp dụng quy chuẩn kiểm thử nghiêm ngặt, bao gồm cả các kịch bản tấn công dồn dập (Adversarial Stress Testing):
 
 ```powershell
-# Chạy bộ test tích hợp bằng Node.js Native Test Runner (81 tests)
+# Chạy bộ test tích hợp bằng Node.js Native Test Runner (104 tests)
 npm test
 
-# Chạy toàn bộ 467 bài kiểm thử bằng Vitest (Unit, Component, Adversarial)
+# Chạy toàn bộ 485 bài kiểm thử bằng Vitest (Unit, Component, Adversarial)
 npm run test:vitest
 
-# Chạy toàn bộ 137 bài kiểm thử Rust backend
+# Chạy toàn bộ 202 bài kiểm thử Rust backend
 cd src-tauri && cargo test --offline -- --test-threads=1
 
 # Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant)
