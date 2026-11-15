@@ -47,6 +47,22 @@ import {
   isVodMetadataJson,
   isIngestProgressEvent,
 } from '../services/ipc/ingestion.ts';
+import {
+  type ChatBucketJson,
+  type ChatVelocityPointJson,
+  isChatBucketJson,
+  isChatBucket,
+  isChatVelocityPointJson,
+  isChatVelocityPoint,
+  normalizeChatBucket,
+  normalizeChatVelocityPoint,
+  calculateAdjustedZScore,
+  DEFAULT_BUCKET_WIDTH_SEC,
+  DEFAULT_BASELINE_WINDOW_SEC,
+  SMOOTHING_EPSILON,
+  MESSAGE_FLOOR_THRESHOLD,
+  SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
+} from '../types/highlight.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -1802,6 +1818,137 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.ok(typesContent.includes('isTranscriptSegmentsContainerJson'), 'Must export isTranscriptSegmentsContainerJson guard');
       assert.ok(typesContent.includes('isSubtitleProjectJson'), 'Must export isSubtitleProjectJson guard');
       assert.ok(typesContent.includes('normalizeTranscriptSegment'), 'Must export normalizeTranscriptSegment');
+    });
+  });
+
+  describe('TASK-M4-09 Test Suite: Adjusted Chat Velocity Z-Score Engine', () => {
+    it('should assert Rust highlight modules, contracts, and integration tests exist', () => {
+      const bucketPath = path.resolve('src-tauri/src/highlight/bucket.rs');
+      const zscorePath = path.resolve('src-tauri/src/highlight/zscore.rs');
+      const modPath = path.resolve('src-tauri/src/highlight/mod.rs');
+      const testPath = path.resolve('src-tauri/tests/highlight_zscore_test.rs');
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+
+      assert.ok(fs.existsSync(bucketPath), 'bucket.rs must exist');
+      assert.ok(fs.existsSync(zscorePath), 'zscore.rs must exist');
+      assert.ok(fs.existsSync(modPath), 'highlight/mod.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'highlight_zscore_test.rs must exist');
+
+      const libContent = fs.readFileSync(libPath, 'utf8');
+      assert.ok(libContent.includes('pub mod highlight;'), 'lib.rs must register pub mod highlight;');
+      assert.ok(libContent.includes('ChatBucket'), 'lib.rs must export ChatBucket');
+      assert.ok(libContent.includes('ChatVelocityPoint'), 'lib.rs must export ChatVelocityPoint');
+      assert.ok(libContent.includes('calculate_adjusted_zscore'), 'lib.rs must export calculate_adjusted_zscore');
+      assert.ok(libContent.includes('compute_chat_velocity_series'), 'lib.rs must export compute_chat_velocity_series');
+
+      const bucketContent = fs.readFileSync(bucketPath, 'utf8');
+      assert.ok(bucketContent.includes('pub struct ChatBucket'), 'bucket.rs must define ChatBucket');
+      assert.ok(bucketContent.includes('DEFAULT_BUCKET_WIDTH_SEC'), 'bucket.rs must define DEFAULT_BUCKET_WIDTH_SEC');
+      assert.ok(bucketContent.includes('SPAM_BOT_MAX_MESSAGES_PER_AUTHOR'), 'bucket.rs must define SPAM_BOT_MAX_MESSAGES_PER_AUTHOR');
+
+      const zscoreContent = fs.readFileSync(zscorePath, 'utf8');
+      assert.ok(zscoreContent.includes('pub struct ChatVelocityPoint'), 'zscore.rs must define ChatVelocityPoint');
+      assert.ok(zscoreContent.includes('MESSAGE_FLOOR_THRESHOLD'), 'zscore.rs must define MESSAGE_FLOOR_THRESHOLD');
+      assert.ok(zscoreContent.includes('SMOOTHING_EPSILON'), 'zscore.rs must define SMOOTHING_EPSILON');
+    });
+
+    it('should assert zero-panic invariant in Rust highlight library code (CONVENTIONS.md §2.4)', () => {
+      const filesToAudit = [
+        path.resolve('src-tauri/src/highlight/bucket.rs'),
+        path.resolve('src-tauri/src/highlight/zscore.rs'),
+        path.resolve('src-tauri/src/highlight/mod.rs'),
+      ];
+
+      for (const filePath of filesToAudit) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        // Extract non-test code (strip #[cfg(test)])
+        const nonTestCode = content.split('#[cfg(test)]')[0] ?? '';
+
+        assert.strictEqual(
+          nonTestCode.includes('.unwrap('),
+          false,
+          `Forbidden .unwrap() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('.expect('),
+          false,
+          `Forbidden .expect() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('panic!('),
+          false,
+          `Forbidden panic!() found in non-test code: ${filePath}`,
+        );
+      }
+    });
+
+    it('should validate Frontend TypeScript contracts and type guards (src/types/highlight.ts)', () => {
+      const typesPath = path.resolve('src/types/highlight.ts');
+      assert.ok(fs.existsSync(typesPath), 'src/types/highlight.ts must exist');
+
+      // Test ChatBucketJson guard
+      const validBucket: ChatBucketJson = {
+        index: 0,
+        timestamp_sec: 0.0,
+        raw_count: 20,
+        effective_count: 3,
+      };
+      assert.strictEqual(isChatBucketJson(validBucket), true);
+      assert.strictEqual(isChatBucketJson({ index: -1 }), false);
+      assert.strictEqual(isChatBucketJson(null), false);
+
+      const normalizedBucket = normalizeChatBucket(validBucket);
+      assert.strictEqual(normalizedBucket.index, 0);
+      assert.strictEqual(normalizedBucket.timestampSec, 0.0);
+      assert.strictEqual(normalizedBucket.rawCount, 20);
+      assert.strictEqual(normalizedBucket.effectiveCount, 3);
+      assert.strictEqual(normalizedBucket.filtered_count, 3);
+      assert.strictEqual(isChatBucket(normalizedBucket), true);
+
+      // Test ChatVelocityPointJson guard
+      const validVelocity: ChatVelocityPointJson = {
+        timestamp_sec: 60.0,
+        count: 45,
+        z_score: 70.0,
+      };
+      assert.strictEqual(isChatVelocityPointJson(validVelocity), true);
+      assert.strictEqual(isChatVelocityPointJson({ count: -1 }), false);
+      assert.strictEqual(isChatVelocityPointJson(undefined), false);
+
+      const normalizedVelocity = normalizeChatVelocityPoint(validVelocity);
+      assert.strictEqual(normalizedVelocity.timestampSec, 60.0);
+      assert.strictEqual(normalizedVelocity.count, 45);
+      assert.strictEqual(normalizedVelocity.zScore, 70.0);
+      assert.strictEqual(isChatVelocityPoint(normalizedVelocity), true);
+    });
+
+    it('should verify pure mathematical invariants: UT-09.1, UT-09.2, UT-09.3', () => {
+      // UT-09.1: Message floor X < 15 => Z = 0.0
+      assert.strictEqual(calculateAdjustedZScore(14, 0.0, 0.0), 0.0);
+      assert.strictEqual(calculateAdjustedZScore(14, 10.0, 2.0), 0.0);
+      assert.strictEqual(calculateAdjustedZScore(0, 0.0, 0.0), 0.0);
+
+      // UT-09.2: X = 45, mu = 10.0, sigma = 0.0, epsilon = 0.5 => Z = (45 - 10) / (0.0 + 0.5) = 70.0
+      const z70 = calculateAdjustedZScore(45, 10.0, 0.0, SMOOTHING_EPSILON, MESSAGE_FLOOR_THRESHOLD);
+      assert.ok(Math.abs(z70 - 70.0) < 1e-6, `Expected Z=70.0, got ${z70}`);
+
+      // UT-09.3: Spam bot clamp: 20 msgs by single author clamped to max 3 => effective=3 < 15 => Z=0.0
+      const singleAuthorSpamCount = 20;
+      const effectiveSpamCount = Math.min(singleAuthorSpamCount, SPAM_BOT_MAX_MESSAGES_PER_AUTHOR);
+      assert.strictEqual(effectiveSpamCount, 3);
+      assert.strictEqual(calculateAdjustedZScore(effectiveSpamCount, 0.0, 0.0), 0.0);
+
+      // Boundary condition: X = 15 => evaluates
+      const zBoundary = calculateAdjustedZScore(15, 10.0, 2.0, 0.5, 15);
+      // (15 - 10) / (2.0 + 0.5) = 5.0 / 2.5 = 2.0
+      assert.ok(Math.abs(zBoundary - 2.0) < 1e-6);
+
+      // Assert constants match specifications
+      assert.strictEqual(DEFAULT_BUCKET_WIDTH_SEC, 5.0);
+      assert.strictEqual(DEFAULT_BASELINE_WINDOW_SEC, 60.0);
+      assert.strictEqual(SMOOTHING_EPSILON, 0.5);
+      assert.strictEqual(MESSAGE_FLOOR_THRESHOLD, 15);
+      assert.strictEqual(SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, 3);
     });
   });
 });

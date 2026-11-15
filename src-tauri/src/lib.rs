@@ -12,6 +12,7 @@
 pub mod commands;
 pub mod config;
 pub mod error;
+pub mod highlight;
 pub mod ingestion;
 pub mod logging;
 pub mod stt;
@@ -31,6 +32,13 @@ pub use core::storage;
 pub use error::{
     codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
+};
+pub use highlight::{
+    bin_chat_events, bin_chat_events_default, bin_chat_events_from_file, bucket_chat_events,
+    calculate_adjusted_zscore, compute_chat_velocity_series, compute_chat_velocity_series_default,
+    compute_chat_velocity_series_from_events, compute_chat_velocity_series_from_file, compute_zscore,
+    ChatBucket, ChatVelocityPoint, DEFAULT_BASELINE_WINDOW_SEC, DEFAULT_BUCKET_WIDTH_SEC,
+    MESSAGE_FLOOR_THRESHOLD, SMOOTHING_EPSILON, SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
 };
 pub use ingestion::{
     extract_message_emotes, is_neuro_swarm_emote, parse_raw_chat_line, AudioChunk,
