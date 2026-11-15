@@ -4,12 +4,23 @@
 //! zero-panic transcript parsing adhering to Schema 5.5, VAD pause-alignment,
 //! and dual `.ass` / `.srt` subtitle export engines (`ADR-001`, `ADR-005`, `ADR-007`).
 
+pub mod audio_prep;
 pub mod model_manager;
 pub mod subtitle_export;
 pub mod transcript_parser;
+pub mod vad;
 pub mod vad_bridge;
 pub mod whisper_sidecar;
 
+pub use audio_prep::{
+    apply_screaming_limiter, build_loudnorm_ffmpeg_args, build_loudnorm_pipe_args,
+    calculate_peak_dbfs_f32, calculate_peak_dbfs_i16, compute_true_peak_dbfs,
+    compute_true_peak_f32, generate_synthetic_normalized_buffer, is_mock_audio_prep_enabled,
+    prepare_audio_file, prepare_audio_to_buffer, resolve_ffmpeg_binary, verify_screaming_defense,
+    AudioPrepConfig, AudioPrepResult, PreparedAudioBuffer, DEFAULT_LOUDNESS_RANGE_LU,
+    DEFAULT_TARGET_LUFS, DEFAULT_TRUE_PEAK_DBFS, MAX_I16_PEAK_AMPLITUDE, TARGET_CHANNELS,
+    TARGET_SAMPLE_RATE,
+};
 pub use model_manager::{
     compute_file_sha256, find_catalog_entry, resolve_models_dir, verify_model, ModelCatalogEntry,
     ModelInfo, MODEL_CATALOG, SHA256_CHUNK_SIZE,
@@ -23,6 +34,13 @@ pub use transcript_parser::{
     calculate_cps, is_special_token, parse_timestamp_to_seconds, parse_whisper_json_full,
     parse_whisper_stdout_line, TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
     CONFIDENCE_FLAG_THRESHOLD, CPS_FLAG_THRESHOLD, DEFAULT_SPEAKER_ID, MIN_SEGMENT_DURATION_SEC,
+};
+pub use vad::{
+    detect_speech_segments, generate_synthetic_speech_signal, process_vad_pipeline_async,
+    prune_silence, split_into_natural_pause_chunks, AudioChunk, ChunkSplitConfig, SpeechSegment,
+    VadConfig, VadPruneResult, DEFAULT_MAX_SILENCE_GAP_MS, DEFAULT_MIN_SILENCE_DURATION_MS,
+    DEFAULT_MIN_SPEECH_DURATION_MS, DEFAULT_NEG_THRESHOLD, DEFAULT_SPEECH_PAD_MS,
+    DEFAULT_THRESHOLD, DEFAULT_VAD_SAMPLE_RATE, DEFAULT_WINDOW_SIZE_SAMPLES,
 };
 pub use vad_bridge::{
     align_segments_with_vad, SpeechInterval, BOUNDARY_SNAP_TOLERANCE_SEC,
