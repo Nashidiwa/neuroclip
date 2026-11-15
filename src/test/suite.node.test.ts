@@ -52,23 +52,44 @@ import {
   type ChatVelocityPointJson,
   type EmoteDensityPointJson,
   type EmoteDensityPoint,
+  type AudioRmsPointJson,
+  type AudioRmsSeriesResponseJson,
+  type AudioRmsPoint,
+  type AudioRmsSeriesResponse,
   isChatBucketJson,
   isChatBucket,
   isChatVelocityPointJson,
   isChatVelocityPoint,
   isEmoteDensityPointJson,
   isEmoteDensityPoint,
+  isAudioRmsPointJson,
+  isAudioRmsPoint,
+  isAudioRmsSeriesResponseJson,
   normalizeChatBucket,
   normalizeChatVelocityPoint,
   normalizeEmoteDensityPoint,
+  normalizeAudioRmsPoint,
+  normalizeAudioRmsSeriesResponse,
   calculateAdjustedZScore,
   calculateEmoteRatio,
+  calculateAudioRms,
+  rmsToDbfs,
+  dbfsToRms,
+  dbfsToNormalizedScale,
+  isAudioRmsPeak,
   DEFAULT_BUCKET_WIDTH_SEC,
   DEFAULT_BASELINE_WINDOW_SEC,
   SMOOTHING_EPSILON,
   MESSAGE_FLOOR_THRESHOLD,
   SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
   MAX_TOP_EMOTES_PER_BUCKET,
+  DEFAULT_RMS_BLOCK_DURATION_SEC,
+  DEFAULT_AUDIO_SAMPLE_RATE,
+  DEFAULT_AUDIO_BASELINE_WINDOW_SEC,
+  SILENCE_FLOOR_DBFS,
+  SILENCE_FLOOR_AMPLITUDE,
+  DEFAULT_PEAK_DB_SPIKE_THRESHOLD,
+  DEFAULT_PEAK_SIGMA_THRESHOLD,
 } from '../types/highlight.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
@@ -2080,6 +2101,186 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.strictEqual(DEFAULT_BUCKET_WIDTH_SEC, 5.0);
       assert.strictEqual(MAX_TOP_EMOTES_PER_BUCKET, 5);
       assert.strictEqual(SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, 3);
+    });
+  });
+
+  describe('TASK-M4-11 Test Suite: Audio RMS Peak Detector & Streaming Energy Analyzer', () => {
+    it('should assert Rust highlight audio RMS modules, contracts, and integration tests exist', () => {
+      const audioRmsPath = path.resolve('src-tauri/src/highlight/audio_rms.rs');
+      const energyAnalyzerPath = path.resolve('src-tauri/src/highlight/energy_analyzer.rs');
+      const highlightModPath = path.resolve('src-tauri/src/highlight/mod.rs');
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+      const testPath = path.resolve('src-tauri/tests/highlight_audio_rms_test.rs');
+
+      assert.ok(fs.existsSync(audioRmsPath), 'audio_rms.rs must exist');
+      assert.ok(fs.existsSync(energyAnalyzerPath), 'energy_analyzer.rs must exist');
+      assert.ok(fs.existsSync(highlightModPath), 'highlight/mod.rs must exist');
+      assert.ok(fs.existsSync(libPath), 'lib.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'highlight_audio_rms_test.rs must exist');
+
+      const modContent = fs.readFileSync(highlightModPath, 'utf8');
+      assert.ok(modContent.includes('pub mod audio_rms;'), 'mod.rs must declare audio_rms module');
+      assert.ok(modContent.includes('pub mod energy_analyzer;'), 'mod.rs must declare energy_analyzer module');
+      assert.ok(modContent.includes('AudioBlockMetrics'), 'mod.rs must export AudioBlockMetrics');
+      assert.ok(modContent.includes('AudioRmsPoint'), 'mod.rs must export AudioRmsPoint');
+      assert.ok(modContent.includes('AudioRmsSeriesResponse'), 'mod.rs must export AudioRmsSeriesResponse');
+
+      const libContent = fs.readFileSync(libPath, 'utf8');
+      assert.ok(libContent.includes('AudioRmsPoint'), 'lib.rs must export AudioRmsPoint');
+      assert.ok(libContent.includes('calculate_raw_rms'), 'lib.rs must export calculate_raw_rms');
+      assert.ok(libContent.includes('detect_energy_peaks'), 'lib.rs must export detect_energy_peaks');
+
+      const rmsContent = fs.readFileSync(audioRmsPath, 'utf8');
+      assert.ok(rmsContent.includes('pub struct AudioBlockMetrics'), 'audio_rms.rs must define AudioBlockMetrics');
+      assert.ok(rmsContent.includes('calculate_raw_rms'), 'audio_rms.rs must define calculate_raw_rms');
+      assert.ok(rmsContent.includes('rms_to_dbfs'), 'audio_rms.rs must define rms_to_dbfs');
+      assert.ok(rmsContent.includes('SILENCE_FLOOR_DBFS'), 'audio_rms.rs must define SILENCE_FLOOR_DBFS');
+
+      const analyzerContent = fs.readFileSync(energyAnalyzerPath, 'utf8');
+      assert.ok(analyzerContent.includes('pub struct AudioRmsPoint'), 'energy_analyzer.rs must define AudioRmsPoint');
+      assert.ok(analyzerContent.includes('pub struct AudioRmsSeriesResponse'), 'energy_analyzer.rs must define AudioRmsSeriesResponse');
+      assert.ok(analyzerContent.includes('detect_energy_peaks'), 'energy_analyzer.rs must define detect_energy_peaks');
+      assert.ok(analyzerContent.includes('analyze_wav_file'), 'energy_analyzer.rs must define analyze_wav_file');
+    });
+
+    it('should assert zero-panic invariant in Rust highlight audio RMS code (CONVENTIONS.md §2.4)', () => {
+      const filesToAudit = [
+        path.resolve('src-tauri/src/highlight/audio_rms.rs'),
+        path.resolve('src-tauri/src/highlight/energy_analyzer.rs'),
+        path.resolve('src-tauri/src/highlight/mod.rs'),
+      ];
+
+      for (const filePath of filesToAudit) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const nonTestCode = content.split('#[cfg(test)]')[0] ?? '';
+
+        assert.strictEqual(
+          nonTestCode.includes('.unwrap('),
+          false,
+          `Forbidden .unwrap() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('.expect('),
+          false,
+          `Forbidden .expect() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('panic!('),
+          false,
+          `Forbidden panic!() found in non-test code: ${filePath}`,
+        );
+      }
+    });
+
+    it('should validate Frontend TypeScript contracts, type guards, and normalizer (src/types/highlight.ts)', () => {
+      const typesPath = path.resolve('src/types/highlight.ts');
+      assert.ok(fs.existsSync(typesPath), 'src/types/highlight.ts must exist');
+
+      // Test AudioRmsPointJson guard
+      const validPoint: AudioRmsPointJson = {
+        timestamp_sec: 1.5,
+        rms_energy: 0.35,
+        is_peak: true,
+        dbfs: -9.1,
+        delta_db: 21.0,
+        z_score: 3.2,
+      };
+      assert.strictEqual(isAudioRmsPointJson(validPoint), true);
+      assert.strictEqual(isAudioRmsPointJson({ timestamp_sec: -1, rms_energy: 0.5, is_peak: true }), false);
+      assert.strictEqual(isAudioRmsPointJson({ timestamp_sec: 1.0, rms_energy: 1.5, is_peak: true }), false);
+      assert.strictEqual(isAudioRmsPointJson(null), false);
+      assert.strictEqual(isAudioRmsPointJson(undefined), false);
+
+      const normalized: AudioRmsPoint = normalizeAudioRmsPoint(validPoint);
+      assert.strictEqual(normalized.timestampSec, 1.5);
+      assert.strictEqual(normalized.rmsEnergy, 0.35);
+      assert.strictEqual(normalized.isPeak, true);
+      assert.strictEqual(normalized.dbfs, -9.1);
+      assert.strictEqual(normalized.deltaDb, 21.0);
+      assert.strictEqual(normalized.zScore, 3.2);
+
+      // Snake_case aliases matching Rust JSON contract
+      assert.strictEqual(normalized.timestamp_sec, 1.5);
+      assert.strictEqual(normalized.rms_energy, 0.35);
+      assert.strictEqual(normalized.is_peak, true);
+      assert.strictEqual(normalized.delta_db, 21.0);
+      assert.strictEqual(normalized.z_score, 3.2);
+
+      assert.strictEqual(isAudioRmsPoint(normalized), true);
+
+      // Test AudioRmsSeriesResponseJson
+      const validResponse: AudioRmsSeriesResponseJson = {
+        vod_id: 'vod_test_123',
+        block_duration_sec: 0.5,
+        baseline_window_sec: 30.0,
+        total_blocks: 1,
+        peak_count: 1,
+        points: [validPoint],
+      };
+      assert.strictEqual(isAudioRmsSeriesResponseJson(validResponse), true);
+
+      const normalizedResponse: AudioRmsSeriesResponse = normalizeAudioRmsSeriesResponse(validResponse);
+      assert.strictEqual(normalizedResponse.vodId, 'vod_test_123');
+      assert.strictEqual(normalizedResponse.blockDurationSec, 0.5);
+      assert.strictEqual(normalizedResponse.baselineWindowSec, 30.0);
+      assert.strictEqual(normalizedResponse.totalBlocks, 1);
+      assert.strictEqual(normalizedResponse.peakCount, 1);
+      assert.strictEqual(normalizedResponse.points.length, 1);
+    });
+
+    it('should verify pure mathematical invariants: UT-11.1, UT-11.2, UT-11.3', () => {
+      // UT-11.1: 1kHz sine wave RMS calculation in client helper
+      // 16 samples per period of 1kHz at 16kHz
+      const sinePeriod: number[] = [];
+      for (let i = 0; i < 16; i++) {
+        const theta = (2 * Math.PI * 1000 * i) / 16000;
+        sinePeriod.push(Math.round(32767 * Math.sin(theta)));
+      }
+      const calculatedRms = calculateAudioRms(sinePeriod);
+      assert.ok(
+        Math.abs(calculatedRms - 0.7071) < 0.005,
+        `Client sine RMS ${calculatedRms} deviates from 0.7071 ± 0.005`,
+      );
+
+      // Silence returns 0.0
+      assert.strictEqual(calculateAudioRms([0, 0, 0, 0]), 0.0);
+      assert.strictEqual(calculateAudioRms([]), 0.0);
+
+      // dBFS conversions and silence clamping
+      assert.strictEqual(rmsToDbfs(0.0), SILENCE_FLOOR_DBFS);
+      assert.strictEqual(rmsToDbfs(SILENCE_FLOOR_AMPLITUDE), SILENCE_FLOOR_DBFS);
+      assert.strictEqual(dbfsToRms(SILENCE_FLOOR_DBFS), 0.0);
+      assert.strictEqual(dbfsToRms(-120.0), 0.0);
+      assert.strictEqual(dbfsToNormalizedScale(SILENCE_FLOOR_DBFS), 0.0);
+      assert.strictEqual(dbfsToNormalizedScale(0.0), 1.0);
+
+      // UT-11.3: Sudden volume spike (+21dB) triggers peak
+      // Baseline at -30dBFS, spike to -9dBFS (+21dB)
+      const baselineRms = Math.pow(10, -30.0 / 20.0);
+      const spikeRms = Math.pow(10, -9.0 / 20.0);
+      const isSpikePeak = isAudioRmsPeak(spikeRms, baselineRms, 0.0, -9.0, -30.0);
+      assert.strictEqual(isSpikePeak, true, '+21dB spike must trigger peak');
+
+      // Normal variation does not trigger peak
+      const normalRms = Math.pow(10, -29.0 / 20.0);
+      const isNormalPeak = isAudioRmsPeak(normalRms, baselineRms, 0.0, -29.0, -30.0);
+      assert.strictEqual(isNormalPeak, false, '+1dB variation must not trigger peak');
+
+      // UT-11.2: Statistical outlier >= 2.5 sigma triggers peak
+      const outlierRms = 0.10 + 2.8 * 0.02; // Mean 0.10, std dev 0.02 -> 2.8 sigma
+      const isOutlierPeak = isAudioRmsPeak(outlierRms, 0.10, 0.02, -20.0, -20.0);
+      assert.strictEqual(isOutlierPeak, true, '2.8 sigma outlier must trigger peak');
+
+      // Silence cannot be peak
+      assert.strictEqual(isAudioRmsPeak(0.0, 0.0, 0.0, -96.0, -96.0), false);
+
+      // Constants match backend
+      assert.strictEqual(DEFAULT_RMS_BLOCK_DURATION_SEC, 0.5);
+      assert.strictEqual(DEFAULT_AUDIO_SAMPLE_RATE, 16000);
+      assert.strictEqual(DEFAULT_AUDIO_BASELINE_WINDOW_SEC, 30.0);
+      assert.strictEqual(SILENCE_FLOOR_DBFS, -96.0);
+      assert.strictEqual(DEFAULT_PEAK_DB_SPIKE_THRESHOLD, 18.0);
+      assert.strictEqual(DEFAULT_PEAK_SIGMA_THRESHOLD, 2.5);
     });
   });
 });
