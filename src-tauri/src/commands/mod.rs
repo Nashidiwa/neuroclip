@@ -2,10 +2,19 @@
 
 pub mod chat_cmd;
 pub mod config_cmd;
+pub mod highlight_cmd;
 pub mod ingest_cmd;
 pub mod log_cmd;
 pub mod storage_cmd;
 pub mod stt_cmd;
+
+pub use highlight_cmd::{
+    __cmd__detect_highlights, __cmd__get_highlight_clusters, __cmd__toggle_cluster_bookmark,
+    __cmd__toggle_highlight_bookmark, __tauri_command_name_detect_highlights,
+    __tauri_command_name_get_highlight_clusters, __tauri_command_name_toggle_cluster_bookmark,
+    __tauri_command_name_toggle_highlight_bookmark, detect_highlights, get_highlight_clusters,
+    toggle_cluster_bookmark, toggle_highlight_bookmark,
+};
 
 pub use chat_cmd::{
     __cmd__get_chat_events, __cmd__get_chat_velocity_heatmap, __cmd__start_chat_extraction,

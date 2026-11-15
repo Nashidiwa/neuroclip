@@ -56,6 +56,8 @@ import {
   type AudioRmsSeriesResponseJson,
   type AudioRmsPoint,
   type AudioRmsSeriesResponse,
+  type HighlightClusterJson,
+  type HighlightClustersContainerJson,
   isChatBucketJson,
   isChatBucket,
   isChatVelocityPointJson,
@@ -65,11 +67,18 @@ import {
   isAudioRmsPointJson,
   isAudioRmsPoint,
   isAudioRmsSeriesResponseJson,
+  isHighlightClusterJson,
+  isHighlightCluster,
+  isHighlightClustersContainerJson,
+  isHighlightClustersContainer,
   normalizeChatBucket,
   normalizeChatVelocityPoint,
   normalizeEmoteDensityPoint,
   normalizeAudioRmsPoint,
   normalizeAudioRmsSeriesResponse,
+  normalizeHighlightCluster,
+  normalizeHighlightClustersContainer,
+  toHighlightClustersContainerJson,
   calculateAdjustedZScore,
   calculateEmoteRatio,
   calculateAudioRms,
@@ -77,6 +86,12 @@ import {
   dbfsToRms,
   dbfsToNormalizedScale,
   isAudioRmsPeak,
+  calculateMultimodalScore,
+  calculateAudioOnlyScore,
+  computeHighlightBounds,
+  formatTimecode,
+  formatScore,
+  formatDuration,
   DEFAULT_BUCKET_WIDTH_SEC,
   DEFAULT_BASELINE_WINDOW_SEC,
   SMOOTHING_EPSILON,
@@ -90,6 +105,19 @@ import {
   SILENCE_FLOOR_AMPLITUDE,
   DEFAULT_PEAK_DB_SPIKE_THRESHOLD,
   DEFAULT_PEAK_SIGMA_THRESHOLD,
+  STREAM_LATENCY_COMPENSATION_SEC,
+  DEFAULT_PRE_ROLL_BUFFER_SEC,
+  DEFAULT_POST_ROLL_BUFFER_SEC,
+  MIN_PRE_ROLL_OFFSET_SEC,
+  MAX_PRE_ROLL_BUFFER_SEC,
+  MIN_CLUSTER_DURATION_SEC,
+  CLUSTER_MERGE_DISTANCE_SEC,
+  MAX_CLUSTER_OVERLAP_RATIO,
+  FUSION_WEIGHT_Z_SCORE,
+  FUSION_WEIGHT_EMOTE,
+  FUSION_WEIGHT_RMS,
+  FUSION_AUDIO_ONLY_WEIGHT_RMS,
+  DEFAULT_TOP_CLUSTERS_LIMIT,
 } from '../types/highlight.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
@@ -2284,6 +2312,212 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
     });
   });
 });
+
+describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
+  describe('Architecture & Codebase Invariants', () => {
+    it('should verify all target files for TASK-M4-12 exist', () => {
+      const files = [
+        'src-tauri/src/highlight/fusion.rs',
+        'src-tauri/src/highlight/cluster.rs',
+        'src-tauri/src/commands/highlight_cmd.rs',
+        'src/types/highlight.ts',
+        'src/services/ipc/highlight.ts',
+        'src/components/highlight/HighlightViewer.tsx',
+        'src/components/highlight/index.ts',
+        'src-tauri/tests/highlight_fusion_test.rs',
+        'src/test/highlight.test.ts',
+      ];
+      for (const f of files) {
+        assert.ok(fs.existsSync(path.resolve(f)), `File must exist: ${f}`);
+      }
+    });
+
+    it('should verify zero-panic clippy invariant in Rust production code', () => {
+      const filesToAudit = [
+        path.resolve('src-tauri/src/highlight/fusion.rs'),
+        path.resolve('src-tauri/src/highlight/cluster.rs'),
+        path.resolve('src-tauri/src/commands/highlight_cmd.rs'),
+      ];
+
+      for (const filePath of filesToAudit) {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const nonTestCode = content.split('#[cfg(test)]')[0] ?? '';
+
+        assert.strictEqual(
+          nonTestCode.includes('.unwrap('),
+          false,
+          `Forbidden .unwrap() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('.expect('),
+          false,
+          `Forbidden .expect() found in non-test code: ${filePath}`,
+        );
+        assert.strictEqual(
+          nonTestCode.includes('panic!('),
+          false,
+          `Forbidden panic!() found in non-test code: ${filePath}`,
+        );
+      }
+    });
+
+    it('should validate Schema 5.4 JSON Schema Draft-07 compliance using Ajv', () => {
+      const schema54 = {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        title: 'HighlightClustersContainer',
+        type: 'object',
+        required: ['vod_id', 'clusters'],
+        properties: {
+          vod_id: { type: 'string' },
+          clusters: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['cluster_id', 'start_sec', 'end_sec', 'peak_sec', 'score', 'primary_reason'],
+              properties: {
+                cluster_id: { type: 'string' },
+                start_sec: { type: 'number' },
+                end_sec: { type: 'number' },
+                peak_sec: { type: 'number' },
+                score: { type: 'number', minimum: 0, maximum: 100 },
+                primary_reason: { type: 'string' },
+                chat_z_score: { type: ['number', 'null'] },
+                audio_rms_peak: { type: ['number', 'null'] },
+                top_emotes: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                is_bookmarked: { type: 'boolean', default: false },
+              },
+            },
+          },
+        },
+      };
+
+      const ajv = new Ajv();
+      const validate = ajv.compile(schema54);
+
+      const sampleContainer: HighlightClustersContainerJson = {
+        vod_id: 'vod_123',
+        clusters: [
+          {
+            cluster_id: 'cluster_1',
+            start_sec: 5055.5,
+            end_sec: 5085.0,
+            peak_sec: 5070.0,
+            score: 89.0,
+            primary_reason: 'Văn hóa Swarm bùng nổ (tutel)',
+            chat_z_score: 5.2,
+            audio_rms_peak: 0.65,
+            top_emotes: ['tutel', 'KEKW'],
+            is_bookmarked: false,
+          },
+        ],
+      };
+
+      const valid = validate(sampleContainer);
+      assert.strictEqual(valid, true, `Ajv errors: ${JSON.stringify(validate.errors)}`);
+    });
+
+    it('should validate Frontend TypeScript contracts, type guards, and normalizer', () => {
+      const rawCluster: HighlightClusterJson = {
+        cluster_id: 'cluster_1',
+        start_sec: 100.0,
+        end_sec: 130.0,
+        peak_sec: 114.5,
+        score: 89.0,
+        primary_reason: 'Spam KEKW / LUL bùng nổ',
+        top_emotes: ['KEKW'],
+        is_bookmarked: true,
+      };
+
+      assert.strictEqual(isHighlightClusterJson(rawCluster), true);
+      assert.strictEqual(isHighlightClusterJson(null), false);
+      assert.strictEqual(isHighlightClusterJson({ cluster_id: 'c1' }), false);
+
+      const domain = normalizeHighlightCluster(rawCluster);
+      assert.strictEqual(isHighlightCluster(domain), true);
+      assert.strictEqual(domain.clusterId, 'cluster_1');
+      assert.strictEqual(domain.cluster_id, 'cluster_1');
+      assert.strictEqual(domain.startSec, 100.0);
+      assert.strictEqual(domain.start_sec, 100.0);
+      assert.strictEqual(domain.endSec, 130.0);
+      assert.strictEqual(domain.score, 89.0);
+      assert.strictEqual(domain.isBookmarked, true);
+      assert.strictEqual(domain.is_bookmarked, true);
+
+      const containerJson: HighlightClustersContainerJson = {
+        vod_id: 'vod_test_m4_12',
+        clusters: [rawCluster],
+      };
+      assert.strictEqual(isHighlightClustersContainerJson(containerJson), true);
+
+      const containerDomain = normalizeHighlightClustersContainer(containerJson);
+      assert.strictEqual(isHighlightClustersContainer(containerDomain), true);
+      assert.strictEqual(containerDomain.vodId, 'vod_test_m4_12');
+      assert.strictEqual(containerDomain.vod_id, 'vod_test_m4_12');
+      assert.strictEqual(containerDomain.clusters.length, 1);
+
+      const wireBack = toHighlightClustersContainerJson(containerDomain);
+      assert.strictEqual(wireBack.vod_id, 'vod_test_m4_12');
+      assert.strictEqual(wireBack.clusters[0]?.cluster_id, 'cluster_1');
+    });
+
+    it('should verify mathematical formulas: UT-12.1, UT-12.2, UT-12.3, ED-12.1, ED-12.3', () => {
+      // UT-12.1: Full Multimodal Weighting
+      // Score = (0.6 * Z_norm + 0.25 * E_ratio + 0.15 * RMS_norm) * 100.0
+      // Z_norm = 1.0, E = 0.8, RMS = 0.6 -> 0.60 + 0.20 + 0.09 = 0.89 -> 89.0
+      const score = calculateMultimodalScore(1.0, 0.8, 0.6);
+      assert.ok(Math.abs(score - 89.0) < 0.1, `Expected 89.0, got ${score}`);
+
+      // UT-12.2: Audio-Only Fallback
+      // Score = 1.0 * RMS * 100.0
+      const audioScore = calculateAudioOnlyScore(0.75);
+      assert.ok(Math.abs(audioScore - 75.0) < 0.1, `Expected 75.0, got ${audioScore}`);
+      assert.strictEqual(calculateAudioOnlyScore(0.0), 0.0);
+
+      // UT-12.3: Latency compensation & padding: peak=5070s on 7200s VOD
+      // start = 5070 - 14.5 = 5055.5s, end = 5085.0s, length = 29.5s
+      const bounds = computeHighlightBounds(5070.0, 7200.0);
+      assert.ok(Math.abs(bounds.startSec - 5055.5) < 0.1);
+      assert.ok(Math.abs(bounds.endSec - 5085.0) < 0.1);
+      assert.ok(Math.abs(bounds.durationSec - 29.5) < 0.1);
+
+      // ED-12.1: Zero Clamping
+      const boundsEarly = computeHighlightBounds(8.0, 3600.0);
+      assert.strictEqual(boundsEarly.startSec, 0.0);
+      assert.ok(Math.abs(boundsEarly.endSec - 23.0) < 0.1);
+
+      // ED-12.3: EOF Dynamic Padding (peak=9992s on 10000s VOD)
+      const boundsEof = computeHighlightBounds(9992.0, 10000.0);
+      assert.strictEqual(boundsEof.endSec, 10000.0);
+      assert.ok(Math.abs(boundsEof.startSec - 9977.5) < 0.1);
+      assert.ok(boundsEof.durationSec >= 15.0);
+
+      // Formatting
+      assert.strictEqual(formatTimecode(5070), '01:24:30');
+      assert.strictEqual(formatTimecode(75), '01:15');
+      assert.strictEqual(formatScore(89.0), '89.0');
+      assert.strictEqual(formatDuration(22.5), '22.5s');
+
+      // Constants
+      assert.strictEqual(STREAM_LATENCY_COMPENSATION_SEC, 4.5);
+      assert.strictEqual(DEFAULT_PRE_ROLL_BUFFER_SEC, 10.0);
+      assert.strictEqual(DEFAULT_POST_ROLL_BUFFER_SEC, 15.0);
+      assert.strictEqual(MIN_PRE_ROLL_OFFSET_SEC, 14.5);
+      assert.strictEqual(MAX_PRE_ROLL_BUFFER_SEC, 20.0);
+      assert.strictEqual(MIN_CLUSTER_DURATION_SEC, 15.0);
+      assert.strictEqual(CLUSTER_MERGE_DISTANCE_SEC, 30.0);
+      assert.strictEqual(MAX_CLUSTER_OVERLAP_RATIO, 0.50);
+      assert.strictEqual(FUSION_WEIGHT_Z_SCORE, 0.60);
+      assert.strictEqual(FUSION_WEIGHT_EMOTE, 0.25);
+      assert.strictEqual(FUSION_WEIGHT_RMS, 0.15);
+      assert.strictEqual(FUSION_AUDIO_ONLY_WEIGHT_RMS, 1.0);
+      assert.strictEqual(DEFAULT_TOP_CLUSTERS_LIMIT, 20);
+    });
+  });
+});
+
 
 
 

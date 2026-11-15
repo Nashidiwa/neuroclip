@@ -5,10 +5,27 @@
 
 pub mod audio_rms;
 pub mod bucket;
+pub mod cluster;
 pub mod emote_filter;
 pub mod energy_analyzer;
+pub mod fusion;
 pub mod swarm_dict;
 pub mod zscore;
+
+pub use cluster::{
+    calculate_clip_bounds, cluster_and_deduplicate, compute_overlap_ratio,
+    determine_primary_reason, generate_clusters_from_fused_series, HighlightCluster,
+    HighlightClustersContainer, CLUSTER_MERGE_DISTANCE_SEC, DEFAULT_MAX_CLUSTERS,
+    DEFAULT_POST_ROLL_SEC, DEFAULT_PRE_ROLL_SEC, DEFAULT_TOTAL_PRE_OFFSET_SEC,
+    MAX_OVERLAP_RATIO, MAX_PRE_ROLL_SEC, MIN_CLIP_DURATION_SEC, STREAM_LATENCY_COMPENSATION_SEC,
+};
+
+pub use fusion::{
+    aggregate_audio_in_window, compute_audio_only_score, compute_multimodal_score,
+    fuse_multimodal_series, normalize_z_score, FusedScorePoint, AUDIO_BLOCK_WIDTH_SEC,
+    CHAT_BUCKET_WIDTH_SEC, MAX_Z_SCORE_REFERENCE, MIN_HIGHLIGHT_SCORE_THRESHOLD,
+    WEIGHT_AUDIO_ONLY_RMS, WEIGHT_AUDIO_RMS, WEIGHT_CHAT_Z, WEIGHT_EMOTE_RATIO,
+};
 
 pub use audio_rms::{
     apply_silence_clamp, calculate_normalized_pcm_rms, calculate_pcm_rms, calculate_raw_rms,

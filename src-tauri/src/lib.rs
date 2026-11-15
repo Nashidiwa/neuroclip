@@ -54,7 +54,14 @@ pub use highlight::{
     MESSAGE_FLOOR_THRESHOLD, MIN_RMS_THRESHOLD, PEAK_DB_THRESHOLD, PEAK_SIGMA_THRESHOLD,
     SILENCE_FLOOR_AMPLITUDE, SILENCE_FLOOR_DBFS, SINE_1KHZ_EXPECTED_RMS,
     SINE_1KHZ_RMS_TOLERANCE, SINE_1KHZ_THEORETICAL_RMS, SMOOTHING_EPSILON,
-    SPAM_BOT_MAX_MESSAGES_PER_AUTHOR,
+    SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, calculate_clip_bounds, cluster_and_deduplicate,
+    compute_audio_only_score, compute_multimodal_score, compute_overlap_ratio,
+    determine_primary_reason, fuse_multimodal_series, generate_clusters_from_fused_series,
+    normalize_z_score, FusedScorePoint, HighlightCluster, HighlightClustersContainer,
+    CLUSTER_MERGE_DISTANCE_SEC, DEFAULT_MAX_CLUSTERS, DEFAULT_POST_ROLL_SEC,
+    DEFAULT_PRE_ROLL_SEC, DEFAULT_TOTAL_PRE_OFFSET_SEC, MAX_OVERLAP_RATIO, MAX_PRE_ROLL_SEC,
+    MIN_CLIP_DURATION_SEC, STREAM_LATENCY_COMPENSATION_SEC, WEIGHT_AUDIO_ONLY_RMS,
+    WEIGHT_AUDIO_RMS, WEIGHT_CHAT_Z, WEIGHT_EMOTE_RATIO,
 };
 pub use ingestion::{
     extract_message_emotes, is_neuro_swarm_emote, parse_raw_chat_line, AudioChunk,
@@ -124,7 +131,11 @@ pub fn run() {
             commands::start_whisper_transcription,
             commands::verify_stt_model,
             commands::export_subtitles_ass,
-            commands::export_subtitles_srt
+            commands::export_subtitles_srt,
+            commands::detect_highlights,
+            commands::get_highlight_clusters,
+            commands::toggle_highlight_bookmark,
+            commands::toggle_cluster_bookmark
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

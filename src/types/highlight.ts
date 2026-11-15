@@ -616,3 +616,375 @@ export function isAudioRmsPeak(
 
   return isDbPeak || isSigmaPeak;
 }
+
+
+// ===========================================================================
+// TASK-M4-12: Multimodal Fusion & Highlight Clustering Types (Schema 5.4)
+// ===========================================================================
+
+export const STREAM_LATENCY_COMPENSATION_SEC = 4.5;
+export const DEFAULT_PRE_ROLL_BUFFER_SEC = 10.0;
+export const DEFAULT_POST_ROLL_BUFFER_SEC = 15.0;
+export const MIN_PRE_ROLL_OFFSET_SEC = 14.5; // 4.5s latency + 10.0s pre-roll
+export const MAX_PRE_ROLL_BUFFER_SEC = 20.0; // Dynamic padding limit
+export const MIN_CLUSTER_DURATION_SEC = 15.0;
+export const CLUSTER_MERGE_DISTANCE_SEC = 30.0;
+export const MAX_CLUSTER_OVERLAP_RATIO = 0.50; // > 50% overlap triggers NMS
+export const FUSION_WEIGHT_Z_SCORE = 0.60;
+export const FUSION_WEIGHT_EMOTE = 0.25;
+export const FUSION_WEIGHT_RMS = 0.15;
+export const FUSION_AUDIO_ONLY_WEIGHT_RMS = 1.0;
+export const DEFAULT_TOP_CLUSTERS_LIMIT = 20;
+
+/**
+ * Wire JSON representation of a highlight cluster conforming strictly to
+ * docs/ARCHITECTURE.md §5.4 Schema 5.4 Draft-07.
+ */
+export interface HighlightClusterJson {
+  readonly cluster_id: string;
+  readonly start_sec: number;
+  readonly end_sec: number;
+  readonly peak_sec: number;
+  readonly score: number;
+  readonly primary_reason: string;
+  readonly chat_z_score?: number | null | undefined;
+  readonly audio_rms_peak?: number | null | undefined;
+  readonly top_emotes?: readonly string[] | undefined;
+  readonly is_bookmarked?: boolean | undefined;
+}
+
+/**
+ * Container object conforming to Schema 5.4 document format on disk and IPC wire.
+ */
+export interface HighlightClustersContainerJson {
+  readonly vod_id: string;
+  readonly clusters: readonly HighlightClusterJson[];
+  readonly total_clusters?: number | undefined;
+  readonly generated_at?: string | undefined;
+}
+
+/**
+ * Domain Model for HighlightCluster with dual camelCase & snake_case accessors.
+ */
+export interface HighlightCluster {
+  readonly clusterId: string;
+  readonly startSec: number;
+  readonly endSec: number;
+  readonly peakSec: number;
+  readonly score: number; // 0.0 - 100.0
+  readonly primaryReason: string;
+  readonly chatZScore?: number | null | undefined;
+  readonly audioRmsPeak?: number | null | undefined;
+  readonly topEmotes: readonly string[];
+  readonly isBookmarked: boolean;
+
+  // Snake_case aliases matching Rust JSON contract
+  readonly cluster_id: string;
+  readonly start_sec: number;
+  readonly end_sec: number;
+  readonly peak_sec: number;
+  readonly primary_reason: string;
+  readonly chat_z_score?: number | null | undefined;
+  readonly audio_rms_peak?: number | null | undefined;
+  readonly top_emotes: readonly string[];
+  readonly is_bookmarked: boolean;
+}
+
+/**
+ * Domain Model for HighlightClustersContainer.
+ */
+export interface HighlightClustersContainer {
+  readonly vodId: string;
+  readonly clusters: readonly HighlightCluster[];
+  readonly totalClusters?: number | undefined;
+  readonly generatedAt?: string | undefined;
+
+  // Snake_case aliases
+  readonly vod_id: string;
+  readonly total_clusters?: number | undefined;
+  readonly generated_at?: string | undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Runtime Type Guards
+// ---------------------------------------------------------------------------
+
+export function isHighlightClusterJson(val: unknown): val is HighlightClusterJson {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['cluster_id'] === 'string' &&
+    obj['cluster_id'].length > 0 &&
+    typeof obj['start_sec'] === 'number' &&
+    Number.isFinite(obj['start_sec']) &&
+    obj['start_sec'] >= 0 &&
+    typeof obj['end_sec'] === 'number' &&
+    Number.isFinite(obj['end_sec']) &&
+    obj['end_sec'] >= obj['start_sec'] &&
+    typeof obj['peak_sec'] === 'number' &&
+    Number.isFinite(obj['peak_sec']) &&
+    obj['peak_sec'] >= 0 &&
+    typeof obj['score'] === 'number' &&
+    Number.isFinite(obj['score']) &&
+    obj['score'] >= 0 &&
+    obj['score'] <= 100 &&
+    typeof obj['primary_reason'] === 'string' &&
+    (obj['chat_z_score'] === undefined ||
+      obj['chat_z_score'] === null ||
+      (typeof obj['chat_z_score'] === 'number' && Number.isFinite(obj['chat_z_score']))) &&
+    (obj['audio_rms_peak'] === undefined ||
+      obj['audio_rms_peak'] === null ||
+      (typeof obj['audio_rms_peak'] === 'number' && Number.isFinite(obj['audio_rms_peak']))) &&
+    (obj['top_emotes'] === undefined ||
+      (Array.isArray(obj['top_emotes']) &&
+        obj['top_emotes'].every((item) => typeof item === 'string'))) &&
+    (obj['is_bookmarked'] === undefined || typeof obj['is_bookmarked'] === 'boolean')
+  );
+}
+
+export function isHighlightCluster(val: unknown): val is HighlightCluster {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['clusterId'] === 'string' &&
+    typeof obj['startSec'] === 'number' &&
+    typeof obj['endSec'] === 'number' &&
+    typeof obj['peakSec'] === 'number' &&
+    typeof obj['score'] === 'number' &&
+    typeof obj['primaryReason'] === 'string' &&
+    Array.isArray(obj['topEmotes']) &&
+    typeof obj['isBookmarked'] === 'boolean'
+  );
+}
+
+export function isHighlightClustersContainerJson(
+  val: unknown,
+): val is HighlightClustersContainerJson {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['vod_id'] === 'string' &&
+    obj['vod_id'].length > 0 &&
+    Array.isArray(obj['clusters']) &&
+    obj['clusters'].every(isHighlightClusterJson)
+  );
+}
+
+export function isHighlightClustersContainer(
+  val: unknown,
+): val is HighlightClustersContainer {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['vodId'] === 'string' &&
+    Array.isArray(obj['clusters']) &&
+    obj['clusters'].every(isHighlightCluster)
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Model Normalizers
+// ---------------------------------------------------------------------------
+
+export function normalizeHighlightCluster(raw: HighlightClusterJson): HighlightCluster {
+  const emotes = Object.freeze(raw.top_emotes ? [...raw.top_emotes] : []);
+  const bookmarked = raw.is_bookmarked ?? false;
+  const chatZ = raw.chat_z_score ?? null;
+  const audioPeak = raw.audio_rms_peak ?? null;
+
+  return {
+    clusterId: raw.cluster_id,
+    startSec: raw.start_sec,
+    endSec: raw.end_sec,
+    peakSec: raw.peak_sec,
+    score: raw.score,
+    primaryReason: raw.primary_reason,
+    chatZScore: chatZ,
+    audioRmsPeak: audioPeak,
+    topEmotes: emotes,
+    isBookmarked: bookmarked,
+
+    cluster_id: raw.cluster_id,
+    start_sec: raw.start_sec,
+    end_sec: raw.end_sec,
+    peak_sec: raw.peak_sec,
+    primary_reason: raw.primary_reason,
+    chat_z_score: chatZ,
+    audio_rms_peak: audioPeak,
+    top_emotes: emotes,
+    is_bookmarked: bookmarked,
+  };
+}
+
+export function normalizeHighlightClustersContainer(
+  raw: HighlightClustersContainerJson,
+): HighlightClustersContainer {
+  const clusters = Object.freeze(raw.clusters.map(normalizeHighlightCluster));
+  return {
+    vodId: raw.vod_id,
+    clusters,
+    totalClusters: raw.total_clusters ?? clusters.length,
+    generatedAt: raw.generated_at,
+
+    vod_id: raw.vod_id,
+    total_clusters: raw.total_clusters ?? clusters.length,
+    generated_at: raw.generated_at,
+  };
+}
+
+export function toHighlightClustersContainerJson(
+  container: HighlightClustersContainer,
+): HighlightClustersContainerJson {
+  return {
+    vod_id: container.vodId,
+    clusters: container.clusters.map((c) => ({
+      cluster_id: c.clusterId,
+      start_sec: c.startSec,
+      end_sec: c.endSec,
+      peak_sec: c.peakSec,
+      score: c.score,
+      primary_reason: c.primaryReason,
+      chat_z_score: c.chatZScore ?? null,
+      audio_rms_peak: c.audioRmsPeak ?? null,
+      top_emotes: [...c.topEmotes],
+      is_bookmarked: c.isBookmarked,
+    })),
+    total_clusters: container.totalClusters ?? container.clusters.length,
+    generated_at: container.generatedAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Pure Client-Side Formatting & Math Helpers
+// ---------------------------------------------------------------------------
+
+export function formatTimecode(
+  seconds: number,
+  options?: { forceHours?: boolean; includeMilliseconds?: boolean },
+): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return options?.forceHours ? '00:00:00' : '00:00';
+  }
+  const totalSec = Math.floor(seconds);
+  const ms = Math.floor((seconds - totalSec) * 10);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+
+  const msSuffix = options?.includeMilliseconds ? `.${ms}` : '';
+  if (h > 0 || options?.forceHours) {
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}${msSuffix}`;
+  }
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}${msSuffix}`;
+}
+
+export function formatScore(score: number): string {
+  if (!Number.isFinite(score) || score <= 0) return '0.0';
+  const clamped = Math.min(100, Math.max(0, score));
+  return clamped.toFixed(1);
+}
+
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0s';
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+/**
+ * Multimodal score calculation (UT-12.1):
+ * Score = (0.6 * Z_norm + 0.25 * E_ratio + 0.15 * RMS_normalized) * 100.0
+ * where Z_norm = clamp(Z_adj / 10.0, 0.0, 1.0)
+ */
+export function calculateMultimodalScore(
+  zNorm: number,
+  eRatio: number,
+  rmsNorm: number,
+): number {
+  const z = Math.min(1.0, Math.max(0.0, Number.isFinite(zNorm) ? zNorm : 0.0));
+  const e = Math.min(1.0, Math.max(0.0, Number.isFinite(eRatio) ? eRatio : 0.0));
+  const rms = Math.min(1.0, Math.max(0.0, Number.isFinite(rmsNorm) ? rmsNorm : 0.0));
+
+  const rawScore =
+    FUSION_WEIGHT_Z_SCORE * z +
+    FUSION_WEIGHT_EMOTE * e +
+    FUSION_WEIGHT_RMS * rms;
+
+  return Math.min(100.0, Math.max(0.0, Math.round(rawScore * 1000.0) / 10.0));
+}
+
+/**
+ * Audio-only fallback score calculation (UT-12.2):
+ * Score = 1.0 * RMS_normalized * 100.0
+ */
+export function calculateAudioOnlyScore(rmsNorm: number): number {
+  const rms = Math.min(1.0, Math.max(0.0, Number.isFinite(rmsNorm) ? rmsNorm : 0.0));
+  return Math.min(100.0, Math.max(0.0, Math.round(FUSION_AUDIO_ONLY_WEIGHT_RMS * rms * 1000.0) / 10.0));
+}
+
+/**
+ * Boundary calculation with latency compensation and dynamic padding at EOF (UT-12.3, ED-12.1, ED-12.3).
+ *
+ * Latency comp: 4.5s
+ * Default pre-roll: 10.0s (total pre-peak offset 14.5s)
+ * Default post-roll: 15.0s
+ * EOF padding: If peak + post_roll > duration, clamp end to duration and shift missing post-roll
+ * into pre-roll buffer (up to max 20.0s), guaranteeing clip length >= 15.0s without exceeding EOF.
+ */
+export function computeHighlightBounds(
+  peakSec: number,
+  vodDurationSec: number,
+  options?: {
+    preRollSec?: number | undefined;
+    postRollSec?: number | undefined;
+    latencyCompensationSec?: number | undefined;
+    isAudioOnly?: boolean | undefined;
+  },
+): { startSec: number; endSec: number; durationSec: number } {
+  const duration = Math.max(0.0, vodDurationSec);
+  const latency = options?.isAudioOnly
+    ? 0.0
+    : (options?.latencyCompensationSec ?? STREAM_LATENCY_COMPENSATION_SEC);
+  const initialPreRoll = options?.preRollSec ?? DEFAULT_PRE_ROLL_BUFFER_SEC;
+  const targetPostRoll = options?.postRollSec ?? DEFAULT_POST_ROLL_BUFFER_SEC;
+
+  let endSec = Math.min(duration, peakSec + targetPostRoll);
+  const baseStart = Math.max(0.0, peakSec - latency - initialPreRoll);
+  let startSec = baseStart;
+
+  // Dynamic padding at end of stream (ED-12.3)
+  if (endSec - startSec < MIN_CLUSTER_DURATION_SEC && duration >= MIN_CLUSTER_DURATION_SEC) {
+    const actualPostRoll = Math.max(0.0, endSec - peakSec);
+    const missingPostRoll = Math.max(0.0, targetPostRoll - actualPostRoll);
+    const needed = MIN_CLUSTER_DURATION_SEC - (endSec - startSec);
+    const extension = Math.min(
+      MAX_PRE_ROLL_BUFFER_SEC - initialPreRoll,
+      Math.max(missingPostRoll, needed),
+    );
+    startSec = Math.max(0.0, peakSec - latency - (initialPreRoll + extension));
+
+    if (endSec - startSec < MIN_CLUSTER_DURATION_SEC) {
+      startSec = Math.max(0.0, endSec - MIN_CLUSTER_DURATION_SEC);
+    }
+  }
+
+  // Bound invariant: 0.0 <= startSec < endSec <= duration (unless duration == 0)
+  if (startSec >= endSec && duration > 0.0) {
+    startSec = Math.max(0.0, endSec - 1.0);
+  }
+
+  return {
+    startSec: Math.round(startSec * 10.0) / 10.0,
+    endSec: Math.round(endSec * 10.0) / 10.0,
+    durationSec: Math.round((endSec - startSec) * 10.0) / 10.0,
+  };
+}
