@@ -352,6 +352,7 @@ describe('TASK-M4-02 Test Suite: Core Crate, Unified Error Handling & IPC Protoc
         'ERR_STT_RATE_LIMIT',
         'ERR_STT_PAYLOAD_TOO_LARGE',
         'ERR_STT_VRAM_INSUFFICIENT',
+        'ERR_STT_CUDA_OOM',
         'ERR_STT_INVALID_API_KEY',
         'ERR_STT_VAD_FAILED',
         'ERR_TRANSLATE_SAFETY_FILTER',
@@ -2839,6 +2840,64 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(normalized.segments[0].textEn, 'Hello everyone!');
       assert.strictEqual(normalized.segments[0].words.length, 2);
       assert.strictEqual(normalized.segments[0].words[0].word, 'Hello');
+    });
+  });
+
+  describe('TASK-M4-16: Faster-Whisper Local INT8 Worker & Hardware Guardrail Contracts', () => {
+    it('should assert Rust faster_whisper_worker module and tests exist in backend', () => {
+      const workerPath = path.resolve('src-tauri/src/stt/faster_whisper_worker.rs');
+      const testPath = path.resolve('src-tauri/tests/local_whisper_worker_test.rs');
+      const modelMgrPath = path.resolve('src-tauri/src/stt/model_manager.rs');
+      const sttModPath = path.resolve('src-tauri/src/stt/mod.rs');
+
+      assert.ok(fs.existsSync(workerPath), 'faster_whisper_worker.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'local_whisper_worker_test.rs must exist');
+      assert.ok(fs.existsSync(modelMgrPath), 'model_manager.rs must exist');
+
+      const workerContent = fs.readFileSync(workerPath, 'utf8');
+      assert.ok(workerContent.includes('pub struct FasterWhisperConfig'), 'Must define FasterWhisperConfig');
+      assert.ok(workerContent.includes('pub enum GuardrailPolicy'), 'Must define GuardrailPolicy');
+      assert.ok(workerContent.includes('pub struct GuardrailDecision'), 'Must define GuardrailDecision');
+      assert.ok(workerContent.includes('pub fn build_worker_command_args'), 'Must define build_worker_command_args');
+      assert.ok(workerContent.includes('pub fn build_faster_whisper_command_args'), 'Must define build_faster_whisper_command_args');
+      assert.ok(workerContent.includes('pub fn evaluate_hardware_guardrail'), 'Must define evaluate_hardware_guardrail');
+      assert.ok(workerContent.includes('pub fn check_hardware_guardrail'), 'Must define check_hardware_guardrail');
+      assert.ok(workerContent.includes('pub fn enforce_hardware_guardrail'), 'Must define enforce_hardware_guardrail');
+      assert.ok(workerContent.includes('pub fn estimate_vram_usage_mb'), 'Must define estimate_vram_usage_mb');
+      assert.ok(workerContent.includes('pub fn map_faster_whisper_to_container'), 'Must define map_faster_whisper_to_container');
+      assert.ok(workerContent.includes('pub fn parse_faster_whisper_json'), 'Must define parse_faster_whisper_json');
+      assert.ok(workerContent.includes('pub async fn run_faster_whisper_worker'), 'Must define run_faster_whisper_worker');
+      assert.ok(workerContent.includes('assign_child_to_job_guard'), 'Must assign child to Windows Job Object');
+
+      const modelMgrContent = fs.readFileSync(modelMgrPath, 'utf8');
+      assert.ok(modelMgrContent.includes('faster-whisper-medium-int8'), 'Must include faster-whisper-medium-int8 in catalog');
+      assert.ok(modelMgrContent.includes('faster-whisper-small-int8'), 'Must include faster-whisper-small-int8 in catalog');
+      assert.ok(modelMgrContent.includes('is_whisper_large'), 'Must export is_whisper_large helper');
+
+      const sttModContent = fs.readFileSync(sttModPath, 'utf8');
+      assert.ok(sttModContent.includes('pub mod faster_whisper_worker;'), 'stt/mod.rs must register faster_whisper_worker');
+    });
+
+    it('should assert zero-panic clippy invariant in faster_whisper_worker.rs', () => {
+      const workerContent = fs.readFileSync(path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'), 'utf8');
+      assert.ok(!workerContent.includes('.unwrap()'), 'faster_whisper_worker.rs must not contain .unwrap()');
+      assert.ok(!workerContent.includes('.expect('), 'faster_whisper_worker.rs must not contain .expect()');
+      assert.ok(!workerContent.includes('panic!('), 'faster_whisper_worker.rs must not contain panic!()');
+    });
+
+    it('should verify hardware guardrail thresholds and VRAM cap mathematical constants', () => {
+      const workerContent = fs.readFileSync(path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'), 'utf8');
+      assert.ok(workerContent.includes('MIN_LARGE_VRAM_MB: u64 = 2500;'), 'MIN_LARGE_VRAM_MB must be 2500MB');
+      assert.ok(workerContent.includes('MAX_INT8_VRAM_CAP_MB: u64 = 1800;'), 'MAX_INT8_VRAM_CAP_MB must be 1800MB');
+      assert.ok(workerContent.includes('DEFAULT_FASTER_WHISPER_MODEL: &str = "medium";'), 'Default model must be medium');
+      assert.ok(workerContent.includes('DEFAULT_FASTER_WHISPER_QUANTIZATION: &str = "int8";'), 'Default quantization must be int8');
+      assert.ok(workerContent.includes('DEFAULT_FASTER_WHISPER_DEVICE: &str = "auto";'), 'Default device must be auto');
+    });
+
+    it('should verify error codes contain ERR_STT_CUDA_OOM and ERR_STT_VRAM_INSUFFICIENT', () => {
+      const codesContent = fs.readFileSync(path.resolve('src-tauri/src/error/codes.rs'), 'utf8');
+      assert.ok(codesContent.includes('ERR_STT_CUDA_OOM'), 'codes.rs must define ERR_STT_CUDA_OOM');
+      assert.ok(codesContent.includes('ERR_STT_VRAM_INSUFFICIENT'), 'codes.rs must define ERR_STT_VRAM_INSUFFICIENT');
     });
   });
 });

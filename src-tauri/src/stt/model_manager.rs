@@ -61,6 +61,18 @@ pub const MODEL_CATALOG: &[ModelCatalogEntry] = &[
         expected_sha256: Some("a57c5a6d5ee3df38f2cb4244ab92ec694e9f740e53a3eb2d32782e3c015b6b15"),
         approx_size_mb: 1100,
     },
+    ModelCatalogEntry {
+        model_name: "faster-whisper-medium-int8",
+        filename: "faster-whisper-medium-int8",
+        expected_sha256: Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        approx_size_mb: 1500,
+    },
+    ModelCatalogEntry {
+        model_name: "faster-whisper-small-int8",
+        filename: "faster-whisper-small-int8",
+        expected_sha256: Some("f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2"),
+        approx_size_mb: 500,
+    },
 ];
 
 /// Resolve the directory where local STT models are stored.
@@ -101,10 +113,24 @@ pub fn resolve_models_dir() -> PathBuf {
 
 /// Look up a model catalog entry by model name or filename.
 pub fn find_catalog_entry(name_or_filename: &str) -> Option<&'static ModelCatalogEntry> {
+    let lower = name_or_filename.to_ascii_lowercase();
+    let normalized = match lower.as_str() {
+        "medium-int8" | "medium_int8" => "faster-whisper-medium-int8",
+        "small-int8" | "small_int8" => "faster-whisper-small-int8",
+        other => other,
+    };
     MODEL_CATALOG.iter().find(|entry| {
-        entry.model_name.eq_ignore_ascii_case(name_or_filename)
+        entry.model_name.eq_ignore_ascii_case(normalized)
+            || entry.filename.eq_ignore_ascii_case(normalized)
+            || entry.model_name.eq_ignore_ascii_case(name_or_filename)
             || entry.filename.eq_ignore_ascii_case(name_or_filename)
     })
+}
+
+/// Check if a given model identifier represents a Whisper Large variant.
+pub fn is_whisper_large(model: &str) -> bool {
+    let lower = model.to_ascii_lowercase();
+    lower.contains("large")
 }
 
 /// Compute the SHA-256 checksum of a file on disk using a fixed 64KB stack buffer.
@@ -171,6 +197,45 @@ pub fn verify_model(
         return Err(AppError::Stt(SttError::ModelNotFound {
             path: target_path.display().to_string(),
         }));
+    }
+
+    if target_path.is_dir() {
+        // CTranslate2 / Faster-Whisper directory layout containing model.bin
+        let model_bin_path = target_path.join("model.bin");
+        if !model_bin_path.exists() {
+            return Err(AppError::Stt(SttError::ModelNotFound {
+                path: model_bin_path.display().to_string(),
+            }));
+        }
+
+        let metadata = std::fs::metadata(&model_bin_path).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed reading model metadata {}: {e}",
+                model_bin_path.display()
+            )))
+        })?;
+
+        let size_bytes = metadata.len();
+        let actual_sha256 = compute_file_sha256(&model_bin_path)?;
+
+        if let Some(expected) = expected_hash {
+            if !actual_sha256.eq_ignore_ascii_case(expected) {
+                return Err(AppError::Stt(SttError::ModelIntegrityFailed {
+                    path: model_bin_path.display().to_string(),
+                    expected_sha256: expected.to_string(),
+                    actual_sha256,
+                }));
+            }
+        }
+
+        return Ok(ModelInfo {
+            model_name: model_name.to_string(),
+            filename,
+            path: target_path.display().to_string(),
+            size_bytes,
+            sha256: actual_sha256,
+            is_verified: true,
+        });
     }
 
     let metadata = std::fs::metadata(&target_path).map_err(|e| {

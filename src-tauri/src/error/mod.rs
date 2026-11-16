@@ -107,6 +107,9 @@ pub enum SttError {
     #[error("Bộ nhớ VRAM không đủ để chạy Faster-Whisper ({available_mb}MB < 2500MB)")]
     InsufficientVram { available_mb: u32 },
 
+    #[error("Lỗi tràn bộ nhớ CUDA Out-of-Memory (OOM): {0}")]
+    CudaOom(String),
+
     #[error("Lỗi mô hình VAD hoặc xử lý âm thanh: {0}")]
     VadProcessingFailed(String),
 
@@ -260,6 +263,7 @@ impl AppError {
                 SttError::RateLimitExceeded(_) => codes::ERR_STT_RATE_LIMIT,
                 SttError::PayloadTooLarge { .. } => codes::ERR_STT_PAYLOAD_TOO_LARGE,
                 SttError::InsufficientVram { .. } => codes::ERR_STT_VRAM_INSUFFICIENT,
+                SttError::CudaOom(_) => codes::ERR_STT_CUDA_OOM,
                 SttError::InvalidApiKey => codes::ERR_STT_INVALID_API_KEY,
                 SttError::VadProcessingFailed(_) => codes::ERR_STT_VAD_FAILED,
                 SttError::ModelNotFound { .. } => codes::ERR_STT_MODEL_NOT_FOUND,
@@ -333,6 +337,7 @@ impl AppError {
             AppError::Stt(err) => match err {
                 SttError::RateLimitExceeded(_)
                 | SttError::InsufficientVram { .. }
+                | SttError::CudaOom(_)
                 | SttError::VadProcessingFailed(_)
                 | SttError::ModelNotFound { .. }
                 | SttError::ModelIntegrityFailed { .. }
@@ -401,8 +406,11 @@ impl AppError {
                 Some(format!("start: {start_sec:.2}s, end: {end_sec:.2}s"))
             }
 
-            AppError::Stt(SttError::RateLimitExceeded(details))
-            | AppError::Stt(SttError::VadProcessingFailed(details)) => Some(details.clone()),
+            AppError::Stt(
+                SttError::RateLimitExceeded(details)
+                | SttError::CudaOom(details)
+                | SttError::VadProcessingFailed(details),
+            ) => Some(details.clone()),
 
             AppError::Translation(TranslationError::SafetyFilterTriggered(details)) => {
                 Some(details.clone())
@@ -485,6 +493,10 @@ mod tests {
         let vram_err = AppError::Stt(SttError::InsufficientVram { available_mb: 2000 });
         assert_eq!(vram_err.code(), codes::ERR_STT_VRAM_INSUFFICIENT);
         assert!(vram_err.is_recoverable());
+
+        let oom_err = AppError::Stt(SttError::CudaOom("CUDA out of memory".to_string()));
+        assert_eq!(oom_err.code(), codes::ERR_STT_CUDA_OOM);
+        assert!(oom_err.is_recoverable());
 
         let trans_err = AppError::Translation(TranslationError::SafetyFilterTriggered(
             "finishReason: SAFETY".to_string(),
