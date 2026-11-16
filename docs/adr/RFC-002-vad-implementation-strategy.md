@@ -4,8 +4,8 @@
 **Dự án:** NeuroClip — Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam  
 **Chủ trì soạn thảo:** `@lead-architect` phối hợp cùng `@tech-lead` & `@qa-reviewer`  
 **Ngày đệ trình:** 2026-11-16  
-**Trạng thái:** [CHỜ PO PHÊ DUYỆT] (Pending Product Owner Decision)  
-**Căn cứ pháp lý:** Hiến pháp `AGENTS.md` (Mục 2: Zero-Guesswork Policy & Mục 3: Quy trình Báo cáo & Đặt câu hỏi cho PO), `docs/adr/ADR-002-tauri-v2-desktop-shell.md`, `docs/TASK_BOARD.md` (`TASK-M4-14`, `AC-14.1`, `AC-14.2`, `AC-14.3`).
+**Trạng thái:** [ĐÃ PHÊ DUYỆT - OPTION 2 -> ADR-008] (Approved by Product Owner on 2026-11-16)  
+**Căn cứ pháp lý:** Hiến pháp `AGENTS.md` (Mục 2: Zero-Guesswork Policy & Mục 3: Quy trình Báo cáo & Đặt câu hỏi cho PO), `docs/adr/ADR-002-tauri-v2-desktop-shell.md`, `docs/adr/ADR-008-pure-rust-tract-silero-vad.md`, `docs/TASK_BOARD.md` (`TASK-M4-14`, `AC-14.1`, `AC-14.2`, `AC-14.3`).
 
 ---
 
@@ -271,11 +271,20 @@ Tuân thủ nghiêm ngặt định dạng quy định tại **Mục 3 của `AGE
 
 ---
 
+### 5.1. Quyết định chính thức từ Product Owner (Phê duyệt ngày 2026-11-16)
+
+> **CĂN CỨ VĂN BẢN CHỈ ĐẠO CỦA PRODUCT OWNER (PO):**
+> * **Lựa chọn phê duyệt:** **CHẤP THUẬN OPTION 2** (Pure Rust ONNX Engine qua `tract-onnx` + Silero VAD Static 16kHz Graph + Pure Rust DSP Fallback).
+> * **Văn bản hóa kiến trúc:** Chuyển hóa thành quyết định kiến trúc chính thức tại `docs/adr/ADR-008-pure-rust-tract-silero-vad.md`.
+> * **Cấp phép chuyển giao:** Cho phép cập nhật `docs/TASK_BOARD.md` tại `TASK-M4-14` và tiến hành triển khai mã nguồn Phase 4 theo đúng Kịch bản A tại Mục 6.
+
+---
+
 ## 6. KẾ HOẠCH HÀNH ĐỘNG KỸ THUẬT SAU KHI PO PHÊ DUYỆT
 
 Ngay sau khi nhận được phản hồi chính thức từ PO, nhóm kỹ thuật sẽ kích hoạt quy trình thực thi theo các kịch bản tương ứng:
 
-### Kịch bản A: PO phê duyệt Option 2 (Khuyến nghị của Lead Architect)
+### Kịch bản A: PO phê duyệt Option 2 (Khuyến nghị của Lead Architect) [ĐANG THỰC THI (ACTIVE)]
 1. **Cập nhật Tài liệu Kiến trúc & Tiêu chuẩn:**
    - Ban hành quyết định kiến trúc chính thức: Tạo file `docs/adr/ADR-008-pure-rust-tract-silero-vad.md`.
    - Cập nhật tài liệu `docs/ARCHITECTURE.md` (Mục 3: Hybrid AI Engine & VAD Subsystem) ghi nhận việc sử dụng `tract-onnx` và mô hình Silero VAD static 16kHz.
@@ -289,13 +298,13 @@ Ngay sau khi nhận được phản hồi chính thức từ PO, nhóm kỹ thu�
    - Trình PO nghiệm thu dứt điểm `TASK-M4-14`.
    - Chuyển giao quyền triển khai sang `TASK-M4-15` (Groq Whisper Client).
 
-### Kịch bản B: PO lựa chọn Option 3 (Chấp nhận nới lỏng ngân sách bộ cài)
+### Kịch bản B: PO lựa chọn Option 3 (Chấp nhận nới lỏng ngân sách bộ cài) [ĐÃ BÃI BỎ (SUPERSEDED)]
 1. Ban hành `docs/adr/ADR-008-official-onnx-runtime-vad.md`.
 2. Lập văn bản sửa đổi kiến trúc cho `docs/adr/ADR-002-tauri-v2-desktop-shell.md`, nới trần kích thước bộ cài đặt từ **15MB – 25MB lên 30MB – 40MB**.
 3. Cấu hình quy trình đóng gói Tauri `tauri.conf.json` để sao chép file `onnxruntime.dll` đi kèm file nhị phân.
 4. Bổ sung cơ chế quét kiểm tra `vcruntime140.dll` trong First-Run Onboarding Wizard (`TASK-M4-02`) để hướng dẫn người dùng cài đặt VC++ Redist nếu bị thiếu.
 
-### Kịch bản C: PO lựa chọn Option 1 (Chấp nhận giới hạn của DSP để giữ nguyên mã nguồn)
+### Kịch bản C: PO lựa chọn Option 1 (Chấp nhận giới hạn của DSP để giữ nguyên mã nguồn) [ĐÃ BÃI BỎ (SUPERSEDED)]
 1. Ban hành `docs/adr/ADR-008-classical-dsp-heuristic-vad.md`.
 2. Cập nhật hạ chuẩn tiêu chí nghiệm thu `AC-14.2` trong `docs/TASK_BOARD.md` từ *"Loại bỏ triệt để $\ge 90\%$ các đoạn im lặng/nhạc không lời"* thành *"Loại bỏ triệt để $\ge 90\%$ các đoạn im lặng kỹ thuật số (không áp dụng cho nhạc nền)"*.
 3. Bổ sung cơ chế phát hiện lặp từ mạnh mẽ hơn tại `TASK-M4-15` để bù đắp việc nhạc nền lọt qua VAD.

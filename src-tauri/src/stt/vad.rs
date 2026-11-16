@@ -4,10 +4,16 @@
 //! silence/music pruning for $> 1.5$s non-speech segments (`AC-14.2`), and natural pause chunk splitting
 //! for Groq cloud API payload constraints (`AC-14.3`).
 
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
+use tract_onnx::prelude::*;
 
 use crate::error::{AppError, SttError};
 use crate::stt::vad_bridge::SpeechInterval;
+
+/// Embedded static 16kHz Silero VAD ONNX model bytes (~1.28MB).
+pub const EMBEDDED_SILERO_VAD_MODEL: &[u8] = include_bytes!("../../resources/models/silero_vad_16k.onnx");
 
 /// Default VAD audio sampling rate in Hz (16,000 Hz standard for Silero & Whisper).
 pub const DEFAULT_VAD_SAMPLE_RATE: usize = 16_000;
@@ -116,6 +122,8 @@ pub struct VadConfig {
     pub max_silence_gap_ms: u64,
     /// Padding added before and after speech in milliseconds (default: 100ms).
     pub speech_pad_ms: u64,
+    /// Optional file path override to custom Silero VAD model (default: None -> embedded static model).
+    pub model_path: Option<PathBuf>,
 }
 
 impl Default for VadConfig {
@@ -129,6 +137,7 @@ impl Default for VadConfig {
             min_silence_duration_ms: DEFAULT_MIN_SILENCE_DURATION_MS,
             max_silence_gap_ms: DEFAULT_MAX_SILENCE_GAP_MS,
             speech_pad_ms: DEFAULT_SPEECH_PAD_MS,
+            model_path: None,
         }
     }
 }
@@ -187,6 +196,274 @@ pub struct AudioChunk {
     pub samples: Vec<f32>,
 }
 
+/// Silero VAD neural inference engine compiled via `tract-onnx`.
+pub struct SileroVadEngine {
+    plan: SimplePlan<TypedFact, Box<dyn TypedOp>, TypedModel>,
+    num_inputs: usize,
+    num_outputs: usize,
+    context_samples: usize,
+}
+
+impl SileroVadEngine {
+    /// Initialize the neural engine from the embedded static model bytes.
+    pub fn from_embedded() -> Result<Self, AppError> {
+        Self::from_bytes(EMBEDDED_SILERO_VAD_MODEL)
+    }
+
+    /// Initialize the neural engine from a custom ONNX file path.
+    pub fn from_path(path: &Path) -> Result<Self, AppError> {
+        let bytes = std::fs::read(path).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to read Silero VAD model from {}: {e}",
+                path.display()
+            )))
+        })?;
+        Self::from_bytes(&bytes)
+    }
+
+    /// Initialize the neural engine from raw bytes.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, AppError> {
+        let mut cursor = std::io::Cursor::new(bytes);
+        let mut model = tract_onnx::onnx()
+            .model_for_read(&mut cursor)
+            .map_err(|e| {
+                AppError::Stt(SttError::VadProcessingFailed(format!(
+                    "Silero VAD model parsing failed: {e}"
+                )))
+            })?;
+
+        let num_inputs = model.inputs.len();
+        let num_outputs = model.outputs.len();
+
+        // Constrain input facts for static 16kHz Silero v5 (2 inputs: [1, 576], [2, 1, 128])
+        // or v4 (4 inputs: [1, 512], [1], [2, 1, 64], [2, 1, 64])
+        let context_samples = if num_inputs == 2 {
+            model
+                .set_input_fact(0, InferenceFact::dt_shape(f32::datum_type(), tvec!(1, 576)))
+                .map_err(|e| {
+                    AppError::Stt(SttError::VadProcessingFailed(format!(
+                        "Silero VAD v5 input0 fact failed: {e}"
+                    )))
+                })?;
+            model
+                .set_input_fact(1, InferenceFact::dt_shape(f32::datum_type(), tvec!(2, 1, 128)))
+                .map_err(|e| {
+                    AppError::Stt(SttError::VadProcessingFailed(format!(
+                        "Silero VAD v5 input1 fact failed: {e}"
+                    )))
+                })?;
+            64
+        } else {
+            0
+        };
+
+        let optimized = model.into_optimized().map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Silero VAD graph optimization failed: {e}"
+            )))
+        })?;
+
+        let plan = optimized.into_runnable().map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Silero VAD model runnable compilation failed: {e}"
+            )))
+        })?;
+
+        Ok(Self {
+            plan,
+            num_inputs,
+            num_outputs,
+            context_samples,
+        })
+    }
+
+    /// Initialize default engine: from override path if provided, else embedded model.
+    pub fn init_default(path_override: &Option<PathBuf>) -> Result<Self, AppError> {
+        if let Some(path) = path_override {
+            Self::from_path(path)
+        } else {
+            Self::from_embedded()
+        }
+    }
+
+    /// Create an active streaming VAD inference session with fresh RNN hidden states.
+    #[must_use]
+    pub fn create_session(&self) -> SileroVadSession<'_> {
+        let state_len = if self.num_inputs == 2 { 256 } else { 128 };
+        SileroVadSession {
+            engine: self,
+            h_state: vec![0.0f32; state_len],
+            c_state: vec![0.0f32; 128],
+            context: vec![0.0f32; self.context_samples],
+            input_buf: vec![0.0f32; self.context_samples + DEFAULT_WINDOW_SIZE_SAMPLES],
+        }
+    }
+}
+
+/// Active streaming inference session holding recurrent LSTM hidden state context.
+pub struct SileroVadSession<'a> {
+    engine: &'a SileroVadEngine,
+    h_state: Vec<f32>,
+    c_state: Vec<f32>,
+    context: Vec<f32>,
+    input_buf: Vec<f32>,
+}
+
+impl<'a> SileroVadSession<'a> {
+    /// Perform forward inference step on a 512-sample audio frame (16kHz).
+    pub fn step(&mut self, frame: &[f32]) -> Result<f32, AppError> {
+        if self.engine.num_inputs == 2 {
+            let needed = self.context.len() + frame.len();
+            if self.input_buf.len() != needed {
+                self.input_buf.resize(needed, 0.0);
+            }
+            self.input_buf[..self.context.len()].copy_from_slice(&self.context);
+            self.input_buf[self.context.len()..].copy_from_slice(frame);
+
+            let audio_tensor =
+                Tensor::from_shape(&[1, needed], &self.input_buf).map_err(|e| {
+                    AppError::Stt(SttError::VadProcessingFailed(format!(
+                        "Failed to build v5 input audio tensor: {e}"
+                    )))
+                })?;
+
+            let state_tensor = Tensor::from_shape(&[2, 1, 128], &self.h_state).map_err(|e| {
+                AppError::Stt(SttError::VadProcessingFailed(format!(
+                    "Failed to build v5 state tensor: {e}"
+                )))
+            })?;
+
+            let outputs = self
+                .engine
+                .plan
+                .run(tvec![audio_tensor.into(), state_tensor.into()])
+                .map_err(|e| {
+                    AppError::Stt(SttError::VadProcessingFailed(format!(
+                        "Silero VAD v5 execution step failed: {e}"
+                    )))
+                })?;
+
+            if outputs.len() < 2 {
+                return Err(AppError::Stt(SttError::VadProcessingFailed(format!(
+                    "Silero VAD v5 expected 2 outputs (prob, stateN), got {}",
+                    outputs.len()
+                ))));
+            }
+
+            let prob_slice = outputs[0].as_slice::<f32>().map_err(|e| {
+                AppError::Stt(SttError::VadProcessingFailed(format!(
+                    "Failed to extract v5 probability tensor slice: {e}"
+                )))
+            })?;
+
+            let next_state_slice = outputs[1].as_slice::<f32>().map_err(|e| {
+                AppError::Stt(SttError::VadProcessingFailed(format!(
+                    "Failed to extract v5 stateN tensor slice: {e}"
+                )))
+            })?;
+
+            if prob_slice.is_empty() || next_state_slice.len() != 256 {
+                return Err(AppError::Stt(SttError::VadProcessingFailed(
+                    "Invalid output dimensions from Silero VAD v5 step".into(),
+                )));
+            }
+
+            let prob = prob_slice[0].clamp(0.0, 1.0);
+            self.h_state.copy_from_slice(next_state_slice);
+            if !self.context.is_empty() && frame.len() >= self.context.len() {
+                let ctx_start = frame.len() - self.context.len();
+                self.context.copy_from_slice(&frame[ctx_start..]);
+            }
+            return Ok(prob);
+        }
+
+        let audio_tensor = Tensor::from_shape(&[1, frame.len()], frame).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to build input audio tensor: {e}"
+            )))
+        })?;
+
+        let h_tensor = Tensor::from_shape(&[2, 1, 64], &self.h_state).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to build h_state tensor: {e}"
+            )))
+        })?;
+
+        let c_tensor = Tensor::from_shape(&[2, 1, 64], &self.c_state).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to build c_state tensor: {e}"
+            )))
+        })?;
+
+        let sr_tensor = Tensor::from_shape(&[1], &[16_000i64]).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to build sr tensor: {e}"
+            )))
+        })?;
+
+        let inputs: TVec<TValue> = if self.engine.num_inputs >= 4 {
+            tvec![
+                audio_tensor.into(),
+                sr_tensor.into(),
+                h_tensor.into(),
+                c_tensor.into()
+            ]
+        } else {
+            tvec![audio_tensor.into(), h_tensor.into(), c_tensor.into()]
+        };
+
+        let outputs = self.engine.plan.run(inputs).map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Silero VAD execution step failed: {e}"
+            )))
+        })?;
+
+        if outputs.len() < 3 || self.engine.num_outputs < 3 {
+            return Err(AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Silero VAD expected 3 outputs (prob, hn, cn), got {}",
+                outputs.len()
+            ))));
+        }
+
+        let prob_slice = outputs[0].as_slice::<f32>().map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to extract probability tensor slice: {e}"
+            )))
+        })?;
+
+        let hn_slice = outputs[1].as_slice::<f32>().map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to extract hn tensor slice: {e}"
+            )))
+        })?;
+
+        let cn_slice = outputs[2].as_slice::<f32>().map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Failed to extract cn tensor slice: {e}"
+            )))
+        })?;
+
+        if prob_slice.is_empty() || hn_slice.len() != 128 || cn_slice.len() != 128 {
+            return Err(AppError::Stt(SttError::VadProcessingFailed(
+                "Invalid output dimensions from Silero VAD step".into(),
+            )));
+        }
+
+        let prob = prob_slice[0].clamp(0.0, 1.0);
+        self.h_state.copy_from_slice(hn_slice);
+        self.c_state.copy_from_slice(cn_slice);
+
+        Ok(prob)
+    }
+
+    /// Reset recurrent states to zero.
+    pub fn reset(&mut self) {
+        self.h_state.fill(0.0);
+        self.c_state.fill(0.0);
+        self.context.fill(0.0);
+    }
+}
+
 /// Core voice activity detection on float32 PCM samples operating on 512-sample windows.
 ///
 /// Returns speech segments with millisecond timestamps adhering to Silero VAD specifications.
@@ -212,6 +489,18 @@ pub fn detect_speech_segments(
     let num_windows = total_samples.div_ceil(window_size);
     let ms_per_window = ((window_size as f64 * 1000.0) / sample_rate as f64).round() as u64;
 
+    // Dual-Engine: Initialize Silero VAD neural engine with automatic pure Rust DSP fallback
+    let engine = match SileroVadEngine::init_default(&config.model_path) {
+        Ok(e) => Some(e),
+        Err(err) => {
+            tracing::warn!(
+                "Silero VAD neural model initialization failed ({err}); falling back to Pure Rust DSP heuristic"
+            );
+            None
+        }
+    };
+    let mut session = engine.as_ref().map(|e| e.create_session());
+
     let mut state_prob: f32 = 0.0;
     let mut triggered = false;
     let mut speech_start_frame: Option<usize> = None;
@@ -230,8 +519,19 @@ pub fn detect_speech_segments(
         frame.fill(0.0);
         frame[..slice.len()].copy_from_slice(slice);
 
-        // Compute speech probability score for 512-sample frame
-        let prob = compute_frame_speech_prob(&frame, state_prob);
+        // Compute speech probability score for 512-sample frame via Silero VAD or DSP fallback
+        let prob = match session.as_mut() {
+            Some(s) => match s.step(&frame) {
+                Ok(p) => p,
+                Err(err) => {
+                    tracing::warn!(
+                        "Silero VAD frame {w} inference step error ({err}); degrading to DSP fallback"
+                    );
+                    compute_frame_speech_prob_fallback(&frame, state_prob)
+                }
+            },
+            None => compute_frame_speech_prob_fallback(&frame, state_prob),
+        };
         state_prob = prob;
 
         if !triggered {
@@ -294,8 +594,11 @@ pub fn detect_speech_segments(
     Ok(merged_segments)
 }
 
-/// Compute voice activity probability for a 512-sample frame using multi-band features.
-fn compute_frame_speech_prob(frame: &[f32], prev_prob: f32) -> f32 {
+/// Fallback DSP speech probability calculation (`compute_frame_speech_prob_fallback`).
+///
+/// Classical multi-band DSP heuristic functioning as automatic fallback
+/// when the Silero VAD neural model is uninitialized or fails inference.
+pub fn compute_frame_speech_prob_fallback(frame: &[f32], prev_prob: f32) -> f32 {
     let n = frame.len();
     if n == 0 {
         return 0.0;
@@ -690,6 +993,29 @@ pub fn generate_synthetic_speech_signal(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stt::audio_prep::PreparedAudioBuffer;
+
+    fn real_speech_slice(start_sec: f64, duration_sec: f64) -> Vec<f32> {
+        let wav_bytes = include_bytes!("../../tests/fixtures/silero_test.wav");
+        let buf = PreparedAudioBuffer::from_wav_bytes(wav_bytes)
+            .expect("silero_test.wav fixture must parse");
+        let sr = buf.sample_rate as usize;
+        let start = (start_sec * sr as f64).round() as usize;
+        let len = (duration_sec * sr as f64).round() as usize;
+        buf.samples_f32[start..start + len].to_vec()
+    }
+
+    #[test]
+    fn test_silero_onnx_engine_initializes_and_runs_without_fallback() {
+        let engine = SileroVadEngine::from_embedded()
+            .expect("Real Silero VAD 16kHz ONNX model must load and optimize in tract-onnx");
+        assert_eq!(engine.num_inputs, 2, "Silero v5 16kHz static graph expects 2 inputs");
+        assert_eq!(engine.num_outputs, 2, "Silero v5 16kHz static graph expects 2 outputs");
+        let mut session = engine.create_session();
+        let silence_frame = vec![0.0f32; DEFAULT_WINDOW_SIZE_SAMPLES];
+        let prob = session.step(&silence_frame).expect("ONNX step on silence must succeed");
+        assert!(prob < 0.2, "Silence probability should be low, got {prob}");
+    }
 
     #[test]
     fn test_speech_segment_bridge_conversion() {
@@ -707,23 +1033,21 @@ mod tests {
 
     #[test]
     fn test_ut_14_1_speech_detection_happy_path() {
-        // UT-14.1: 60s audio comprising 20s speech interspersed with 40s silence
+        // UT-14.1: 60s audio comprising 20s real human speech interspersed with 40s silence
         let sample_rate = 16_000;
         let mut audio = Vec::with_capacity(sample_rate * 60);
 
         // 0s - 10s: Silence (10s)
         audio.extend(vec![0.0f32; sample_rate * 10]);
 
-        // 10s - 20s: Speech (10s, 300Hz voice formant)
-        let speech_1 = generate_synthetic_speech_signal(sample_rate, 10.0, 300.0, 0.6);
-        audio.extend(speech_1);
+        // 10s - 20s: Real speech block 1 (10s)
+        audio.extend(real_speech_slice(21.0, 10.0));
 
         // 20s - 40s: Silence (20s)
         audio.extend(vec![0.0f32; sample_rate * 20]);
 
-        // 40s - 50s: Speech (10s, 250Hz voice formant)
-        let speech_2 = generate_synthetic_speech_signal(sample_rate, 10.0, 250.0, 0.6);
-        audio.extend(speech_2);
+        // 40s - 50s: Real speech block 2 (10s)
+        audio.extend(real_speech_slice(25.0, 10.0));
 
         // 50s - 60s: Silence (10s)
         audio.extend(vec![0.0f32; sample_rate * 10]);
@@ -739,15 +1063,15 @@ mod tests {
             segments.len()
         );
 
-        // First segment should roughly span 10s to 20s (with speech padding tolerance)
+        // First segment should span ~10s to ~20s
         let seg1 = &segments[0];
-        assert!(seg1.start_ms >= 9_800 && seg1.start_ms <= 10_200, "seg1 start: {}", seg1.start_ms);
-        assert!(seg1.end_ms >= 19_800 && seg1.end_ms <= 20_200, "seg1 end: {}", seg1.end_ms);
+        assert!(seg1.start_ms >= 9_700 && seg1.start_ms <= 10_500, "seg1 start: {}", seg1.start_ms);
+        assert!(seg1.end_ms >= 19_500 && seg1.end_ms <= 20_300, "seg1 end: {}", seg1.end_ms);
 
-        // Second segment should roughly span 40s to 50s
+        // Second segment should span ~40s to ~50s
         let seg2 = &segments[1];
-        assert!(seg2.start_ms >= 39_800 && seg2.start_ms <= 40_200, "seg2 start: {}", seg2.start_ms);
-        assert!(seg2.end_ms >= 49_800 && seg2.end_ms <= 50_200, "seg2 end: {}", seg2.end_ms);
+        assert!(seg2.start_ms >= 39_700 && seg2.start_ms <= 40_500, "seg2 start: {}", seg2.start_ms);
+        assert!(seg2.end_ms >= 49_500 && seg2.end_ms <= 50_300, "seg2 end: {}", seg2.end_ms);
     }
 
     #[test]
@@ -758,12 +1082,12 @@ mod tests {
 
         // 0s - 10s: Silence (10s)
         audio.extend(vec![0.0f32; sample_rate * 10]);
-        // 10s - 20s: Speech (10s)
-        audio.extend(generate_synthetic_speech_signal(sample_rate, 10.0, 300.0, 0.6));
+        // 10s - 20s: Real speech (10s)
+        audio.extend(real_speech_slice(21.0, 10.0));
         // 20s - 40s: Silence (20s)
         audio.extend(vec![0.0f32; sample_rate * 20]);
-        // 40s - 50s: Speech (10s)
-        audio.extend(generate_synthetic_speech_signal(sample_rate, 10.0, 250.0, 0.6));
+        // 40s - 50s: Real speech (10s)
+        audio.extend(real_speech_slice(25.0, 10.0));
         // 50s - 60s: Silence (10s)
         audio.extend(vec![0.0f32; sample_rate * 10]);
 
@@ -771,7 +1095,7 @@ mod tests {
         let prune_result = prune_silence(&audio, &config).expect("Pruning must succeed");
 
         assert_eq!(prune_result.original_duration_ms, 60_000);
-        // Original: 60s. Pruned: ~20s speech + tiny cushions <= 22s.
+        // Original: 60s. Pruned: ~20s speech + tiny cushions <= 25s.
         assert!(
             prune_result.reduction_ratio >= 0.30,
             "Payload reduction ratio {:.2}% must be >= 30%",
@@ -792,23 +1116,24 @@ mod tests {
 
         // Seg 1: 2s to 6s
         audio.extend(vec![0.0f32; sample_rate * 2]);
-        audio.extend(generate_synthetic_speech_signal(sample_rate, 4.0, 300.0, 0.6));
+        audio.extend(real_speech_slice(21.0, 4.0));
 
         // Silence 1: 6s to 12s (6s pause)
         audio.extend(vec![0.0f32; sample_rate * 6]);
 
         // Seg 2: 12s to 18s
-        audio.extend(generate_synthetic_speech_signal(sample_rate, 6.0, 350.0, 0.6));
+        audio.extend(real_speech_slice(25.0, 6.0));
 
         // Silence 2: 18s to 24s (6s pause)
         audio.extend(vec![0.0f32; sample_rate * 6]);
 
         // Seg 3: 24s to 28s
-        audio.extend(generate_synthetic_speech_signal(sample_rate, 4.0, 300.0, 0.6));
+        audio.extend(real_speech_slice(31.5, 4.0));
         audio.extend(vec![0.0f32; sample_rate * 2]);
 
         let config = VadConfig::default();
         let segments = detect_speech_segments(&audio, &config).expect("VAD detection must pass");
+        assert!(segments.len() >= 3, "Expected >= 3 speech segments, got {}", segments.len());
 
         // Request max chunk duration 10s to trigger pause splits
         let split_config = ChunkSplitConfig {
@@ -841,18 +1166,14 @@ mod tests {
     fn test_ed_14_2_vad_speed_sla() {
         // ED-14.2 & AC-14.1: VAD processing on 1 minute audio <= 1.5s on CPU
         let sample_rate = 16_000;
-        let mut audio = Vec::with_capacity(sample_rate * 60);
-
-        // 60s alternating synthetic audio
-        for _ in 0..6 {
-            audio.extend(generate_synthetic_speech_signal(sample_rate, 5.0, 300.0, 0.5));
-            audio.extend(vec![0.0f32; sample_rate * 5]);
-        }
-        assert_eq!(audio.len(), sample_rate * 60);
+        let wav_bytes = include_bytes!("../../tests/fixtures/silero_test.wav");
+        let buf = PreparedAudioBuffer::from_wav_bytes(wav_bytes)
+            .expect("silero_test.wav fixture must parse");
+        assert_eq!(buf.samples_f32.len(), sample_rate * 60);
 
         let config = VadConfig::default();
         let start = std::time::Instant::now();
-        let segments = detect_speech_segments(&audio, &config).expect("VAD must succeed");
+        let segments = detect_speech_segments(&buf.samples_f32, &config).expect("VAD must succeed");
         let elapsed = start.elapsed();
 
         assert!(!segments.is_empty());

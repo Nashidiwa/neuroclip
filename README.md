@@ -16,8 +16,8 @@
 [![React: v18.3](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests: 485 Vitest + 104 Node + 202 Rust](https://img.shields.io/badge/Tests-485%20Vitest%20%2B%20104%20Node%20%2B%20202%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
-[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(13%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
+[![Tests: 485 Vitest + 104 Node + 260 Rust](https://img.shields.io/badge/Tests-485%20Vitest%20%2B%20104%20Node%20%2B%20260%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
+[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(14%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
 [Current Implementation](#-current-implementation) •
@@ -52,11 +52,11 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
 
 ```text
-[█████████████░░░░░░░░░░░░░░░░░░░] 13 / 32 Tasks Hoàn thành (40.6% v1 Core)
-485 Vitest Tests Passing • 104 Node Native Runner Tests Passing • 202 Rust Tests Passing • Zero Unhandled Panics
+[██████████████░░░░░░░░░░░░░░░░░░] 14 / 32 Tasks Hoàn thành (43.8% v1 Core)
+485 Vitest Tests Passing • 104 Node Native Runner Tests Passing • 260 Rust Tests Passing • Zero Unhandled Panics
 ```
 
-Toàn bộ 13 tasks thuộc 3 Milestones nền tảng đầu tiên (M4.1, M4.2 & M4.3) đã hoàn thành và được kiểm thử toàn diện:
+Toàn bộ 13 tasks thuộc 3 Milestones nền tảng đầu tiên (M4.1, M4.2 & M4.3) và task mở đầu Milestone M4.4 (`TASK-M4-14`) đã hoàn thành và được kiểm thử toàn diện:
 
 - **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
   - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
@@ -100,6 +100,10 @@ Toàn bộ 13 tasks thuộc 3 Milestones nền tảng đầu tiên (M4.1, M4.2 &
 - **Bộ tải phân đoạn video chính xác không tải thừa (`TASK-M4-13`)**:
   - FFmpeg input-seeking HTTP Range Request trực tiếp qua mạng từ URL m3u8 stream gốc trong `vod_manifest.json` (`-ss <start> -to <end>` đặt trước `-i`), cắt phân đoạn 90s trong $\le 10\text{s}$ với dung lượng chỉ 30MB–80MB (tiết kiệm $\ge 99\%$ băng thông mạng và dung lượng đĩa so với tải 30GB video).
   - Stream copy `-c copy` và `-avoid_negative_ts make_zero` đảm bảo không bị gián đoạn/đóng băng khung hình đầu tiên; tự động kiểm tra Keyframe alignment và audio/video drift $\le 50\text{ms}$; quản lý tiến trình an toàn qua Windows Job Object.
+- **Bộ tiền xử lý âm thanh & Lọc khoảng lặng Pure Rust `tract-onnx` Silero VAD (`TASK-M4-14`)**:
+  - Chuẩn hóa âm thanh qua FFmpeg EBU R128 `loudnorm=I=-16:TP=-1.5:LRA=11` (16kHz mono PCM) kèm soft-knee limiter + 4x Hermite cubic oversampling True Peak (`ERR-08 Screaming Defense`) giữ đỉnh $\le -1.5\text{dBFS}$ không vỡ tiếng.
+  - Suy luận nơ-ron **Silero VAD v5 đồ thị tĩnh 16kHz (`silero_vad_16k.onnx`, 1.28MB)** chạy thuần Rust qua `tract-onnx v0.21` (`ADR-008`) xử lý 60s audio trong `0.3817s` (bản release), loại bỏ 100% nhạc chiptune/tông đơn âm và $\ge 95\%$ nhạc nền BGM đa âm (`AC-14.2`), cắt bỏ khoảng lặng $> 1.5\text{s}$ và chia nhỏ chunk $< 20\text{MB}$ tại điểm nghỉ tự nhiên (`AC-14.3`).
+  - Tích hợp tầng dự phòng tự động Pure Rust DSP (`compute_frame_speech_prob_fallback`) khi model gặp lỗi nạp/I/O, thực thi bất đồng bộ qua `tokio::task::spawn_blocking`.
 
 ---
 
@@ -164,13 +168,13 @@ flowchart LR
 | **M4.1** | **Nền tảng cốt lõi (Foundation)** | Tauri v2 Acrylic Shell, Giao thức IPC Error, Win32 Hardware Profiler, Tracing NDJSON & Secret Redaction | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.2** | **Thu nạp VOD, Chat & Bóc băng STT** | Pre-flight disk check 5GB, Audio-First 16kHz PCM streamer, Chat replay normalizer & heatmap, Whisper local STT | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.3** | **Động cơ Highlight đa phương thức** | Thuật toán Chat Velocity Z-Score, Bộ lọc Emote Swarm, Quét đỉnh âm thanh RMS, Bù trễ stream 4.5s, Lossless range slicer | **5 / 5** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
-| **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD, FFmpeg loudnorm limiter, Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | **0 / 3** | ⏳ *Planned* |
+| **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD (`tract-onnx` 16kHz + DSP fallback), FFmpeg loudnorm limiter (`TASK-M4-14` ✅), Groq Whisper Large-v3 client (<25MB chunks), Faster-Whisper INT8 offline worker | **1 / 3** | 🔄 *In Progress* |
 | **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing (`BLOCK_NONE`), Từ điển Swarm Lore, Ma trận xưng hô nhân vật, Smart line-breaker | **0 / 3** | ⏳ *Planned* |
 | **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline, Virtualized subtitle list 60fps, Bàn phím số 1-chạm đổi màu nhân vật, Đèn cảnh báo CPS | **0 / 4** | ⏳ *Planned* |
 | **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | **0 / 3** | ⏳ *Planned* |
 | **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | **0 / 3** | ⏳ *Planned* |
 | **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | **0 / 3** | ⏳ *Planned* |
-| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **13 / 32** | **40.6% Complete** |
+| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **14 / 32** | **43.8% Complete** |
 
 > 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 32 tasks (TASK-M4-01 đến TASK-M4-32) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
 
@@ -246,7 +250,8 @@ graph TD
 | **UI & Styling** | [Tailwind CSS 3.4](https://tailwindcss.com/), `clsx`, `tailwind-merge`, [Lucide Icons](https://lucide.dev/) | Hệ thống thiết kế Dark Theme Neuro-sama với Acrylic/Mica backdrop. |
 | **State Management** | [Zustand](https://github.com/pmndrs/zustand) | Quản lý trạng thái client nhẹ, chống race condition bằng sequence counters. |
 | **Build & Tooling** | [Vite 4.3](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
-| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | 791 bài kiểm tra tự động (485 Vitest + 104 Node + 202 Cargo Rust tests). |
+| **Pure Rust Neural VAD** | `tract-onnx` v0.21 + `silero_vad_16k.onnx` | Suy luận Silero VAD đồ thị tĩnh 16kHz thuần Rust (không cần DLL C++), kèm DSP fallback an toàn (`ADR-008`). |
+| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | 849 bài kiểm tra tự động (485 Vitest + 104 Node + 260 Cargo Rust tests). |
 | **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest), `whisper.cpp` (`main.exe`) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch/YouTube, bóc băng giọng nói local Q5_K. |
 
 ### Data Contracts & JSON Schemas (SSOT):
@@ -302,7 +307,7 @@ npm test
 # Chạy toàn bộ 485 bài kiểm thử bằng Vitest (Unit, Component, Adversarial)
 npm run test:vitest
 
-# Chạy toàn bộ 202 bài kiểm thử Rust backend
+# Chạy toàn bộ 260 bài kiểm thử Rust backend
 cd src-tauri && cargo test --offline -- --test-threads=1
 
 # Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant)
@@ -332,7 +337,7 @@ neuroclip/
 ├── .agents/                    # Bộ quy chuẩn và skills dành cho Multi-Agent Team
 │   └── skills/                 # Skills hỗ trợ lập trình, tài liệu và frontend design
 ├── docs/                       # TÀI LIỆU SSOT (Single Source of Truth)
-│   ├── adr/                    # 7 Architectural Decision Records chính thức (ADR-001 -> ADR-007)
+│   ├── adr/                    # 8 Architectural Decision Records (ADR-001 -> ADR-008) & RFC-001..002
 │   ├── ARCHITECTURE.md         # Đặc tả kiến trúc hệ thống, data contracts, failure modes
 │   ├── CONVENTIONS.md          # Tiêu chuẩn code Rust/TypeScript, clippy lint, IPC protocol
 │   ├── PRD.md                  # Tài liệu yêu cầu sản phẩm, chân dung người dùng, epics
@@ -352,6 +357,7 @@ neuroclip/
 │   └── test/                   # Test Suites (Adversarial stress tests, Unit tests, Node runner)
 ├── src-tauri/                  # BACKEND RUST CORE (TAURI V2 NATIVE)
 │   ├── icons/                  # Bộ biểu tượng ứng dụng đa kích thước cho Windows
+│   ├── resources/              # Tài nguyên tĩnh nhúng kèm ứng dụng (`models/silero_vad_16k.onnx`)
 │   ├── src/                    # Mã nguồn Rust
 │   │   ├── commands/           # Các hàm Tauri IPC Command (`chat_cmd`, `stt_cmd`, `ingest_cmd`, `storage_cmd`...)
 │   │   ├── config/             # Quản lý cấu hình nguyên tử (atomic file writes) & Hardware probe
@@ -359,9 +365,10 @@ neuroclip/
 │   │   ├── error/              # Cây lỗi phân cấp `AppError` và danh mục mã lỗi `ERR_*`
 │   │   ├── ingestion/          # Động cơ Audio-First streaming, Chat Replay parser, BoundedQueue, Cookie/UA rotation
 │   │   ├── logging/            # Hạ tầng Tracing NDJSON, xoay vòng log, lọc secret redaction
-│   │   ├── stt/                # Whisper.cpp sidecar supervisor, Q5_K GGUF model manager, ASS/SRT exporter, VAD bridge
+│   │   ├── stt/                # Whisper.cpp sidecar, Q5_K model manager, `audio_prep` loudnorm, `tract-onnx` Silero VAD, ASS/SRT exporter
 │   │   ├── lib.rs              # Khởi tạo AppState, đăng ký IPC handlers, clippy denies
 │   │   └── main.rs             # Điểm vào thực thi ứng dụng Windows desktop
+│   ├── tests/                  # Integration & adversarial test suites + audio fixtures (`silero_test.wav`)
 │   ├── Cargo.toml              # Khai báo crate dependencies, target Windows Win32 APIs
 │   ├── rustfmt.toml            # Quy chuẩn format code Rust chuẩn Windows newline
 │   └── tauri.conf.json         # Cấu hình cửa sổ, định dạng Acrylic/Mica, bundle metadata

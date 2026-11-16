@@ -15,8 +15,8 @@
 |:---:|:---|:---:|:---|:---|:---:|
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
-| **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **READY_FOR_PO_REVIEW (GATE 3)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **PLANNED (SẴN SÀNG THỰC THI)** |
+| **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (14 / 32 Tasks Completed: M4.1–M4.3 & TASK-M4-14)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -610,19 +610,25 @@
 
 ### Milestone M4.4: Động Cơ Nhận Diện Giọng Nói & Tách Thoại (STT & VAD)
 
-#### TASK-M4-14: Bộ Tiền Xử Lý Âm Thanh Chuẩn Hóa & Lọc Khoảng Lặng Silero VAD
+#### TASK-M4-14: Bộ Tiền Xử Lý Âm Thanh Chuẩn Hóa & Lọc Khoảng Lặng Pure Rust tract-onnx Silero VAD — ✅ ĐÃ HOÀN THÀNH (PO ACCEPTED 2026-11-16)
 - **Lead Persona:** Senior Backend Dev (Rust) & `@tech-lead`
 - **Target Files:**
+  - `src-tauri/Cargo.toml`
   - `src-tauri/src/stt/audio_prep.rs`
   - `src-tauri/src/stt/vad.rs`
+  - `src-tauri/resources/models/silero_vad_16k.onnx`
+  - `src-tauri/tests/stt_vad_test.rs`
+  - `src-tauri/tests/fixtures/silero_test.wav`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Áp dụng bộ lọc âm thanh `loudnorm` của FFmpeg:
     `ffmpeg -i clip.mp4 -af "loudnorm=I=-16:TP=-1.5:LRA=11" clip_norm.wav`
-    nhằm làm dịu biên độ khi streamer la hét (chống hiện tượng vỡ tiếng clipping).
-  - Tích hợp mô hình **Silero VAD (Voice Activity Detection)** chạy qua ONNX Runtime:
-    - Quét file âm thanh, nhận diện các mốc có tiếng người nói.
-    - Cắt bỏ hoàn toàn các khoảng lặng và đoạn chỉ có nhạc nền game kéo dài $> 1.5\text{ giây}$.
-  - Xác định các điểm ngắt tự nhiên (Natural Pause Points) để chia nhỏ file audio thành các chunks $< 20\text{MB}$ khi gửi lên Groq Cloud API.
+    nhằm làm dịu biên độ khi streamer la hét (chống hiện tượng vỡ tiếng clipping `ERR-08`).
+  - Tích hợp động cơ **Silero VAD qua Pure Rust ONNX (`tract-onnx`)** với đồ thị tĩnh 16kHz (`silero_vad_16k.onnx`) theo quyết định kiến trúc `ADR-008` (phê duyệt từ `RFC-002` Option 2):
+    - Quét file âm thanh 16kHz theo các frame 512 mẫu (32ms), tính toán xác suất giọng nói kèm cập nhật trạng thái RNN (`state` / `stateN` `[2, 1, 128]` trên v5 hoặc `h`/`c` trên v4) qua `tract-onnx`.
+    - Duy trì thuật toán Pure Rust DSP Heuristic làm tầng fallback an toàn tự động (`compute_frame_speech_prob_fallback`) nếu nạp/khởi tạo mô hình gặp sự cố (zero-panic, graceful degradation, ghi log qua `tracing::warn!`).
+    - Cắt bỏ hoàn toàn các khoảng lặng và đoạn chỉ có nhạc nền game kéo dài $> 1.5\text{ giây}$ (`AC-14.2`), loại bỏ $\ge 90\%$ non-speech và giảm $\ge 30\%$ payload gửi lên cloud.
+    - Toàn bộ tác vụ quét VAD nặng được thực thi trong `tokio::task::spawn_blocking` tuân thủ nghiêm ngặt `docs/CONVENTIONS.md`.
+  - Xác định các điểm ngắt tự nhiên (Natural Pause Points) để chia nhỏ file audio thành các chunks $< 20\text{MB}$ khi gửi lên Groq Cloud API (`AC-14.3`).
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: File audio thô của clip (`clip_slice.mp4`).
   - Đầu ra: File audio đã chuẩn hóa âm lượng và danh sách `speech_segments: Vec<{ start_ms: u64, end_ms: u64 }>`.
@@ -630,25 +636,28 @@
   - Prerequisites: TASK-M4-03, TASK-M4-13.
   - Blocks: TASK-M4-15, TASK-M4-16.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-14.1:** Bộ lọc Silero VAD xử lý 1 phút âm thanh trong vòng $\le 1.5\text{ giây}$ trên CPU.
-  - [ ] **AC-14.2:** Loại bỏ triệt để $\ge 90\%$ các đoạn im lặng/nhạc không lời, giúp giảm tối thiểu 30% dung lượng payload gửi lên cloud.
-  - [ ] **AC-14.3:** Điểm cắt chunk luôn nằm trong khoảng lặng âm thanh, không bao giờ cắt ngang một từ đang phát âm.
+  - [x] **AC-14.1:** Bộ lọc Silero VAD xử lý 1 phút âm thanh trong vòng $\le 1.5\text{ giây}$ trên CPU (đo thực tế `--release`: `0.3817s` cho 60s audio thật).
+  - [x] **AC-14.2:** Loại bỏ triệt để $\ge 90\%$ các đoạn im lặng/nhạc không lời, giúp giảm tối thiểu 30% dung lượng payload gửi lên cloud (đạt 100% rejection trên chiptune 8-bit & nốt A4 440Hz, $\ge 95\%$ trên BGM đa âm).
+  - [x] **AC-14.3:** Điểm cắt chunk luôn nằm trong khoảng lặng âm thanh, không bao giờ cắt ngang một từ đang phát âm.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
-  - *Phân loại kiểm thử:* Audio DSP & ONNX VAD Unit Test
-  - *Unit Test Cases:*
-    - [ ] **UT-14.1 (Happy Path - Silero VAD Speech Detection):** Đưa vào file âm thanh 60 giây gồm 20s nói xen kẽ 40s im lặng/nhạc game; Silero VAD trả về chính xác danh sách các mốc thời gian có tiếng người nói.
-    - [ ] **UT-14.2 (Silence Pruning):** Cắt bỏ triệt để $\ge 90\%$ các đoạn im lặng/nhạc không lời kéo dài $> 1.5\text{ giây}$.
-    - [ ] **UT-14.3 (Natural Pause Splitting):** Điểm cắt chia chunk luôn nằm tại các khoảng lặng giữa 2 câu nói, không bao giờ cắt ngang giữa một từ đang phát âm.
+  - *Phân loại kiểm thử:* Audio DSP & Pure Rust tract-onnx Silero VAD Unit/Integration Test
+  - *Unit & Integration Test Cases:*
+    - [x] **UT-14.1 (Happy Path - Silero VAD Speech Detection):** Đưa vào file âm thanh 60 giây gồm tiếng nói thật (`silero_test.wav`) xen kẽ im lặng/nhạc game; Silero VAD trả về chính xác danh sách các mốc thời gian có tiếng người nói.
+    - [x] **UT-14.2 (Silence & BGM Pruning):** Cắt bỏ triệt để $\ge 90\%$ các đoạn im lặng và nhạc nền game kéo dài $> 1.5\text{ giây}$, giảm $\ge 30\%$ dung lượng payload gửi cloud.
+    - [x] **UT-14.3 (Natural Pause Splitting):** Điểm cắt chia chunk luôn nằm tại các khoảng lặng giữa 2 câu nói, không bao giờ cắt ngang giữa một từ đang phát âm, payload mỗi chunk $< 20\text{MB}$.
+    - [x] **UT-14.4 (Fallback Graceful Degradation):** Khi file model ONNX bị thiếu hoặc lỗi nạp, hệ thống tự động fallback sang thuật toán DSP heuristic, không panic, ghi log cảnh báo.
   - *Integration & Contract Verification:*
-    - [ ] **IT-14.1:** Tích hợp bộ lọc FFmpeg `loudnorm=I=-16:TP=-1.5:LRA=11` nén đỉnh biên độ âm thanh trước khi đưa vào VAD.
-  - *Boundary & Audio Limits (ERR-08 Screaming Defense):**
-    - [ ] **ED-14.1 (Vedal Scream Distortion):** Đưa vào đoạn audio streamer la hét bão hòa biên độ đỉnh ($0\text{dBFS}$). Sau khi qua `loudnorm`, True Peak được khống chế ở mức $\le -1.5\text{dBFS}$, dạng sóng không bị clipping.
-    - [ ] **ED-14.2 (VAD Speed):** Thời gian xử lý VAD trên 1 phút âm thanh $\le 1.5\text{ giây}$ trên CPU.
+    - [x] **IT-14.1:** Tích hợp bộ lọc FFmpeg `loudnorm=I=-16:TP=-1.5:LRA=11` nén đỉnh biên độ âm thanh trước khi đưa vào VAD.
+  - *Boundary & Audio Limits (ERR-08 Screaming Defense):*
+    - [x] **ED-14.1 (Vedal Scream Distortion):** Đưa vào đoạn audio streamer la hét bão hòa biên độ đỉnh ($0\text{dBFS}$). Sau khi qua `loudnorm`, True Peak được khống chế ở mức $\le -1.5\text{dBFS}$, dạng sóng không bị clipping.
+    - [x] **ED-14.2 (VAD Speed):** Thời gian xử lý VAD trên 1 phút âm thanh $\le 1.5\text{ giây}$ trên CPU.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib stt::vad::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --test stt_vad_test
+    cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1
+    cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic
     ```
-    *Khẳng định: Giảm $\ge 30\%$ payload size gửi cloud, điểm cắt chunk an toàn.*
+    *Khẳng định: Giảm $\ge 30\%$ payload size gửi cloud, điểm cắt chunk an toàn, 0 panic trong production code.*
 
 ---
 

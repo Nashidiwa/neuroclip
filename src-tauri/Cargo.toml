@@ -26,6 +26,7 @@ tracing-appender = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1.10"
 sha2 = "0.10"
+tract-onnx = "0.21"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52", features = [
@@ -37,6 +38,27 @@ windows-sys = { version = "0.52", features = [
     "Win32_System_Registry",
     "Win32_Storage_FileSystem",
 ] }
+
+[profile.dev.package.tract-core]
+opt-level = 3
+
+[profile.dev.package.tract-linalg]
+opt-level = 3
+
+[profile.dev.package.tract-data]
+opt-level = 3
+
+[profile.dev.package.tract-hir]
+opt-level = 3
+
+[profile.dev.package.tract-onnx]
+opt-level = 3
+
+[profile.dev.package.matrixmultiply]
+opt-level = 3
+
+[profile.dev.package.ndarray]
+opt-level = 3
 
 [profile.release]
 panic = "abort"
