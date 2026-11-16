@@ -5,6 +5,7 @@
 //! and dual `.ass` / `.srt` subtitle export engines (`ADR-001`, `ADR-005`, `ADR-007`).
 
 pub mod audio_prep;
+pub mod groq_client;
 pub mod model_manager;
 pub mod subtitle_export;
 pub mod transcript_parser;
@@ -20,6 +21,12 @@ pub use audio_prep::{
     AudioPrepConfig, AudioPrepResult, PreparedAudioBuffer, DEFAULT_LOUDNESS_RANGE_LU,
     DEFAULT_TARGET_LUFS, DEFAULT_TRUE_PEAK_DBFS, MAX_I16_PEAK_AMPLITUDE, TARGET_CHANNELS,
     TARGET_SAMPLE_RATE,
+};
+pub use groq_client::{
+    deduplicate_overlap_segments, map_verbose_json_to_container, parse_retry_after, GroqClient,
+    GroqClientConfig, GroqErrorBody, GroqErrorEnvelope, GroqSegment, GroqVerboseJsonResponse,
+    GroqWord, DEFAULT_GROQ_API_URL, DEFAULT_GROQ_MODEL, DEFAULT_OVERLAP_MS,
+    MAX_PAYLOAD_BYTES, MAX_RATE_LIMIT_RETRIES, SAFE_CHUNK_BYTES,
 };
 pub use model_manager::{
     compute_file_sha256, find_catalog_entry, resolve_models_dir, verify_model, ModelCatalogEntry,

@@ -13,15 +13,35 @@ import {
   type ModelInfoJson,
   type SttProgressPayload,
   type SttProgressPayloadJson,
+  type TranscriptSegment,
+  type TranscriptSegmentJson,
   type TranscriptSegmentsContainer,
   type TranscriptSegmentsContainerJson,
   normalizeModelInfo,
   normalizeSttProgressPayload,
+  normalizeTranscriptSegment,
   normalizeTranscriptSegmentsContainer,
   toTranscriptSegmentsContainerJson,
 } from '../../types/transcript.ts';
 
 export * from '../../types/transcript.ts';
+
+export interface TranscribeClipOptions {
+  readonly apiKey?: string | undefined;
+  readonly isMusicMode?: boolean | undefined;
+}
+
+export interface SttChunkPayload {
+  readonly clipId: string;
+  readonly chunkIndex: number;
+  readonly segment: TranscriptSegment;
+}
+
+export interface SttChunkPayloadJson {
+  readonly clip_id: string;
+  readonly chunk_index: number;
+  readonly segment: TranscriptSegmentJson;
+}
 
 // ---------------------------------------------------------------------------
 // IPC Invoke Wrappers
@@ -45,6 +65,35 @@ export async function startWhisperTranscription(
       clipId,
       audioPath,
       modelName: modelName ?? null,
+    });
+    return normalizeTranscriptSegmentsContainer(raw);
+  } catch (err: unknown) {
+    throw parseIpcError(err);
+  }
+}
+
+/**
+ * Transcribe a highlight clip using Groq Whisper Cloud API (whisper-large-v3).
+ *
+ * Automatically manages 20MB chunking via Silero VAD pause split with 1.5s lookback overlap,
+ * rate limit backoff retry (HTTP 429), and karaoke repetition guardrail (isMusicMode).
+ *
+ * @param clipId Unique identifier for the highlight clip.
+ * @param audioPath Absolute path to the audio file on disk.
+ * @param options Optional configuration (Groq API key, isMusicMode).
+ * @returns TranscriptSegmentsContainer adhering to Schema 5.5.
+ */
+export async function transcribeHighlightClip(
+  clipId: string,
+  audioPath: string,
+  options?: TranscribeClipOptions
+): Promise<TranscriptSegmentsContainer> {
+  try {
+    const raw = await invoke<TranscriptSegmentsContainerJson>('transcribe_highlight_clip', {
+      clipId,
+      audioPath,
+      apiKey: options?.apiKey ?? null,
+      isMusicMode: options?.isMusicMode ?? false,
     });
     return normalizeTranscriptSegmentsContainer(raw);
   } catch (err: unknown) {
@@ -130,5 +179,23 @@ export async function listenSttProgress(
 ): Promise<UnlistenFn> {
   return listen<SttProgressPayloadJson>('stt:progress', (event) => {
     callback(normalizeSttProgressPayload(event.payload));
+  });
+}
+
+/**
+ * Subscribe to streamed transcription chunk events as they are emitted from the backend.
+ *
+ * @param callback Handler receiving each emitted transcript segment.
+ * @returns Unlisten function to detach subscription.
+ */
+export async function listenSttChunk(
+  callback: (payload: SttChunkPayload) => void
+): Promise<UnlistenFn> {
+  return listen<SttChunkPayloadJson>('stt:chunk', (event) => {
+    callback({
+      clipId: event.payload.clip_id,
+      chunkIndex: event.payload.chunk_index,
+      segment: normalizeTranscriptSegment(event.payload.segment),
+    });
   });
 }

@@ -51,10 +51,13 @@ pub use storage_cmd::{
 };
 pub use stt_cmd::{
     __cmd__export_subtitles_ass, __cmd__export_subtitles_srt,
-    __cmd__start_whisper_transcription, __cmd__verify_stt_model,
-    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_srt,
-    __tauri_command_name_start_whisper_transcription, __tauri_command_name_verify_stt_model,
-    export_subtitles_ass, export_subtitles_srt, start_whisper_transcription, verify_stt_model,
+    __cmd__start_whisper_transcription, __cmd__transcribe_highlight_clip,
+    __cmd__verify_stt_model, __tauri_command_name_export_subtitles_ass,
+    __tauri_command_name_export_subtitles_srt,
+    __tauri_command_name_start_whisper_transcription,
+    __tauri_command_name_transcribe_highlight_clip, __tauri_command_name_verify_stt_model,
+    export_subtitles_ass, export_subtitles_srt, start_whisper_transcription,
+    transcribe_highlight_clip, verify_stt_model,
 };
 pub use slice_cmd::{
     __cmd__cancel_slice_video_segment, __cmd__slice_video_segment,

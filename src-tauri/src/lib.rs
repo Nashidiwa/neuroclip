@@ -137,6 +137,7 @@ pub fn run() {
             commands::get_chat_events,
             commands::get_chat_velocity_heatmap,
             commands::start_whisper_transcription,
+            commands::transcribe_highlight_clip,
             commands::verify_stt_model,
             commands::export_subtitles_ass,
             commands::export_subtitles_srt,

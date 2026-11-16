@@ -136,6 +136,13 @@ import {
   FULL_VOD_REFERENCE_SIZE_MB,
 } from '../types/range_slicer.ts';
 import { sliceVideoSegment, cancelSliceVideoSegment } from '../services/ipc/slice.ts';
+import {
+  transcribeHighlightClip,
+  listenSttChunk,
+  normalizeTranscriptSegmentsContainer,
+  type TranscribeClipOptions,
+  type SttChunkPayload,
+} from '../services/ipc/stt.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -2738,6 +2745,100 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
     it('should verify IPC service method signatures and export integrity', () => {
       assert.strictEqual(typeof sliceVideoSegment, 'function');
       assert.strictEqual(typeof cancelSliceVideoSegment, 'function');
+    });
+  });
+
+  describe('TASK-M4-15: Groq Whisper Cloud API Client & IPC Contracts', () => {
+    it('should assert Rust groq_client module and commands exist in backend', () => {
+      const groqPath = path.resolve('src-tauri/src/stt/groq_client.rs');
+      const testPath = path.resolve('src-tauri/tests/groq_client_test.rs');
+      const cmdPath = path.resolve('src-tauri/src/commands/stt_cmd.rs');
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+
+      assert.ok(fs.existsSync(groqPath), 'groq_client.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'groq_client_test.rs must exist');
+
+      const groqContent = fs.readFileSync(groqPath, 'utf8');
+      assert.ok(groqContent.includes('pub struct GroqClient'), 'Must define GroqClient');
+      assert.ok(groqContent.includes('pub struct GroqClientConfig'), 'Must define GroqClientConfig');
+      assert.ok(groqContent.includes('pub struct GroqVerboseJsonResponse'), 'Must define GroqVerboseJsonResponse');
+      assert.ok(groqContent.includes('SAFE_CHUNK_BYTES'), 'Must define SAFE_CHUNK_BYTES');
+      assert.ok(groqContent.includes('MAX_PAYLOAD_BYTES'), 'Must define MAX_PAYLOAD_BYTES');
+      assert.ok(groqContent.includes('DEFAULT_OVERLAP_MS'), 'Must define DEFAULT_OVERLAP_MS');
+
+      const cmdContent = fs.readFileSync(cmdPath, 'utf8');
+      assert.ok(cmdContent.includes('pub async fn transcribe_highlight_clip'), 'Must define transcribe_highlight_clip command');
+
+      const libContent = fs.readFileSync(libPath, 'utf8');
+      assert.ok(
+        libContent.includes('commands::transcribe_highlight_clip'),
+        'lib.rs must register transcribe_highlight_clip command',
+      );
+    });
+
+    it('should assert zero-panic clippy invariant in groq_client.rs and stt_cmd.rs', () => {
+      const groqContent = fs.readFileSync(path.resolve('src-tauri/src/stt/groq_client.rs'), 'utf8');
+      assert.ok(!groqContent.includes('.unwrap()'), 'groq_client.rs must not contain .unwrap()');
+      assert.ok(!groqContent.includes('.expect('), 'groq_client.rs must not contain .expect()');
+      assert.ok(!groqContent.includes('panic!('), 'groq_client.rs must not contain panic!()');
+    });
+
+    it('should verify TypeScript IPC stt service signatures and export contracts', () => {
+      assert.strictEqual(typeof transcribeHighlightClip, 'function');
+      assert.strictEqual(typeof listenSttChunk, 'function');
+    });
+
+    it('should verify STT canonical error codes and friendly Vietnamese messages', () => {
+      assert.strictEqual(ERROR_CODES.STT_RATE_LIMIT, 'ERR_STT_RATE_LIMIT');
+      assert.strictEqual(ERROR_CODES.STT_PAYLOAD_TOO_LARGE, 'ERR_STT_PAYLOAD_TOO_LARGE');
+      assert.strictEqual(ERROR_CODES.STT_INVALID_API_KEY, 'ERR_STT_INVALID_API_KEY');
+      assert.strictEqual(ERROR_CODES.STT_VAD_FAILED, 'ERR_STT_VAD_FAILED');
+
+      const msgRateLimit = getFriendlyErrorMessage(ERROR_CODES.STT_RATE_LIMIT);
+      assert.ok(msgRateLimit.length > 0, 'Must have localized message for ERR_STT_RATE_LIMIT');
+
+      const msgPayload = getFriendlyErrorMessage(ERROR_CODES.STT_PAYLOAD_TOO_LARGE);
+      assert.ok(msgPayload.length > 0, 'Must have localized message for ERR_STT_PAYLOAD_TOO_LARGE');
+
+      const msgKey = getFriendlyErrorMessage(ERROR_CODES.STT_INVALID_API_KEY);
+      assert.ok(msgKey.length > 0, 'Must have localized message for ERR_STT_INVALID_API_KEY');
+    });
+
+    it('should verify TranscribeClipOptions type contracts and Schema 5.5 normalization', () => {
+      const options: TranscribeClipOptions = {
+        apiKey: 'gsk_test_123',
+        isMusicMode: true,
+      };
+      assert.strictEqual(options.apiKey, 'gsk_test_123');
+      assert.strictEqual(options.isMusicMode, true);
+
+      // Verify Schema 5.5 TranscriptSegmentsContainer normalization
+      const rawWire = {
+        clip_id: 'test_clip_15',
+        segments: [
+          {
+            segment_id: 'test_clip_15_seg_0001',
+            start_sec: 1.0,
+            end_sec: 3.5,
+            speaker_id: 'neuro',
+            text_en: 'Hello everyone!',
+            confidence: 0.98,
+            cps_score: 14.5,
+            is_flagged_for_review: false,
+            words: [
+              { word: 'Hello', start_sec: 1.0, end_sec: 1.8, probability: 0.98 },
+              { word: 'everyone!', start_sec: 1.9, end_sec: 3.5, probability: 0.98 },
+            ],
+          },
+        ],
+      };
+
+      const normalized = normalizeTranscriptSegmentsContainer(rawWire);
+      assert.strictEqual(normalized.clipId, 'test_clip_15');
+      assert.strictEqual(normalized.segments.length, 1);
+      assert.strictEqual(normalized.segments[0].textEn, 'Hello everyone!');
+      assert.strictEqual(normalized.segments[0].words.length, 2);
+      assert.strictEqual(normalized.segments[0].words[0].word, 'Hello');
     });
   });
 });
