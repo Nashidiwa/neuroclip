@@ -16,6 +16,7 @@ pub mod highlight;
 pub mod ingestion;
 pub mod logging;
 pub mod stt;
+pub mod translation;
 
 /// Backward-compatibility and architectural alias for core logging subsystem.
 pub mod core {
@@ -94,6 +95,16 @@ pub use stt::{
     CONFIDENCE_FLAG_THRESHOLD, CPS_FLAG_THRESHOLD, DEFAULT_SPEAKER_ID, MIN_SEGMENT_DURATION_SEC,
     MODEL_CATALOG, SHA256_CHUNK_SIZE, WORD_GAP_SPLIT_THRESHOLD_SEC,
 };
+pub use translation::{
+    strip_markdown_code_fence, DialogueChunk, GeminiCandidate, GeminiClient, GeminiClientConfig,
+    GeminiContent, GeminiGenerationConfig, GeminiPart, GeminiRequest, GeminiResponse,
+    GeminiSafetySetting, MockHttpHandler, PromptBuilder, TranslationProgressPayload,
+    TransportResponse, BLOCK_NONE_THRESHOLD, CONTEXT_WINDOW_HEADER, DEFAULT_CHUNK_SIZE,
+    DEFAULT_CONTEXT_WINDOW_SIZE, DEFAULT_GEMINI_API_URL, DEFAULT_GEMINI_MODEL,
+    DEFAULT_RETRY_BASE_DELAY_MS, DIALOGUE_TARGET_HEADER, FORMAT_FALLBACK_PREFIX,
+    MAX_RATE_LIMIT_RETRIES, SAFETY_CATEGORIES, SAFETY_FALLBACK_PREFIX, SUBTITLE_GUIDELINES,
+    THEATRICAL_FRAMING_INSTRUCTION, TranslatedSegmentItem,
+};
 
 /// Health check ping/pong command adhering to Result<T, AppError> contract
 pub fn ping() -> Result<String, AppError> {
@@ -146,7 +157,10 @@ pub fn run() {
             commands::toggle_highlight_bookmark,
             commands::toggle_cluster_bookmark,
             commands::slice_video_segment,
-            commands::cancel_slice_video_segment
+            commands::cancel_slice_video_segment,
+            commands::translate_vietsub,
+            commands::test_gemini_connection,
+            commands::update_speaker_role
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

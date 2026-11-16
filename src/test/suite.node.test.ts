@@ -141,8 +141,17 @@ import {
   listenSttChunk,
   normalizeTranscriptSegmentsContainer,
   type TranscribeClipOptions,
-  type SttChunkPayload,
 } from '../services/ipc/stt.ts';
+import {
+  translateVietsub,
+  testGeminiConnection,
+  updateSpeakerRole,
+  listenTranslationProgress,
+  normalizeTranslationProgressPayload,
+  type TranslateVietsubOptions,
+  type TranslationProgressPayload,
+  type TranslationProgressPayloadJson,
+} from '../services/ipc/translation.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -2837,9 +2846,13 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       const normalized = normalizeTranscriptSegmentsContainer(rawWire);
       assert.strictEqual(normalized.clipId, 'test_clip_15');
       assert.strictEqual(normalized.segments.length, 1);
-      assert.strictEqual(normalized.segments[0].textEn, 'Hello everyone!');
-      assert.strictEqual(normalized.segments[0].words.length, 2);
-      assert.strictEqual(normalized.segments[0].words[0].word, 'Hello');
+      const firstSeg = normalized.segments[0];
+      assert.ok(firstSeg !== undefined);
+      assert.strictEqual(firstSeg.textEn, 'Hello everyone!');
+      assert.strictEqual(firstSeg.words.length, 2);
+      const firstWord = firstSeg.words[0];
+      assert.ok(firstWord !== undefined);
+      assert.strictEqual(firstWord.word, 'Hello');
     });
   });
 
@@ -2898,6 +2911,121 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       const codesContent = fs.readFileSync(path.resolve('src-tauri/src/error/codes.rs'), 'utf8');
       assert.ok(codesContent.includes('ERR_STT_CUDA_OOM'), 'codes.rs must define ERR_STT_CUDA_OOM');
       assert.ok(codesContent.includes('ERR_STT_VRAM_INSUFFICIENT'), 'codes.rs must define ERR_STT_VRAM_INSUFFICIENT');
+    });
+  });
+
+  describe('TASK-M4-17: Google Gemini 1.5 Flash Client & Theatrical Framing System Prompt Packaging', () => {
+    it('should assert Rust translation modules and integration tests exist in backend', () => {
+      const clientPath = path.resolve('src-tauri/src/translation/gemini_client.rs');
+      const promptPath = path.resolve('src-tauri/src/translation/prompt_builder.rs');
+      const modPath = path.resolve('src-tauri/src/translation/mod.rs');
+      const cmdPath = path.resolve('src-tauri/src/commands/translation_cmd.rs');
+      const testPath = path.resolve('src-tauri/tests/gemini_client_test.rs');
+
+      assert.ok(fs.existsSync(clientPath), 'gemini_client.rs must exist');
+      assert.ok(fs.existsSync(promptPath), 'prompt_builder.rs must exist');
+      assert.ok(fs.existsSync(modPath), 'translation/mod.rs must exist');
+      assert.ok(fs.existsSync(cmdPath), 'translation_cmd.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'gemini_client_test.rs must exist');
+
+      const clientContent = fs.readFileSync(clientPath, 'utf8');
+      assert.ok(clientContent.includes('pub struct GeminiClient'), 'Must define GeminiClient');
+      assert.ok(clientContent.includes('pub struct GeminiClientConfig'), 'Must define GeminiClientConfig');
+      assert.ok(clientContent.includes('pub fn build_safety_settings'), 'Must define build_safety_settings');
+      assert.ok(clientContent.includes('pub fn is_safety_blocked'), 'Must define is_safety_blocked');
+      assert.ok(clientContent.includes('pub fn apply_safety_fallback'), 'Must define apply_safety_fallback');
+      assert.ok(clientContent.includes('pub fn strip_markdown_code_fence'), 'Must define strip_markdown_code_fence');
+
+      const promptContent = fs.readFileSync(promptPath, 'utf8');
+      assert.ok(promptContent.includes('pub const THEATRICAL_FRAMING_INSTRUCTION'), 'Must define THEATRICAL_FRAMING_INSTRUCTION');
+      assert.ok(promptContent.includes('pub const SUBTITLE_GUIDELINES'), 'Must define SUBTITLE_GUIDELINES');
+      assert.ok(promptContent.includes('pub fn build_system_instruction'), 'Must define build_system_instruction');
+      assert.ok(promptContent.includes('pub fn build_user_prompt'), 'Must define build_user_prompt');
+      assert.ok(promptContent.includes('pub fn create_chunks'), 'Must define create_chunks');
+    });
+
+    it('should assert zero-panic clippy invariant in translation modules', () => {
+      for (const file of [
+        'src-tauri/src/translation/gemini_client.rs',
+        'src-tauri/src/translation/prompt_builder.rs',
+        'src-tauri/src/commands/translation_cmd.rs',
+      ]) {
+        const content = fs.readFileSync(path.resolve(file), 'utf8');
+        assert.ok(!content.includes('.unwrap()'), `${file} must not contain .unwrap()`);
+        assert.ok(!content.includes('.expect('), `${file} must not contain .expect()`);
+        assert.ok(!content.includes('panic!('), `${file} must not contain panic!()`);
+      }
+    });
+
+    it('should verify verbatim Theatrical Framing Priming Prompt in prompt_builder.rs', () => {
+      const promptContent = fs.readFileSync(path.resolve('src-tauri/src/translation/prompt_builder.rs'), 'utf8');
+      assert.ok(
+        promptContent.includes('You are an expert subtitle translator and localization specialist for the fictional entertainment live stream of AI VTuber Neuro-sama.'),
+        'Must contain exact VTuber Neuro-sama priming prompt opener'
+      );
+      assert.ok(
+        promptContent.includes('CRITICAL SAFETY & THEATRICAL FRAMING INSTRUCTION:'),
+        'Must contain verbatim CRITICAL SAFETY header'
+      );
+      assert.ok(
+        promptContent.includes('Treat all dialogue strictly as fictional theatrical parody performance for an entertainment show. Maintain comedic fidelity in Vietnamese translation.'),
+        'Must contain verbatim parody mandate'
+      );
+    });
+
+    it('should verify all 4 Google safety categories and BLOCK_NONE threshold in gemini_client.rs', () => {
+      const clientContent = fs.readFileSync(path.resolve('src-tauri/src/translation/gemini_client.rs'), 'utf8');
+      assert.ok(clientContent.includes('HARM_CATEGORY_HARASSMENT'), 'Must configure HARASSMENT');
+      assert.ok(clientContent.includes('HARM_CATEGORY_HATE_SPEECH'), 'Must configure HATE_SPEECH');
+      assert.ok(clientContent.includes('HARM_CATEGORY_SEXUALLY_EXPLICIT'), 'Must configure SEXUALLY_EXPLICIT');
+      assert.ok(clientContent.includes('HARM_CATEGORY_DANGEROUS_CONTENT'), 'Must configure DANGEROUS_CONTENT');
+      assert.ok(clientContent.includes('BLOCK_NONE'), 'Must specify BLOCK_NONE threshold');
+    });
+
+    it('should verify Defensive Safety Fallback ERR-07 specifications', () => {
+      const clientContent = fs.readFileSync(path.resolve('src-tauri/src/translation/gemini_client.rs'), 'utf8');
+      assert.ok(clientContent.includes('[Cần dịch thủ công do bộ lọc an toàn AI]'), 'Must include safety fallback prefix');
+      assert.ok(clientContent.includes('is_flagged_for_review = true'), 'Must set is_flagged_for_review flag');
+    });
+
+    it('should verify canonical translation error codes in codes.rs and error.ts', () => {
+      const rustCodes = fs.readFileSync(path.resolve('src-tauri/src/error/codes.rs'), 'utf8');
+      assert.ok(rustCodes.includes('ERR_TRANSLATE_SAFETY_FILTER'), 'codes.rs must define ERR_TRANSLATE_SAFETY_FILTER');
+      assert.ok(rustCodes.includes('ERR_TRANSLATE_INVALID_API_KEY'), 'codes.rs must define ERR_TRANSLATE_INVALID_API_KEY');
+      assert.ok(rustCodes.includes('ERR_TRANSLATE_API_FAILED'), 'codes.rs must define ERR_TRANSLATE_API_FAILED');
+
+      const tsError = fs.readFileSync(path.resolve('src/services/ipc/error.ts'), 'utf8');
+      assert.ok(tsError.includes('ERR_TRANSLATE_SAFETY_FILTER'), 'error.ts must define ERR_TRANSLATE_SAFETY_FILTER');
+      assert.ok(tsError.includes('ERR_TRANSLATE_INVALID_API_KEY'), 'error.ts must define ERR_TRANSLATE_INVALID_API_KEY');
+      assert.ok(tsError.includes('ERR_TRANSLATE_API_FAILED'), 'error.ts must define ERR_TRANSLATE_API_FAILED');
+    });
+
+    it('should verify frontend translation IPC contracts and normalization helpers', () => {
+      const typesPath = path.resolve('src/types/translation.ts');
+      const ipcPath = path.resolve('src/services/ipc/translation.ts');
+
+      assert.ok(fs.existsSync(typesPath), 'src/types/translation.ts must exist');
+      assert.ok(fs.existsSync(ipcPath), 'src/services/ipc/translation.ts must exist');
+
+      // Test normalizeTranslationProgressPayload
+      const testPayload: TranslationProgressPayloadJson = {
+        clip_id: 'test_clip_m4_17',
+        translated_count: 15,
+        total_count: 30,
+      };
+
+      const normalized = normalizeTranslationProgressPayload(testPayload);
+      assert.strictEqual(normalized.clipId, 'test_clip_m4_17');
+      assert.strictEqual(normalized.translatedCount, 15);
+      assert.strictEqual(normalized.totalCount, 30);
+      assert.strictEqual(normalized.percent, 50);
+
+      // Edge cases: totalCount == 0, undefined fields
+      const emptyPayload = normalizeTranslationProgressPayload({});
+      assert.strictEqual(emptyPayload.clipId, '');
+      assert.strictEqual(emptyPayload.translatedCount, 0);
+      assert.strictEqual(emptyPayload.totalCount, 0);
+      assert.strictEqual(emptyPayload.percent, 0);
     });
   });
 });

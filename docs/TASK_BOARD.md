@@ -759,19 +759,19 @@
   - Prerequisites: TASK-M4-02, TASK-M4-04, TASK-M4-15, TASK-M4-28.
   - Blocks: TASK-M4-18, TASK-M4-19.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-17.1:** Thời gian dịch một phân đoạn 50 dòng thoại đạt $\le 4.0\text{ giây}$.
-  - [ ] **AC-17.2:** Vượt qua bộ lọc an toàn của Google đối với các câu nói châm biếm đen tối của Neuro với tỷ lệ thành công $\ge 95\%$.
-  - [ ] **AC-17.3:** Khi gặp câu bị chặn an toàn, ứng dụng bảo lưu câu tiếng Anh gốc và hiển thị cờ cảnh báo trên UI thay vì trả về lỗi rỗng.
+  - [x] **AC-17.1:** Thời gian dịch một phân đoạn 50 dòng thoại đạt $\le 4.0\text{ giây}$.
+  - [x] **AC-17.2:** Vượt qua bộ lọc an toàn của Google đối với các câu nói châm biếm đen tối của Neuro với tỷ lệ thành công $\ge 95\%$.
+  - [x] **AC-17.3:** Khi gặp câu bị chặn an toàn, ứng dụng bảo lưu câu tiếng Anh gốc và hiển thị cờ cảnh báo trên UI thay vì trả về lỗi rỗng.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Mock HTTP Integration & Defensive Fallback Test
   - *Unit Test Cases:*
-    - [ ] **UT-17.1 (Happy Path - Prompt Packaging):** Kiểm tra nội dung System Prompt gửi tới Gemini chứa đầy đủ khai báo Theatrical Framing và chỉ thị dịch thuật sang tiếng Việt tự nhiên.
-    - [ ] **UT-17.2 (Safety Settings Validation):** Kiểm tra request JSON gửi đi bắt buộc chứa cấu hình `safetySettings: BLOCK_NONE` cho toàn bộ 4 nhóm nội dung.
+    - [x] **UT-17.1 (Happy Path - Prompt Packaging):** Kiểm tra nội dung System Prompt gửi tới Gemini chứa đầy đủ khai báo Theatrical Framing và chỉ thị dịch thuật sang tiếng Việt tự nhiên.
+    - [x] **UT-17.2 (Safety Settings Validation):** Kiểm tra request JSON gửi đi bắt buộc chứa cấu hình `safetySettings: BLOCK_NONE` cho toàn bộ 4 nhóm nội dung.
   - *Integration & Contract Verification (`wiremock`):**
-    - [ ] **IT-17.1:** Mock Gemini endpoint `v1beta/models/gemini-1.5-flash:generateContent`. Kiểm tra parse kết quả dịch trả về cho lô 30 câu thoại.
-    - [ ] **IT-17.2:** Thời gian xử lý dịch 50 dòng thoại đạt $\le 4.0\text{ giây}$.
+    - [x] **IT-17.1:** Mock Gemini endpoint `v1beta/models/gemini-1.5-flash:generateContent`. Kiểm tra parse kết quả dịch trả về cho lô 30 câu thoại.
+    - [x] **IT-17.2:** Thời gian xử lý dịch 50 dòng thoại đạt $\le 4.0\text{ giây}$.
   - *Boundary & Edge Cases (ERR-07 Defensive Safety Fallback):**
-    - [ ] **ED-17.1 (Safety Triggered Fallback):** Giả lập Gemini phản hồi `finishReason: "SAFETY"` trên 1 câu nói unhinged. Pipeline KHÔNG văng lỗi làm hủy mẻ dịch; tự động giữ nguyên câu tiếng Anh gốc, gắn cờ `is_flagged_for_review = true`, hiển thị cảnh báo trên UI và tiếp tục dịch bình thường các câu còn lại.
+    - [x] **ED-17.1 (Safety Triggered Fallback):** Giả lập Gemini phản hồi `finishReason: "SAFETY"` trên 1 câu nói unhinged. Pipeline KHÔNG văng lỗi làm hủy mẻ dịch; tự động giữ nguyên câu tiếng Anh gốc, gắn cờ `is_flagged_for_review = true`, hiển thị cảnh báo trên UI và tiếp tục dịch bình thường các câu còn lại.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --test gemini_client_test -- --nocapture

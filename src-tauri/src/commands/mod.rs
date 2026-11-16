@@ -8,6 +8,7 @@ pub mod log_cmd;
 pub mod slice_cmd;
 pub mod storage_cmd;
 pub mod stt_cmd;
+pub mod translation_cmd;
 
 pub use highlight_cmd::{
     __cmd__detect_highlights, __cmd__get_highlight_clusters, __cmd__toggle_cluster_bookmark,
@@ -65,4 +66,10 @@ pub use slice_cmd::{
     cancel_slice_task_token, cancel_slice_video_segment, register_slice_task_token,
     resolve_vod_project_dir, slice_video_segment, slice_video_segment_internal,
     unregister_slice_task_token,
+};
+pub use translation_cmd::{
+    __cmd__test_gemini_connection, __cmd__translate_vietsub, __cmd__update_speaker_role,
+    __tauri_command_name_test_gemini_connection, __tauri_command_name_translate_vietsub,
+    __tauri_command_name_update_speaker_role, test_gemini_connection, translate_vietsub,
+    update_speaker_role,
 };
