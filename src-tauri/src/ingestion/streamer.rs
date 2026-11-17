@@ -49,6 +49,155 @@ pub struct VodMetadata {
     pub is_live: Option<bool>,
     #[serde(default)]
     pub live_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_stream_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct YtDlpFormat {
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default)]
+    manifest_url: Option<String>,
+    #[serde(default)]
+    vcodec: Option<String>,
+    #[serde(default)]
+    acodec: Option<String>,
+    #[serde(default)]
+    height: Option<u32>,
+}
+
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Default + serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct YtDlpRawMetadata {
+    id: String,
+    title: String,
+    #[serde(default)]
+    uploader: Option<String>,
+    #[serde(default)]
+    channel: Option<String>,
+    #[serde(default)]
+    duration: Option<f64>,
+    #[serde(default)]
+    is_live: Option<bool>,
+    #[serde(default)]
+    live_status: Option<String>,
+    #[serde(default)]
+    video_stream_url: Option<String>,
+    #[serde(default)]
+    manifest_url: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    requested_formats: Vec<YtDlpFormat>,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
+    formats: Vec<YtDlpFormat>,
+}
+
+fn is_valid_stream_url(candidate: &str, webpage_url: &str) -> bool {
+    let trimmed = candidate.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return false;
+    }
+    trimmed != webpage_url.trim()
+}
+
+fn format_valid_stream_url(fmt: &YtDlpFormat, webpage_url: &str) -> Option<String> {
+    if let Some(ref manifest) = fmt.manifest_url {
+        if is_valid_stream_url(manifest, webpage_url) {
+            return Some(manifest.trim().to_string());
+        }
+    }
+    if let Some(ref u) = fmt.url {
+        if is_valid_stream_url(u, webpage_url) {
+            return Some(u.trim().to_string());
+        }
+    }
+    None
+}
+
+fn extract_video_stream_url(raw: &YtDlpRawMetadata, webpage_url: &str) -> Option<String> {
+    if let Some(ref direct) = raw.video_stream_url {
+        if is_valid_stream_url(direct, webpage_url) {
+            return Some(direct.trim().to_string());
+        }
+    }
+
+    if let Some(ref manifest) = raw.manifest_url {
+        if is_valid_stream_url(manifest, webpage_url) {
+            return Some(manifest.trim().to_string());
+        }
+    }
+
+    for fmt in &raw.requested_formats {
+        if fmt.vcodec.as_deref() == Some("none")
+            || (fmt.vcodec.is_none() && fmt.acodec.as_deref().is_some_and(|a| a != "none"))
+        {
+            continue;
+        }
+        if let Some(url) = format_valid_stream_url(fmt, webpage_url) {
+            return Some(url);
+        }
+    }
+
+    if let Some(ref u) = raw.url {
+        if is_valid_stream_url(u, webpage_url) {
+            return Some(u.trim().to_string());
+        }
+    }
+
+    // Best muxed format first (valid stream URL filtered before max height), then best video-only format
+    if let Some(url) = raw
+        .formats
+        .iter()
+        .filter(|f| {
+            f.vcodec.as_deref().is_some_and(|v| v != "none")
+                && f.acodec.as_deref().is_some_and(|a| a != "none")
+        })
+        .filter_map(|f| format_valid_stream_url(f, webpage_url).map(|u| (f.height.unwrap_or(0), u)))
+        .max_by_key(|(height, _)| *height)
+        .map(|(_, url)| url)
+    {
+        return Some(url);
+    }
+
+    if let Some(url) = raw
+        .formats
+        .iter()
+        .filter(|f| f.vcodec.as_deref().is_some_and(|v| v != "none"))
+        .filter_map(|f| format_valid_stream_url(f, webpage_url).map(|u| (f.height.unwrap_or(0), u)))
+        .max_by_key(|(height, _)| *height)
+        .map(|(_, url)| url)
+    {
+        return Some(url);
+    }
+
+    None
+}
+
+fn raw_to_vod_metadata(raw: YtDlpRawMetadata, webpage_url: &str) -> VodMetadata {
+    let video_stream_url = extract_video_stream_url(&raw, webpage_url);
+    VodMetadata {
+        id: raw.id,
+        title: raw.title,
+        uploader: raw.uploader,
+        channel: raw.channel,
+        duration: raw.duration,
+        is_live: raw.is_live,
+        live_status: raw.live_status,
+        video_stream_url,
+    }
 }
 
 /// Schema 5.2 compliant VOD manifest document stored on disk.
@@ -90,196 +239,9 @@ const fn default_audio_only() -> bool {
     true
 }
 
-/// RAII Guard wrapping a spawned `tokio::process::Child` to guarantee termination on drop.
-pub struct ChildProcessGuard {
-    child: Option<tokio::process::Child>,
-    pid: Option<u32>,
-}
-
-impl ChildProcessGuard {
-    #[must_use]
-    pub fn new(child: tokio::process::Child) -> Self {
-        let pid = child.id();
-        Self {
-            child: Some(child),
-            pid,
-        }
-    }
-
-    #[must_use]
-    pub const fn pid(&self) -> Option<u32> {
-        self.pid
-    }
-
-    pub fn take_child(&mut self) -> Option<tokio::process::Child> {
-        self.child.take()
-    }
-
-    pub fn child_mut(&mut self) -> Option<&mut tokio::process::Child> {
-        self.child.as_mut()
-    }
-}
-
-impl Drop for ChildProcessGuard {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            let _ = child.start_kill();
-        }
-    }
-}
-
-/// Windows Job Object RAII Guard ensuring 0 zombie processes on Windows (`ADR-007`).
 #[cfg(windows)]
-pub struct WindowsJobObjectGuard {
-    job_handle: windows_sys::Win32::Foundation::HANDLE,
-}
-
-#[cfg(windows)]
-unsafe impl Send for WindowsJobObjectGuard {}
-
-#[cfg(windows)]
-unsafe impl Sync for WindowsJobObjectGuard {}
-
-#[cfg(windows)]
-impl WindowsJobObjectGuard {
-    /// Create a Windows Job Object configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
-    pub fn new() -> Result<Self, std::io::Error> {
-        use windows_sys::Win32::System::JobObjects::{
-            CreateJobObjectW, SetInformationJobObject, JobObjectExtendedLimitInformation,
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        };
-        use std::mem::size_of;
-
-        unsafe {
-            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if job == 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-
-            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-
-            let res = SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                std::ptr::addr_of!(info).cast(),
-                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            );
-
-            if res == 0 {
-                windows_sys::Win32::Foundation::CloseHandle(job);
-                return Err(std::io::Error::last_os_error());
-            }
-
-            Ok(Self { job_handle: job })
-        }
-    }
-
-    /// Assign a running process to this Job Object.
-    pub fn assign_process(&self, process_handle: windows_sys::Win32::Foundation::HANDLE) -> Result<(), std::io::Error> {
-        use windows_sys::Win32::System::JobObjects::AssignProcessToJobObject;
-        unsafe {
-            let res = AssignProcessToJobObject(self.job_handle, process_handle);
-            if res == 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        }
-    }
-
-    /// Assign a spawned tokio child process to this Job Object by PID using Win32 OpenProcess.
-    pub fn assign_child_process(&self, child: &tokio::process::Child) -> Result<(), std::io::Error> {
-        if self.job_handle == 0 {
-            return Ok(());
-        }
-        use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
-        use windows_sys::Win32::Foundation::CloseHandle;
-
-        if let Some(pid) = child.id() {
-            unsafe {
-                let handle = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid);
-                if handle == 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                let res = self.assign_process(handle);
-                CloseHandle(handle);
-                res
-            }
-        } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Child process has no PID",
-            ))
-        }
-    }
-}
-
-#[cfg(windows)]
-impl Drop for WindowsJobObjectGuard {
-    fn drop(&mut self) {
-        unsafe {
-            if self.job_handle != 0 {
-                windows_sys::Win32::Foundation::CloseHandle(self.job_handle);
-            }
-        }
-    }
-}
-
-/// Fallback dummy guard on non-windows target platforms.
-#[cfg(not(windows))]
-pub struct WindowsJobObjectGuard;
-
-#[cfg(not(windows))]
-impl WindowsJobObjectGuard {
-    pub fn new() -> Result<Self, std::io::Error> {
-        Ok(Self)
-    }
-
-    pub fn assign_process(&self, _handle: usize) -> Result<(), std::io::Error> {
-        Ok(())
-    }
-
-    pub fn assign_child_process(&self, _child: &tokio::process::Child) -> Result<(), std::io::Error> {
-        Ok(())
-    }
-}
-
-#[cfg(windows)]
-static GLOBAL_JOB_GUARD: std::sync::OnceLock<Option<WindowsJobObjectGuard>> = std::sync::OnceLock::new();
-
-#[cfg(windows)]
-pub fn get_global_job_guard() -> Result<&'static WindowsJobObjectGuard, std::io::Error> {
-    let opt = GLOBAL_JOB_GUARD.get_or_init(|| {
-        match WindowsJobObjectGuard::new() {
-            Ok(guard) => Some(guard),
-            Err(e) => {
-                tracing::warn!("Failed to initialize WindowsJobObjectGuard: {e}");
-                None
-            }
-        }
-    });
-
-    match opt.as_ref() {
-        Some(guard) => Ok(guard),
-        None => Err(std::io::Error::other("Windows Job Object is unavailable")),
-    }
-}
-
-/// Assign a spawned subprocess to the OS-level Job Object guard to guarantee zero zombies (`ADR-007`).
-pub fn assign_child_to_job_guard(child: &tokio::process::Child) {
-    #[cfg(windows)]
-    {
-        if let Ok(guard) = get_global_job_guard() {
-            if let Err(e) = guard.assign_child_process(child) {
-                tracing::warn!("Failed to assign child process to Windows Job Object: {e}");
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = child;
-    }
-}
+pub use crate::sidecar::get_global_job_guard;
+pub use crate::sidecar::{assign_child_to_job_guard, ChildProcessGuard, WindowsJobObjectGuard};
 
 /// Build standard FFmpeg arguments for real-time 16kHz Mono PCM streaming over stdout pipe.
 #[must_use]
@@ -415,8 +377,9 @@ pub async fn probe_vod_metadata(
 
     // Check mock override environment variable for automated testing
     if let Ok(mock_json) = std::env::var("NEUROCLIP_MOCK_YTDLP_METADATA") {
-        let meta: VodMetadata = serde_json::from_str(&mock_json)
+        let raw: YtDlpRawMetadata = serde_json::from_str(&mock_json)
             .map_err(|e| AppError::Ingestion(IngestError::ExtractionFailed(e.to_string())))?;
+        let meta = raw_to_vod_metadata(raw, trimmed_url);
         if meta.is_live == Some(true) || meta.live_status.as_deref() == Some("is_live") {
             return Err(AppError::Ingestion(IngestError::LiveStreamUnsupported));
         }
@@ -458,7 +421,10 @@ pub async fn probe_vod_metadata(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("403") || stderr.contains("Sign in to confirm you’re not a bot") {
+        if stderr.contains("403")
+            || stderr.contains("429")
+            || stderr.contains("Sign in to confirm")
+        {
             return Err(AppError::Ingestion(IngestError::BotBlocked(stderr.to_string())));
         }
         return Err(AppError::Ingestion(IngestError::ExtractionFailed(
@@ -466,14 +432,112 @@ pub async fn probe_vod_metadata(
         )));
     }
 
-    let meta: VodMetadata = serde_json::from_slice(&output.stdout)
+    let raw: YtDlpRawMetadata = serde_json::from_slice(&output.stdout)
         .map_err(|e| AppError::Ingestion(IngestError::ExtractionFailed(e.to_string())))?;
+    let meta = raw_to_vod_metadata(raw, trimmed_url);
 
     if meta.is_live == Some(true) || meta.live_status.as_deref() == Some("is_live") {
         return Err(AppError::Ingestion(IngestError::LiveStreamUnsupported));
     }
 
     Ok(meta)
+}
+
+/// Resolve a direct playable/slicable stream URL from an online VOD webpage URL via `yt-dlp -g`.
+///
+/// Validates that the resolved URL starts with `http://` or `https://` and is NOT
+/// identical to the webpage `original_url`.
+///
+/// # Errors
+/// Returns `AppError::Ingestion` or `AppError::Sidecar` if URL validation or `yt-dlp` fails.
+pub async fn resolve_video_stream_url(
+    original_url: &str,
+    cookie_source: &CookieSource,
+    custom_ua: Option<&str>,
+) -> Result<String, AppError> {
+    let trimmed_url = original_url.trim();
+    if trimmed_url.is_empty()
+        || (!trimmed_url.starts_with("http://") && !trimmed_url.starts_with("https://"))
+    {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            trimmed_url.to_string(),
+        )));
+    }
+
+    if let Ok(mock_stream_url) = std::env::var("NEUROCLIP_MOCK_YTDLP_STREAM_URL") {
+        let candidate = mock_stream_url
+            .lines()
+            .map(str::trim)
+            .find(|line| is_valid_stream_url(line, trimmed_url));
+        return match candidate {
+            Some(url) => Ok(url.to_string()),
+            None => Err(AppError::Ingestion(IngestError::ExtractionFailed(
+                "Mock yt-dlp stream URL was empty, non-HTTP, or equal to webpage URL".to_string(),
+            ))),
+        };
+    }
+
+    let mut args = vec![
+        "-g".to_string(),
+        "-f".to_string(),
+        "b[ext=mp4]/b/best".to_string(),
+        "--no-warnings".to_string(),
+        "--no-playlist".to_string(),
+    ];
+    args.extend(build_bot_defense_args(cookie_source, custom_ua));
+    args.push(trimmed_url.to_string());
+
+    let ytdlp_bin = resolve_ytdlp_binary();
+    let mut cmd = Command::new(&ytdlp_bin);
+    cmd.args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let child = cmd.spawn().map_err(|e| {
+        AppError::Sidecar(SidecarError::BinaryNotFound {
+            name: "yt-dlp".to_string(),
+            path: format!("{ytdlp_bin}: {e}"),
+        })
+    })?;
+
+    assign_child_to_job_guard(&child);
+
+    let output = child.wait_with_output().await.map_err(|e| {
+        AppError::Sidecar(SidecarError::ExecutionFailed {
+            binary: "yt-dlp".to_string(),
+            exit_code: None,
+            details: e.to_string(),
+        })
+    })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("403")
+            || stderr.contains("429")
+            || stderr.contains("Sign in to confirm")
+        {
+            return Err(AppError::Ingestion(IngestError::BotBlocked(
+                stderr.to_string(),
+            )));
+        }
+        return Err(AppError::Ingestion(IngestError::ExtractionFailed(
+            stderr.to_string(),
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let resolved = stdout
+        .lines()
+        .map(str::trim)
+        .find(|line| is_valid_stream_url(line, trimmed_url));
+
+    match resolved {
+        Some(url) => Ok(url.to_string()),
+        None => Err(AppError::Ingestion(IngestError::ExtractionFailed(
+            "yt-dlp -g did not return a valid direct stream URL".to_string(),
+        ))),
+    }
 }
 
 /// Download audio-only stream from Twitch or YouTube using yt-dlp.
@@ -863,6 +927,48 @@ pub async fn compute_audio_energy_stream(
 }
 
 
+/// Create and persist `vod_manifest.json` compliant with Schema 5.2 into the project directory,
+/// optionally setting `video_stream_url` and `local_video_path`.
+///
+/// # Errors
+/// Returns `AppError::Internal` if JSON serialization or writing `vod_manifest.json` fails.
+#[allow(clippy::too_many_arguments)]
+pub fn generate_vod_manifest_with_streams(
+    vod_id: &str,
+    source_type: &str,
+    original_url: Option<&str>,
+    title: &str,
+    streamer: Option<&str>,
+    duration_seconds: f64,
+    audio_path: &Path,
+    project_dir: &Path,
+    video_stream_url: Option<&str>,
+    local_video_path: Option<&str>,
+) -> Result<VodManifest, AppError> {
+    let manifest = VodManifest {
+        vod_id: vod_id.to_string(),
+        source_type: source_type.to_string(),
+        original_url: original_url.map(ToString::to_string),
+        title: title.to_string(),
+        streamer: streamer.map(ToString::to_string),
+        duration_seconds,
+        audio_path: audio_path.to_string_lossy().to_string(),
+        chat_file_path: None,
+        video_stream_url: video_stream_url.map(ToString::to_string),
+        local_video_path: local_video_path.map(ToString::to_string),
+        created_at: Utc::now().to_rfc3339(),
+    };
+
+    let manifest_path = project_dir.join("vod_manifest.json");
+    let json_bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize vod_manifest: {e}")))?;
+
+    std::fs::write(&manifest_path, json_bytes)
+        .map_err(|e| AppError::Internal(format!("Failed to write vod_manifest.json: {e}")))?;
+
+    Ok(manifest)
+}
+
 /// Create and persist `vod_manifest.json` compliant with Schema 5.2 into the project directory.
 #[allow(clippy::too_many_arguments)]
 pub fn generate_vod_manifest(
@@ -875,28 +981,18 @@ pub fn generate_vod_manifest(
     audio_path: &Path,
     project_dir: &Path,
 ) -> Result<VodManifest, AppError> {
-    let manifest = VodManifest {
-        vod_id: vod_id.to_string(),
-        source_type: source_type.to_string(),
-        original_url: original_url.map(ToString::to_string),
-        title: title.to_string(),
-        streamer: streamer.map(ToString::to_string),
+    generate_vod_manifest_with_streams(
+        vod_id,
+        source_type,
+        original_url,
+        title,
+        streamer,
         duration_seconds,
-        audio_path: audio_path.to_string_lossy().to_string(),
-        chat_file_path: None,
-        video_stream_url: None,
-        local_video_path: None,
-        created_at: Utc::now().to_rfc3339(),
-    };
-
-    let manifest_path = project_dir.join("vod_manifest.json");
-    let json_bytes = serde_json::to_vec_pretty(&manifest)
-        .map_err(|e| AppError::Internal(format!("Failed to serialize vod_manifest: {e}")))?;
-
-    std::fs::write(&manifest_path, json_bytes)
-        .map_err(|e| AppError::Internal(format!("Failed to write vod_manifest.json: {e}")))?;
-
-    Ok(manifest)
+        audio_path,
+        project_dir,
+        None,
+        None,
+    )
 }
 
 fn resolve_ytdlp_binary() -> String {

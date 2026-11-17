@@ -5,6 +5,7 @@
 pub mod buffer;
 pub mod chat_parser;
 pub mod cookies;
+pub mod local_importer;
 pub mod range_slicer;
 pub mod streamer;
 pub mod twitch_gql;
@@ -24,6 +25,11 @@ pub use cookies::{
     build_bot_defense_args, build_cookie_args, get_desktop_user_agents,
     get_rotated_desktop_user_agent, parse_browser_type, BrowserType, CookieSource,
 };
+pub use local_importer::{
+    build_local_wav_extraction_args, derive_local_vod_id, import_local_video_file,
+    is_supported_local_video_extension, probe_local_video_duration, validate_local_video_path,
+    SUPPORTED_LOCAL_VIDEO_EXTENSIONS,
+};
 pub use range_slicer::{
     build_ffmpeg_range_slice_args, build_slice_ffmpeg_args, evaluate_keyframe_alignment,
     execute_range_slice, parse_ffprobe_json, probe_keyframe_alignment, resolve_ffmpeg_binary,
@@ -33,7 +39,8 @@ pub use range_slicer::{
 };
 pub use streamer::{
     build_ffmpeg_file_args, build_ffmpeg_pipe_args, compute_audio_energy_stream, detect_source_type,
-    download_audio_stream, generate_vod_manifest, parse_ytdlp_progress_line, probe_vod_metadata,
+    download_audio_stream, generate_vod_manifest, generate_vod_manifest_with_streams,
+    parse_ytdlp_progress_line, probe_vod_metadata, resolve_video_stream_url,
     start_ffmpeg_pcm_stream, AudioEnergyWindow, ChildProcessGuard, IngestOptions,
     IngestProgressPayload, VodManifest, VodMetadata, WindowsJobObjectGuard,
 };

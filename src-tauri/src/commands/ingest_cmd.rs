@@ -11,10 +11,11 @@ use tokio_util::sync::CancellationToken;
 use crate::core::storage::{check_disk_space, resolve_cache_dir, resolve_projects_dir};
 use crate::error::{AppError, StorageError};
 use crate::ingestion::cookies::{parse_browser_type, CookieSource};
+use crate::ingestion::local_importer::import_local_video_file;
 use crate::ingestion::streamer::{
-    compute_audio_energy_stream, detect_source_type, download_audio_stream, generate_vod_manifest,
-    probe_vod_metadata, AudioEnergyWindow, IngestOptions, IngestProgressPayload, VodManifest,
-    VodMetadata,
+    compute_audio_energy_stream, detect_source_type, download_audio_stream,
+    generate_vod_manifest_with_streams, probe_vod_metadata, AudioEnergyWindow, IngestOptions,
+    IngestProgressPayload, VodManifest, VodMetadata,
 };
 
 static ACTIVE_TASKS: Mutex<Option<HashMap<String, CancellationToken>>> = Mutex::new(None);
@@ -218,7 +219,7 @@ pub async fn start_vod_ingestion(
     let duration = metadata.duration.unwrap_or(0.0);
     let streamer = metadata.uploader.or(metadata.channel);
 
-    let manifest = generate_vod_manifest(
+    let manifest = generate_vod_manifest_with_streams(
         &vod_id,
         source_type,
         Some(&url),
@@ -227,6 +228,8 @@ pub async fn start_vod_ingestion(
         duration,
         &audio_path,
         &project_dir,
+        metadata.video_stream_url.as_deref(),
+        None,
     )?;
 
     // Emit final 100% progress event
@@ -242,6 +245,54 @@ pub async fn start_vod_ingestion(
     );
 
     Ok(manifest)
+}
+
+/// Import a local video file completely offline (`TASK-M4-07`).
+///
+/// Validates extension, probes duration via `ffprobe`, extracts 16kHz mono PCM WAV,
+/// and writes Schema 5.2 `vod_manifest.json` (`source_type: "local_file"`).
+///
+/// # Errors
+/// Returns `AppError` if the file is missing/unsupported, storage is insufficient, or `FFmpeg` fails.
+#[tauri::command]
+pub async fn import_local_video(
+    file_path: String,
+    custom_cache_dir: Option<String>,
+    task_id: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<VodManifest, AppError> {
+    let cancellation_token = CancellationToken::new();
+    let tid = task_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map_or_else(
+            || format!("local_{}", chrono::Utc::now().timestamp_millis()),
+            ToString::to_string,
+        );
+    register_task_token(&tid, cancellation_token.clone());
+
+    let projects_root = resolve_projects_dir();
+    let cache_root = match custom_cache_dir.as_deref() {
+        Some(dir) if !dir.trim().is_empty() => PathBuf::from(dir.trim()),
+        _ => resolve_cache_dir(),
+    };
+
+    let app_clone = app.clone();
+    let res = import_local_video_file(
+        std::path::Path::new(file_path.trim()),
+        &projects_root,
+        &cache_root,
+        Some(&tid),
+        move |payload: IngestProgressPayload| {
+            let _ = app_clone.emit("ingest:progress", &payload);
+        },
+        cancellation_token,
+    )
+    .await;
+
+    unregister_task_token(&tid);
+    res
 }
 
 /// Cancel an ongoing VOD ingestion task.

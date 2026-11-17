@@ -3,10 +3,10 @@
 //! Strict compliance with docs/CONVENTIONS.md, docs/TASK_BOARD.md (TASK-M4-05), and
 //! zero-panic clippy invariants.
 
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, IngestError, StorageError};
 
@@ -277,14 +277,20 @@ pub fn validate_project_id(project_id: &str) -> Result<&str, StorageError> {
     {
         return Err(StorageError::DirectoryCreationFailed {
             path: project_id.to_string(),
-            details: "Project ID contains forbidden characters or path traversal sequences".to_string(),
+            details: "Project ID contains forbidden characters or path traversal sequences"
+                .to_string(),
         });
     }
 
-    if !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+    if !trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
         return Err(StorageError::DirectoryCreationFailed {
             path: project_id.to_string(),
-            details: "Project ID may only contain alphanumeric characters, underscores, and hyphens".to_string(),
+            details:
+                "Project ID may only contain alphanumeric characters, underscores, and hyphens"
+                    .to_string(),
         });
     }
 
@@ -349,7 +355,10 @@ pub fn initialize_project_directory(project_id: &str) -> Result<PathBuf, AppErro
 /// SAFETY GUARANTEE:
 /// - Whitelists only `.tmp` and `.wav` files.
 /// - Strictly protects `.json`, `.ass`, `.srt`, `.mp4`, `.txt`, `.toml` from deletion.
-pub fn clean_expired_cache(cache_dir: &Path, max_age_days: u64) -> Result<CacheCleanupStats, AppError> {
+pub fn clean_expired_cache(
+    cache_dir: &Path,
+    max_age_days: u64,
+) -> Result<CacheCleanupStats, AppError> {
     if !cache_dir.exists() {
         return Ok(CacheCleanupStats::default());
     }
@@ -357,10 +366,12 @@ pub fn clean_expired_cache(cache_dir: &Path, max_age_days: u64) -> Result<CacheC
     let read_dir = match fs::read_dir(cache_dir) {
         Ok(rd) => rd,
         Err(e) => {
-            return Err(AppError::Storage(StorageError::CacheCleanupFailed(format!(
-                "Failed to read cache directory {}: {e}",
-                cache_dir.display()
-            ))));
+            return Err(AppError::Storage(StorageError::CacheCleanupFailed(
+                format!(
+                    "Failed to read cache directory {}: {e}",
+                    cache_dir.display()
+                ),
+            )));
         }
     };
 
@@ -502,11 +513,15 @@ pub mod tests {
 
     #[test]
     fn test_initialize_storage_directories() {
-        let temp_root = std::env::temp_dir().join(format!("neuroclip_test_storage_{}", std::process::id()));
+        let temp_root =
+            std::env::temp_dir().join(format!("neuroclip_test_storage_{}", std::process::id()));
         let custom_cache = temp_root.join("cache");
         let _ = fs::create_dir_all(&temp_root);
 
-        std::env::set_var("NEUROCLIP_PROJECTS_DIR", temp_root.join("projects").to_string_lossy().to_string());
+        std::env::set_var(
+            "NEUROCLIP_PROJECTS_DIR",
+            temp_root.join("projects").to_string_lossy().to_string(),
+        );
 
         let paths = init_storage_directories(Some(&custom_cache));
         assert!(paths.is_ok());
@@ -521,7 +536,8 @@ pub mod tests {
 
     #[test]
     fn test_cache_cleanup_preserves_json_and_deletes_old_tmp_wav() {
-        let temp_cache = std::env::temp_dir().join(format!("neuroclip_test_clean_{}", std::process::id()));
+        let temp_cache =
+            std::env::temp_dir().join(format!("neuroclip_test_clean_{}", std::process::id()));
         let _ = fs::create_dir_all(&temp_cache);
 
         let old_tmp = temp_cache.join("stream_slice_01.tmp");

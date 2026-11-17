@@ -33,10 +33,11 @@ pub use config_cmd::{
 };
 pub use ingest_cmd::{
     __cmd__cancel_vod_ingestion, __cmd__extract_pcm_stream, __cmd__get_vod_manifest,
-    __cmd__probe_vod, __cmd__start_vod_ingestion, __tauri_command_name_cancel_vod_ingestion,
-    __tauri_command_name_extract_pcm_stream, __tauri_command_name_get_vod_manifest,
-    __tauri_command_name_probe_vod, __tauri_command_name_start_vod_ingestion,
-    cancel_vod_ingestion, extract_pcm_stream, get_vod_manifest, probe_vod, start_vod_ingestion,
+    __cmd__import_local_video, __cmd__probe_vod, __cmd__start_vod_ingestion,
+    __tauri_command_name_cancel_vod_ingestion, __tauri_command_name_extract_pcm_stream,
+    __tauri_command_name_get_vod_manifest, __tauri_command_name_import_local_video,
+    __tauri_command_name_probe_vod, __tauri_command_name_start_vod_ingestion, cancel_vod_ingestion,
+    extract_pcm_stream, get_vod_manifest, import_local_video, probe_vod, start_vod_ingestion,
 };
 pub use log_cmd::{
     __cmd__clear_logs, __cmd__get_recent_logs, __cmd__log_frontend_event,

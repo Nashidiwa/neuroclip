@@ -11,8 +11,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::core::storage::{resolve_cache_dir, resolve_projects_dir};
 use crate::error::{AppError, IngestError, StorageError};
+use crate::ingestion::cookies::CookieSource;
 use crate::ingestion::range_slicer::{execute_range_slice, RangeSliceRequest, SliceResult};
-use crate::ingestion::streamer::VodManifest;
+use crate::ingestion::streamer::{resolve_video_stream_url, VodManifest};
 
 static ACTIVE_SLICE_TASKS: Mutex<Option<HashMap<String, CancellationToken>>> = Mutex::new(None);
 
@@ -117,6 +118,9 @@ pub async fn slice_video_segment_internal(
 
     let manifest_path = project_dir.join("vod_manifest.json");
 
+    let mut loaded_manifest: Option<VodManifest> = None;
+    let mut had_cached_stream_url = false;
+
     let (input_source, is_online, clamped_end_sec) = if let Some(src) = custom_input_source {
         let is_remote = src.starts_with("http://") || src.starts_with("https://");
         (src.to_string(), is_remote, end_sec)
@@ -128,7 +132,7 @@ pub async fn slice_video_segment_internal(
             )))
         })?;
 
-        let manifest: VodManifest = serde_json::from_slice(&bytes).map_err(|e| {
+        let mut manifest: VodManifest = serde_json::from_slice(&bytes).map_err(|e| {
             AppError::Ingestion(IngestError::ExtractionFailed(format!(
                 "Lỗi phân giải vod_manifest.json: {e}"
             )))
@@ -144,7 +148,8 @@ pub async fn slice_video_segment_internal(
         let (src, is_remote) = if manifest.source_type == "local_file" {
             let path = manifest
                 .local_video_path
-                .or(manifest.original_url)
+                .clone()
+                .filter(|p| !p.trim().is_empty())
                 .ok_or_else(|| {
                     AppError::Ingestion(IngestError::ExtractionFailed(
                         "Không tìm thấy local_video_path trong vod_manifest.json".to_string(),
@@ -152,17 +157,41 @@ pub async fn slice_video_segment_internal(
                 })?;
             (path, false)
         } else {
-            let url = manifest
+            let cached_stream = manifest
                 .video_stream_url
-                .or(manifest.original_url)
-                .ok_or_else(|| {
-                    AppError::Ingestion(IngestError::ExtractionFailed(
-                        "Không tìm thấy video_stream_url trong vod_manifest.json".to_string(),
-                    ))
-                })?;
-            (url, true)
+                .as_deref()
+                .map(str::trim)
+                .filter(|u| u.starts_with("http://") || u.starts_with("https://"))
+                .filter(|u| manifest.original_url.as_deref().map(str::trim) != Some(*u))
+                .map(ToString::to_string);
+
+            let stream_url = if let Some(url) = cached_stream {
+                had_cached_stream_url = true;
+                url
+            } else if let Some(orig_url) = manifest
+                .original_url
+                .as_deref()
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+            {
+                let resolved =
+                    resolve_video_stream_url(orig_url, &CookieSource::None, None).await?;
+                manifest.video_stream_url = Some(resolved.clone());
+                if let Ok(updated_bytes) = serde_json::to_vec_pretty(&manifest) {
+                    let _ = std::fs::write(&manifest_path, updated_bytes);
+                }
+                resolved
+            } else {
+                return Err(AppError::Ingestion(IngestError::ExtractionFailed(
+                    "Không tìm thấy video_stream_url hoặc original_url hợp lệ trong vod_manifest.json"
+                        .to_string(),
+                )));
+            };
+
+            (stream_url, true)
         };
 
+        loaded_manifest = Some(manifest);
         (src, is_remote, clamped)
     } else {
         return Err(AppError::Storage(StorageError::FileNotFound(format!(
@@ -201,14 +230,49 @@ pub async fn slice_video_segment_internal(
         input_source,
         start_sec,
         end_sec: clamped_end_sec,
-        output_path,
+        output_path: output_path.clone(),
         is_online,
         http_headers: None,
         use_duration_flag: false,
         task_id: Some(task_id.clone()),
     };
 
-    let slice_result = execute_range_slice(request, Some(token)).await;
+    let mut slice_result = execute_range_slice(request, Some(token.clone())).await;
+
+    // If a cached online stream URL failed (e.g. expired CDN token), lazily re-resolve once via yt-dlp -g
+    if is_online && had_cached_stream_url {
+        if let Err(AppError::Ingestion(IngestError::SliceFailed(_))) = slice_result {
+            if let Some(mut manifest) = loaded_manifest {
+                if let Some(orig_url) = manifest
+                    .original_url
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty())
+                {
+                    if let Ok(refreshed_url) =
+                        resolve_video_stream_url(orig_url, &CookieSource::None, None).await
+                    {
+                        manifest.video_stream_url = Some(refreshed_url.clone());
+                        if let Ok(updated_bytes) = serde_json::to_vec_pretty(&manifest) {
+                            let _ = std::fs::write(&manifest_path, updated_bytes);
+                        }
+                        let retry_request = RangeSliceRequest {
+                            input_source: refreshed_url,
+                            start_sec,
+                            end_sec: clamped_end_sec,
+                            output_path,
+                            is_online: true,
+                            http_headers: None,
+                            use_duration_flag: false,
+                            task_id: Some(task_id.clone()),
+                        };
+                        slice_result = execute_range_slice(retry_request, Some(token)).await;
+                    }
+                }
+            }
+        }
+    }
+
     unregister_slice_task_token(&task_id);
 
     if let Some(app_handle) = app {

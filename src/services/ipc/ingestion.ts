@@ -7,7 +7,7 @@
  * Strict adherence to docs/CONVENTIONS.md (zero-any, exactOptionalPropertyTypes).
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   ERROR_CODES,
@@ -310,6 +310,51 @@ export async function getVodManifest(projectId: string): Promise<VodManifest> {
     return toVodManifest(raw);
   } catch (err: unknown) {
     throw parseIpcError(err, 'Không thể đọc vod_manifest.json của dự án');
+  }
+}
+
+/**
+ * Import a local video file completely offline (`TASK-M4-07`).
+ *
+ * Validates the local path, extracts 16kHz mono PCM WAV via FFmpeg, and writes
+ * a Schema 5.2 `vod_manifest.json` with `source_type: 'local_file'`.
+ */
+export async function importLocalVideo(
+  filePath: string,
+  customCacheDir?: string | null,
+  taskId?: string | null,
+): Promise<VodManifest> {
+  try {
+    const raw: unknown = await invoke('import_local_video', {
+      filePath: filePath.trim(),
+      customCacheDir: customCacheDir ?? null,
+      taskId: taskId ?? null,
+    });
+    if (!isVodManifestJson(raw)) {
+      throw {
+        code: ERROR_CODES.INGEST_EXTRACTION_FAILED,
+        message: 'Dữ liệu phản hồi manifest video cục bộ không đúng định dạng Schema 5.2',
+        details: `Malformed payload from import_local_video: ${safeSerialize(raw)}`,
+        recoverable: true,
+      } satisfies IpcErrorResponse;
+    }
+    return toVodManifest(raw);
+  } catch (err: unknown) {
+    throw parseIpcError(err, 'Không thể nhập tệp video cục bộ');
+  }
+}
+
+/**
+ * Convert an absolute local filesystem path into a Tauri `asset://` streaming URL
+ * backed by HTTP 206 Partial Content Range requests.
+ */
+export function toLocalAssetUrl(filePath: string): string {
+  const trimmed = filePath.trim();
+  if (!trimmed) return '';
+  try {
+    return convertFileSrc(trimmed);
+  } catch {
+    return '';
   }
 }
 

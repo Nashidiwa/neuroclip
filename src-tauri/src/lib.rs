@@ -11,19 +11,14 @@
 
 pub mod commands;
 pub mod config;
+pub mod core;
 pub mod error;
 pub mod highlight;
 pub mod ingestion;
 pub mod logging;
+pub mod sidecar;
 pub mod stt;
 pub mod translation;
-
-/// Backward-compatibility and architectural alias for core logging subsystem.
-pub mod core {
-    pub use crate::logging;
-    #[path = "storage.rs"]
-    pub mod storage;
-}
 
 pub use commands::{
     cancel_slice_task_token, cancel_slice_video_segment, register_slice_task_token,
@@ -125,6 +120,10 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .register_asynchronous_uri_scheme_protocol(
+            "asset",
+            core::custom_protocol::handle_asset_protocol,
+        )
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::ping,
@@ -140,6 +139,7 @@ pub fn run() {
             commands::initialize_project,
             commands::clean_expired_cache,
             commands::start_vod_ingestion,
+            commands::import_local_video,
             commands::cancel_vod_ingestion,
             commands::probe_vod,
             commands::get_vod_manifest,
