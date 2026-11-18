@@ -76,4 +76,3 @@ export const WINDOW_GEOMETRY: Readonly<WindowGeometry> = Object.freeze({
 export function getWindowGeometry(): WindowGeometry {
   return { ...WINDOW_GEOMETRY };
 }
-

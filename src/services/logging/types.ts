@@ -95,10 +95,7 @@ let nextIdSequence = 1;
  * Convert a raw LogEntryJson into a domain LogEntry model.
  */
 export function toLogEntry(json: LogEntryJson, idOrIndex?: string | number): LogEntry {
-  const id =
-    idOrIndex !== undefined
-      ? `log-${idOrIndex}`
-      : `log-${Date.now()}-${nextIdSequence++}`;
+  const id = idOrIndex !== undefined ? `log-${idOrIndex}` : `log-${Date.now()}-${nextIdSequence++}`;
 
   const entry: {
     readonly id: string;

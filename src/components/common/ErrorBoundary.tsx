@@ -115,19 +115,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       <div
         role="alert"
         aria-live="assertive"
-        className="m-4 p-6 rounded-xl bg-bg-secondary/90 border border-border-dark text-slate-100 shadow-acrylic flex flex-col space-y-4"
+        className="m-4 flex flex-col space-y-4 rounded-xl border border-border-dark bg-bg-secondary/90 p-6 text-slate-100 shadow-acrylic"
         data-testid="error-boundary-fallback"
       >
         <div className="flex items-center space-x-2 text-accent-evil">
-          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-          <h2 className="text-base font-semibold">
-            {title ?? 'Sự Cố Hiển Thị Giao Diện'}
-          </h2>
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <h2 className="text-base font-semibold">{title ?? 'Sự Cố Hiển Thị Giao Diện'}</h2>
         </div>
 
-        <p className="text-sm text-slate-300 leading-relaxed">
-          NeuroClip đã ghi nhận sự cố bất ngờ trong phân vùng hiển thị này.
-          Dữ liệu phiên làm việc và các tiến trình nền vẫn đang được bảo toàn.
+        <p className="text-sm leading-relaxed text-slate-300">
+          NeuroClip đã ghi nhận sự cố bất ngờ trong phân vùng hiển thị này. Dữ liệu phiên làm việc
+          và các tiến trình nền vẫn đang được bảo toàn.
         </p>
 
         <ErrorBanner
@@ -139,5 +137,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     );
   }
 }
+
+export interface GlobalErrorBoundaryProps {
+  children: ReactNode;
+}
+
+export const GlobalErrorBoundary: React.FC<GlobalErrorBoundaryProps> = ({ children }) => (
+  <ErrorBoundary title="Khôi phục phiên làm việc">{children}</ErrorBoundary>
+);
 
 export default ErrorBoundary;

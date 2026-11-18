@@ -9,11 +9,7 @@
 
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import {
-  ERROR_CODES,
-  parseIpcError,
-  type IpcErrorResponse,
-} from './error.ts';
+import { ERROR_CODES, parseIpcError, type IpcErrorResponse } from './error.ts';
 
 // ---------------------------------------------------------------------------
 // Data Contracts: VOD Manifest (Schema 5.2)
@@ -78,7 +74,8 @@ export function isVodManifestJson(val: unknown): val is VodManifestJson {
     obj['source_type'] === 'youtube_vod' ||
     obj['source_type'] === 'local_file';
   const hasTitle = typeof obj['title'] === 'string';
-  const hasDuration = typeof obj['duration_seconds'] === 'number' && !Number.isNaN(obj['duration_seconds']);
+  const hasDuration =
+    typeof obj['duration_seconds'] === 'number' && !Number.isNaN(obj['duration_seconds']);
   const hasAudioPath = typeof obj['audio_path'] === 'string';
   const hasCreatedAt = typeof obj['created_at'] === 'string';
 
@@ -97,8 +94,10 @@ export function toVodManifest(raw: VodManifestJson | VodManifest): VodManifest {
   const durationSeconds = 'durationSeconds' in raw ? raw.durationSeconds : raw.duration_seconds;
   const audioPath = 'audioPath' in raw ? raw.audioPath : raw.audio_path;
   const chatFilePath = 'chatFilePath' in raw ? raw.chatFilePath : (raw.chat_file_path ?? null);
-  const videoStreamUrl = 'videoStreamUrl' in raw ? raw.videoStreamUrl : (raw.video_stream_url ?? null);
-  const localVideoPath = 'localVideoPath' in raw ? raw.localVideoPath : (raw.local_video_path ?? null);
+  const videoStreamUrl =
+    'videoStreamUrl' in raw ? raw.videoStreamUrl : (raw.video_stream_url ?? null);
+  const localVideoPath =
+    'localVideoPath' in raw ? raw.localVideoPath : (raw.local_video_path ?? null);
   const createdAt = 'createdAt' in raw ? raw.createdAt : raw.created_at;
 
   return {
@@ -154,7 +153,7 @@ export function isVodMetadataJson(val: unknown): val is VodMetadataJson {
 }
 
 export function toVodMetadata(raw: VodMetadataJson): VodMetadata {
-  const isLive = Boolean(raw.is_live ?? (raw.live_status === 'is_live'));
+  const isLive = Boolean(raw.is_live ?? raw.live_status === 'is_live');
   return {
     id: raw.id,
     title: raw.title,
@@ -258,14 +257,16 @@ export async function startVodIngestion(
   try {
     const raw: unknown = await invoke('start_vod_ingestion', {
       url: url.trim(),
-      options: options ? {
-        audioOnly: options.audioOnly ?? true,
-        cookiesPath: options.cookiesPath ?? null,
-        browserCookies: options.browserCookies ?? null,
-        customUserAgent: options.customUserAgent ?? null,
-        customCacheDir: options.customCacheDir ?? null,
-        taskId: options.taskId ?? null,
-      } : null,
+      options: options
+        ? {
+            audioOnly: options.audioOnly ?? true,
+            cookiesPath: options.cookiesPath ?? null,
+            browserCookies: options.browserCookies ?? null,
+            customUserAgent: options.customUserAgent ?? null,
+            customCacheDir: options.customCacheDir ?? null,
+            taskId: options.taskId ?? null,
+          }
+        : null,
     });
     if (!isVodManifestJson(raw)) {
       throw {
@@ -457,4 +458,3 @@ export async function extractPcmStream(
     throw parseIpcError(err, 'Không thể trích xuất luồng PCM');
   }
 }
-

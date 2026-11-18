@@ -1,8 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, it, expect } from 'vitest';
+import React from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import App from './App';
+import { GlobalErrorBoundary } from './components/common/ErrorBoundary';
+import { useProjectStore } from './stores/useProjectStore';
+import { useIngestionStore } from './stores/useIngestionStore';
+import { useChatStore } from './stores/useChatStore';
+import { useHighlightStore } from './stores/useHighlightStore';
+import { normalizeHighlightCluster } from './types/highlight';
 import {
   loadTheme,
   resolveBackdropConfig,
@@ -12,6 +19,12 @@ import {
 } from './styles/theme';
 
 describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
+  beforeEach(() => {
+    useProjectStore.getState().reset();
+    useIngestionStore.getState().reset();
+    useChatStore.getState().reset();
+    useHighlightStore.getState().reset();
+  });
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
     it('should return exactly the specified Neuro-sama VTuber theme palette hex colors', () => {
       const theme = loadTheme();
@@ -23,10 +36,10 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
 
       // VTuber character accent colors
       expect(theme.accentNeuro.toUpperCase()).toBe('#FFB6C1'); // Neuro Pastel Pink
-      expect(theme.accentEvil.toUpperCase()).toBe('#FF0055');  // Evil Red
+      expect(theme.accentEvil.toUpperCase()).toBe('#FF0055'); // Evil Red
       expect(theme.accentVedal.toUpperCase()).toBe('#98FB98'); // Vedal Green
       expect(theme.accentGuest.toUpperCase()).toBe('#FFD700'); // Guest Gold
-      expect(theme.accentChat.toUpperCase()).toBe('#87CEEB');  // Chat Sky Blue
+      expect(theme.accentChat.toUpperCase()).toBe('#87CEEB'); // Chat Sky Blue
 
       // Border token
       expect(theme.border.toUpperCase()).toBe('#2E3247');
@@ -166,6 +179,69 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
 
       const expectedGeometryBadge = `Window: ${WINDOW_GEOMETRY.defaultWidth}x${WINDOW_GEOMETRY.defaultHeight} (Min: ${WINDOW_GEOMETRY.minWidth}x${WINDOW_GEOMETRY.minHeight})`;
       expect(screen.getByText(expectedGeometryBadge)).toBeInTheDocument();
+    });
+  });
+
+  describe('Workspace Tab Wiring & GlobalErrorBoundary Integration', () => {
+    it('switches to ingestion tab and mounts IngestionDashboard and DropZone', () => {
+      render(<App />);
+
+      const ingestionTab = screen.getByTestId('tab-ingestion');
+      fireEvent.click(ingestionTab);
+
+      expect(ingestionTab).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('ingestion-dashboard')).toBeInTheDocument();
+      expect(screen.getByTestId('local-dropzone-container')).toBeInTheDocument();
+    });
+
+    it('switches to highlights tab and renders HighlightViewer backed by useHighlightStore', () => {
+      const sampleCluster = normalizeHighlightCluster({
+        cluster_id: 'cluster_app_1',
+        start_sec: 120,
+        end_sec: 150,
+        peak_sec: 135,
+        score: 91.5,
+        primary_reason: 'Swarm hype peak',
+        top_emotes: ['NeuroHeart'],
+        is_bookmarked: false,
+      });
+
+      useHighlightStore.setState({
+        vodId: 'vod_app_test',
+        clusters: [sampleCluster],
+        selectedClusterId: 'cluster_app_1',
+      });
+
+      render(<App />);
+
+      const highlightsTab = screen.getByTestId('tab-highlights');
+      fireEvent.click(highlightsTab);
+
+      expect(highlightsTab).toHaveAttribute('aria-selected', 'true');
+      expect(
+        screen.getByRole('region', { name: 'Khung xem highlight đa phương thức' }),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Swarm hype peak')).toBeInTheDocument();
+    });
+
+    it('renders GlobalErrorBoundary fallback with Khôi phục phiên làm việc when child throws', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const ThrowingChild: React.FC = () => {
+        throw new Error('Render crash simulation');
+      };
+
+      try {
+        render(
+          <GlobalErrorBoundary>
+            <ThrowingChild />
+          </GlobalErrorBoundary>,
+        );
+
+        expect(screen.getByTestId('error-boundary-fallback')).toBeInTheDocument();
+        expect(screen.getByText('Khôi phục phiên làm việc')).toBeInTheDocument();
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
     });
   });
 });

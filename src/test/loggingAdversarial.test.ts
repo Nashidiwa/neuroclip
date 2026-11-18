@@ -10,11 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  useLogStore,
-  selectFilteredLogs,
-  DEFAULT_MAX_LOG_ENTRIES,
-} from '../stores/useLogStore.ts';
+import { useLogStore, selectFilteredLogs, DEFAULT_MAX_LOG_ENTRIES } from '../stores/useLogStore.ts';
 import { LoggerService, isTauriEnvironment } from '../services/logging/logger.ts';
 import { type LogEntry, type LogEntryJson, toLogEntry } from '../services/logging/types.ts';
 import { ERROR_CODES } from '../services/ipc/error.ts';
@@ -513,7 +509,7 @@ describe('ADVERSARIAL STRESS TEST: TASK-M4-04 Logging Infrastructure', () => {
       expect(clampLimit(-10)).toBe(1);
     });
 
-    it('VERIFICATION: multi-file chronological retrieval retains today\'s newest logs and sorts chronologically', () => {
+    it("VERIFICATION: multi-file chronological retrieval retains today's newest logs and sorts chronologically", () => {
       // Model of how fixed log_cmd.rs processes multiple files
       // File 1 (Newest file, e.g. 2026-11-10): 50 entries
       const file1Logs = Array.from({ length: 50 }, (_, i) => ({
@@ -544,9 +540,10 @@ describe('ADVERSARIAL STRESS TEST: TASK-M4-04 Logging Infrastructure', () => {
       for (const fileEntries of files) {
         const needed = effectiveLimit - collected.length;
         if (needed <= 0) break;
-        const slice = fileEntries.length > needed
-          ? fileEntries.slice(fileEntries.length - needed)
-          : fileEntries;
+        const slice =
+          fileEntries.length > needed
+            ? fileEntries.slice(fileEntries.length - needed)
+            : fileEntries;
         collected.push(...slice);
       }
       collected.sort((a, b) => a.timestamp.localeCompare(b.timestamp));

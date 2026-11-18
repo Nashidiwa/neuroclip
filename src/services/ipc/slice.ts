@@ -65,7 +65,8 @@ export async function sliceVideoSegment(
       end = requestOrVodId.endSec ?? requestOrVodId.end_sec ?? 0;
       clusterId = requestOrVodId.clusterId ?? requestOrVodId.cluster_id ?? null;
       outputFilename = requestOrVodId.outputFilename ?? requestOrVodId.output_filename ?? null;
-      customInputSource = requestOrVodId.customInputSource ?? requestOrVodId.custom_input_source ?? null;
+      customInputSource =
+        requestOrVodId.customInputSource ?? requestOrVodId.custom_input_source ?? null;
     }
 
     const raw = await invoke<SliceResultJson>('slice_video_segment', {

@@ -3,7 +3,9 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { DropZone, isSupportedVideoPath } from './DropZone';
 
 const mockInvoke = vi.fn();
-const mockConvertFileSrc = vi.fn((path: string) => `http://asset.localhost/${encodeURIComponent(path)}`);
+const mockConvertFileSrc = vi.fn(
+  (path: string) => `http://asset.localhost/${encodeURIComponent(path)}`,
+);
 const mockOnDragDropEvent = vi.fn();
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -273,5 +275,24 @@ describe('DropZone (TASK-M4-07)', () => {
 
     expect(mockOnDragDropEvent).toHaveBeenCalledTimes(1);
     expect(mockUnlisten).not.toHaveBeenCalled();
+  });
+
+  it('triggers hidden file input click exactly once without recursive bubbling when clicking dropzone-area', () => {
+    const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+
+    try {
+      render(<DropZone />);
+      const dropzoneArea = screen.getByTestId('dropzone-area');
+      const fileInput = screen.getByTestId('dropzone-file-input');
+
+      fireEvent.click(dropzoneArea);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+
+      // Direct click on nested input must not bubble back up to dropzone-area
+      fireEvent.click(fileInput);
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      clickSpy.mockRestore();
+    }
   });
 });

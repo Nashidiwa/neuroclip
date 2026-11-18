@@ -73,8 +73,7 @@ describe('Logger Redaction & Frontend Bridge Subsystem', () => {
     });
 
     it('should sanitize multiple sensitive keys embedded within a single string', () => {
-      const msg =
-        'Keys: groq=gsk_1234567890abcdef12345678 gemini=AIzaSyD987654321abcdef1234567890';
+      const msg = 'Keys: groq=gsk_1234567890abcdef12345678 gemini=AIzaSyD987654321abcdef1234567890';
       const sanitized = sanitizeLogString(msg);
       expect(sanitized).toContain('gsk_[REDACTED]5678');
       expect(sanitized).toContain('AIza[REDACTED]7890');

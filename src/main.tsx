@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { GlobalErrorBoundary } from './components/common/ErrorBoundary';
 import './styles/theme.css';
 import './styles/globals.css';
 
@@ -9,7 +10,9 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <App />
+      <GlobalErrorBoundary>
+        <App />
+      </GlobalErrorBoundary>
     </React.StrictMode>,
   );
 } else {

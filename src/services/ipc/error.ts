@@ -32,8 +32,14 @@ export const ERROR_CODES = {
   STT_RATE_LIMIT: 'ERR_STT_RATE_LIMIT',
   STT_PAYLOAD_TOO_LARGE: 'ERR_STT_PAYLOAD_TOO_LARGE',
   STT_VRAM_INSUFFICIENT: 'ERR_STT_VRAM_INSUFFICIENT',
+  STT_CUDA_OOM: 'ERR_STT_CUDA_OOM',
   STT_INVALID_API_KEY: 'ERR_STT_INVALID_API_KEY',
   STT_VAD_FAILED: 'ERR_STT_VAD_FAILED',
+  STT_MODEL_NOT_FOUND: 'ERR_STT_MODEL_NOT_FOUND',
+  STT_MODEL_INTEGRITY_FAILED: 'ERR_STT_MODEL_INTEGRITY_FAILED',
+  STT_SIDECAR_FAILED: 'ERR_STT_SIDECAR_FAILED',
+  STT_PARSER_FAILED: 'ERR_STT_PARSER_FAILED',
+  STT_INVALID_TIMESTAMP: 'ERR_STT_INVALID_TIMESTAMP',
 
   // Translation Errors
   TRANSLATE_SAFETY_FILTER: 'ERR_TRANSLATE_SAFETY_FILTER',
@@ -92,8 +98,14 @@ export const ERROR_CODES = {
   ERR_STT_RATE_LIMIT: 'ERR_STT_RATE_LIMIT',
   ERR_STT_PAYLOAD_TOO_LARGE: 'ERR_STT_PAYLOAD_TOO_LARGE',
   ERR_STT_VRAM_INSUFFICIENT: 'ERR_STT_VRAM_INSUFFICIENT',
+  ERR_STT_CUDA_OOM: 'ERR_STT_CUDA_OOM',
   ERR_STT_INVALID_API_KEY: 'ERR_STT_INVALID_API_KEY',
   ERR_STT_VAD_FAILED: 'ERR_STT_VAD_FAILED',
+  ERR_STT_MODEL_NOT_FOUND: 'ERR_STT_MODEL_NOT_FOUND',
+  ERR_STT_MODEL_INTEGRITY_FAILED: 'ERR_STT_MODEL_INTEGRITY_FAILED',
+  ERR_STT_SIDECAR_FAILED: 'ERR_STT_SIDECAR_FAILED',
+  ERR_STT_PARSER_FAILED: 'ERR_STT_PARSER_FAILED',
+  ERR_STT_INVALID_TIMESTAMP: 'ERR_STT_INVALID_TIMESTAMP',
   ERR_TRANSLATE_SAFETY_FILTER: 'ERR_TRANSLATE_SAFETY_FILTER',
   ERR_TRANSLATE_INVALID_API_KEY: 'ERR_TRANSLATE_INVALID_API_KEY',
   ERR_TRANSLATE_API_FAILED: 'ERR_TRANSLATE_API_FAILED',
@@ -140,22 +152,27 @@ export const ERROR_MESSAGES_VI: Readonly<Record<string, string>> = Object.freeze
     'Không thể trích xuất stream từ liên kết này. Vui lòng kiểm tra lại URL.',
   [ERROR_CODES.INGEST_LIVE_STREAM_UNSUPPORTED]:
     'Luồng đang phát trực tiếp không được hỗ trợ trong phiên bản này (chỉ hỗ trợ VOD đã kết thúc).',
-  [ERROR_CODES.INGEST_SLICE_FAILED]:
-    'Lỗi trong quá trình cắt phân đoạn video.',
+  [ERROR_CODES.INGEST_SLICE_FAILED]: 'Lỗi trong quá trình cắt phân đoạn video.',
   [ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED]:
     'Lệch keyframe hoặc không đồng bộ âm thanh/hình ảnh vượt quá ngưỡng cho phép (50ms).',
-  [ERROR_CODES.INGEST_INVALID_TIME_RANGE]:
-    'Mốc thời gian cắt phân đoạn video không hợp lệ.',
+  [ERROR_CODES.INGEST_INVALID_TIME_RANGE]: 'Mốc thời gian cắt phân đoạn video không hợp lệ.',
   [ERROR_CODES.STT_RATE_LIMIT]:
     'Đã vượt quá giới hạn lượt gọi Groq STT API (Rate Limit 429). Vui lòng thử lại sau giây lát.',
   [ERROR_CODES.STT_PAYLOAD_TOO_LARGE]:
     'Tệp âm thanh vượt quá giới hạn 25MB của Groq API. Hệ thống sẽ tự động cắt nhỏ đoạn âm thanh.',
   [ERROR_CODES.STT_VRAM_INSUFFICIENT]:
     'Bộ nhớ VRAM không đủ để chạy Faster-Whisper cục bộ. Vui lòng chuyển sang Groq API trong Cài đặt.',
+  [ERROR_CODES.STT_CUDA_OOM]:
+    'Tràn bộ nhớ GPU (CUDA Out-of-Memory) khi chạy Faster-Whisper. Vui lòng hạ model hoặc chuyển sang Groq API.',
   [ERROR_CODES.STT_INVALID_API_KEY]:
     'Groq API Key không hợp lệ hoặc chưa được cấu hình trong Cài đặt.',
-  [ERROR_CODES.STT_VAD_FAILED]:
-    'Xử lý Silero VAD nhận diện giọng nói thất bại.',
+  [ERROR_CODES.STT_VAD_FAILED]: 'Xử lý Silero VAD nhận diện giọng nói thất bại.',
+  [ERROR_CODES.STT_MODEL_NOT_FOUND]: 'Không tìm thấy tệp mô hình Whisper cục bộ trên ổ đĩa.',
+  [ERROR_CODES.STT_MODEL_INTEGRITY_FAILED]:
+    'Xác thực tính toàn vẹn SHA-256 của mô hình Whisper thất bại. Vui lòng tải lại mô hình.',
+  [ERROR_CODES.STT_SIDECAR_FAILED]: 'Tiến trình bóc băng Whisper gặp sự cố khi thực thi.',
+  [ERROR_CODES.STT_PARSER_FAILED]: 'Không thể phân tích dữ liệu kết quả bóc băng từ Whisper.',
+  [ERROR_CODES.STT_INVALID_TIMESTAMP]: 'Mốc thời gian bóc băng từ mô hình STT không hợp lệ.',
   [ERROR_CODES.TRANSLATE_SAFETY_FILTER]:
     'Bộ lọc an toàn Gemini đã kích hoạt. Đoạn này được giữ nguyên câu gốc tiếng Anh để dịch thủ công.',
   [ERROR_CODES.TRANSLATE_INVALID_API_KEY]:
@@ -164,52 +181,33 @@ export const ERROR_MESSAGES_VI: Readonly<Record<string, string>> = Object.freeze
     'Gọi API dịch thuật Gemini thất bại. Vui lòng kiểm tra kết nối mạng và quota tài khoản.',
   [ERROR_CODES.EXPORT_CAPCUT_NOT_FOUND]:
     'Không tìm thấy thư mục CapCut Draft trên máy tính của bạn.',
-  [ERROR_CODES.EXPORT_FILE_WRITE_FAILED]:
-    'Không thể ghi tệp dự án hoặc tệp phụ đề ra ổ đĩa.',
-  [ERROR_CODES.EXPORT_INVALID_LAYOUT]:
-    'Layout xuất bản không hợp lệ hoặc chưa được hỗ trợ.',
+  [ERROR_CODES.EXPORT_FILE_WRITE_FAILED]: 'Không thể ghi tệp dự án hoặc tệp phụ đề ra ổ đĩa.',
+  [ERROR_CODES.EXPORT_INVALID_LAYOUT]: 'Layout xuất bản không hợp lệ hoặc chưa được hỗ trợ.',
   [ERROR_CODES.HIGHLIGHT_CHAT_PARSING_FAILED]:
     'Lỗi phân tích cú pháp sự kiện chat trong luồng VOD.',
-  [ERROR_CODES.HIGHLIGHT_AUDIO_ANALYSIS_FAILED]:
-    'Lỗi phân tích năng lượng âm thanh.',
+  [ERROR_CODES.HIGHLIGHT_AUDIO_ANALYSIS_FAILED]: 'Lỗi phân tích năng lượng âm thanh.',
   [ERROR_CODES.HIGHLIGHT_NO_HIGHLIGHTS]:
     'Không tìm thấy khoảnh khắc highlight nào thỏa mãn tiêu chí.',
-  [ERROR_CODES.HIGHLIGHT_WORKER_PANICKED]:
-    'Worker tính toán highlight gặp sự cố bất ngờ.',
-  [ERROR_CODES.SIDECAR_BINARY_NOT_FOUND]:
-    'Không tìm thấy công cụ phụ trợ (ffmpeg hoặc yt-dlp).',
-  [ERROR_CODES.SIDECAR_EXECUTION_FAILED]:
-    'Tiến trình phụ trợ gặp lỗi khi đang thực thi tác vụ.',
-  [ERROR_CODES.SIDECAR_UPDATE_FAILED]:
-    'Cập nhật công cụ phụ trợ thất bại.',
+  [ERROR_CODES.HIGHLIGHT_WORKER_PANICKED]: 'Worker tính toán highlight gặp sự cố bất ngờ.',
+  [ERROR_CODES.SIDECAR_BINARY_NOT_FOUND]: 'Không tìm thấy công cụ phụ trợ (ffmpeg hoặc yt-dlp).',
+  [ERROR_CODES.SIDECAR_EXECUTION_FAILED]: 'Tiến trình phụ trợ gặp lỗi khi đang thực thi tác vụ.',
+  [ERROR_CODES.SIDECAR_UPDATE_FAILED]: 'Cập nhật công cụ phụ trợ thất bại.',
   [ERROR_CODES.SIDECAR_PROCESS_KILLED]:
     'Tiến trình con bị hủy do ứng dụng tắt hoặc người dùng dừng.',
-  [ERROR_CODES.HARDWARE_PROBE_FAILED]:
-    'Không thể đánh giá thông số phần cứng của hệ thống.',
-  [ERROR_CODES.HARDWARE_UNSUPPORTED_GPU]:
-    'Không tìm thấy GPU tương thích hoặc không hỗ trợ CUDA.',
+  [ERROR_CODES.HARDWARE_PROBE_FAILED]: 'Không thể đánh giá thông số phần cứng của hệ thống.',
+  [ERROR_CODES.HARDWARE_UNSUPPORTED_GPU]: 'Không tìm thấy GPU tương thích hoặc không hỗ trợ CUDA.',
   [ERROR_CODES.HARDWARE_INSUFFICIENT_MEMORY]:
     'Dung lượng RAM hệ thống không đủ đáp ứng yêu cầu tối thiểu.',
-  [ERROR_CODES.STORAGE_DISK_CHECK_FAILED]:
-    'Không thể kiểm tra dung lượng ổ đĩa.',
-  [ERROR_CODES.STORAGE_DIRECTORY_CREATION_FAILED]:
-    'Không thể tạo thư mục lưu trữ trên ổ đĩa.',
-  [ERROR_CODES.STORAGE_CACHE_CLEANUP_FAILED]:
-    'Dọn dẹp bộ nhớ đệm thất bại.',
-  [ERROR_CODES.STORAGE_FILE_NOT_FOUND]:
-    'Không tìm thấy tệp tin được yêu cầu.',
-  [ERROR_CODES.CONFIG_NOT_FOUND]:
-    'Không tìm thấy tệp cấu hình ứng dụng.',
-  [ERROR_CODES.CONFIG_INVALID_FORMAT]:
-    'Không thể đọc hoặc giải mã cấu hình.',
-  [ERROR_CODES.CONFIG_SAVE_FAILED]:
-    'Không thể lưu tệp cấu hình ra đĩa.',
-  [ERROR_CODES.CONFIG_INVALID_VALUE]:
-    'Giá trị cấu hình không hợp lệ.',
-  [ERROR_CODES.TASK_CANCELLED]:
-    'Tác vụ đã được hủy bởi người dùng.',
-  [ERROR_CODES.INTERNAL_ERROR]:
-    'Đã xảy ra lỗi hệ thống nội bộ không xác định.',
+  [ERROR_CODES.STORAGE_DISK_CHECK_FAILED]: 'Không thể kiểm tra dung lượng ổ đĩa.',
+  [ERROR_CODES.STORAGE_DIRECTORY_CREATION_FAILED]: 'Không thể tạo thư mục lưu trữ trên ổ đĩa.',
+  [ERROR_CODES.STORAGE_CACHE_CLEANUP_FAILED]: 'Dọn dẹp bộ nhớ đệm thất bại.',
+  [ERROR_CODES.STORAGE_FILE_NOT_FOUND]: 'Không tìm thấy tệp tin được yêu cầu.',
+  [ERROR_CODES.CONFIG_NOT_FOUND]: 'Không tìm thấy tệp cấu hình ứng dụng.',
+  [ERROR_CODES.CONFIG_INVALID_FORMAT]: 'Không thể đọc hoặc giải mã cấu hình.',
+  [ERROR_CODES.CONFIG_SAVE_FAILED]: 'Không thể lưu tệp cấu hình ra đĩa.',
+  [ERROR_CODES.CONFIG_INVALID_VALUE]: 'Giá trị cấu hình không hợp lệ.',
+  [ERROR_CODES.TASK_CANCELLED]: 'Tác vụ đã được hủy bởi người dùng.',
+  [ERROR_CODES.INTERNAL_ERROR]: 'Đã xảy ra lỗi hệ thống nội bộ không xác định.',
 });
 
 /**
@@ -226,8 +224,7 @@ export function isIpcError(err: unknown): err is IpcErrorResponse {
   const hasMessage = typeof record['message'] === 'string';
   const hasRecoverable = typeof record['recoverable'] === 'boolean';
   const details = record['details'];
-  const hasValidDetails =
-    details === undefined || details === null || typeof details === 'string';
+  const hasValidDetails = details === undefined || details === null || typeof details === 'string';
 
   return hasCode && hasMessage && hasRecoverable && hasValidDetails;
 }

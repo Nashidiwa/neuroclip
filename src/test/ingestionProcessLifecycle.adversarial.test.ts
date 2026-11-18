@@ -38,10 +38,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { invoke } from '@tauri-apps/api/core';
 import { useIngestionStore } from '../stores/useIngestionStore.ts';
-import {
-  type VodMetadataJson,
-  toVodMetadata,
-} from '../services/ipc/ingestion.ts';
+import { type VodMetadataJson, toVodMetadata } from '../services/ipc/ingestion.ts';
 import { ERROR_CODES } from '../services/ipc/error.ts';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -70,42 +67,53 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
   describe('Vector 1: Process Lifecycle, Crash Safety & Windows Job Object', () => {
     it('should verify WindowsJobObjectGuard configures JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE', () => {
       const streamerPath = path.resolve(process.cwd(), 'src-tauri/src/ingestion/streamer.rs');
-      const content = fs.readFileSync(streamerPath, 'utf-8');
+      const streamerContent = fs.readFileSync(streamerPath, 'utf-8');
+      const killSwitchPath = path.resolve(process.cwd(), 'src-tauri/src/sidecar/kill_switch.rs');
+      const killSwitchContent = fs.readFileSync(killSwitchPath, 'utf-8');
+
+      // 0. Verify streamer.rs re-exports kill_switch guards
+      expect(streamerContent).toContain(
+        'pub use crate::sidecar::{assign_child_to_job_guard, ChildProcessGuard, WindowsJobObjectGuard};',
+      );
 
       // 1. Verify Job Object win32 import and limit flag
-      expect(content).toContain('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE');
-      expect(content).toContain('CreateJobObjectW');
-      expect(content).toContain('SetInformationJobObject');
-      expect(content).toContain('JobObjectExtendedLimitInformation');
-      expect(content).toContain('AssignProcessToJobObject');
+      expect(killSwitchContent).toContain('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE');
+      expect(killSwitchContent).toContain('CreateJobObjectW');
+      expect(killSwitchContent).toContain('SetInformationJobObject');
+      expect(killSwitchContent).toContain('JobObjectExtendedLimitInformation');
+      expect(killSwitchContent).toContain('AssignProcessToJobObject');
 
       // 2. Verify LimitFlags assignment
-      expect(content).toMatch(/LimitFlags\s*=\s*JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
+      expect(killSwitchContent).toMatch(/LimitFlags\s*=\s*JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
 
       // 3. Verify RAII drop cleans handle
-      expect(content).toMatch(/impl\s+Drop\s+for\s+WindowsJobObjectGuard/);
-      expect(content).toContain('CloseHandle(self.job_handle)');
+      expect(killSwitchContent).toMatch(/impl\s+Drop\s+for\s+WindowsJobObjectGuard/);
+      expect(killSwitchContent).toContain('CloseHandle(self.job_handle)');
 
       // 4. Verify assign_child_to_job_guard helper
-      expect(content).toContain('pub fn assign_child_to_job_guard');
+      expect(killSwitchContent).toContain('pub fn assign_child_to_job_guard');
     });
 
     it('should verify ChildProcessGuard and kill_on_drop(true) on all spawned processes', () => {
       const streamerPath = path.resolve(process.cwd(), 'src-tauri/src/ingestion/streamer.rs');
-      const content = fs.readFileSync(streamerPath, 'utf-8');
+      const streamerContent = fs.readFileSync(streamerPath, 'utf-8');
+      const killSwitchPath = path.resolve(process.cwd(), 'src-tauri/src/sidecar/kill_switch.rs');
+      const killSwitchContent = fs.readFileSync(killSwitchPath, 'utf-8');
 
-      // Verify ChildProcessGuard struct and Drop implementation
-      expect(content).toContain('pub struct ChildProcessGuard');
-      expect(content).toMatch(/impl\s+Drop\s+for\s+ChildProcessGuard\s*\{\s*fn\s+drop\(&mut\s+self\)\s*\{\s*if\s+let\s+Some\(mut\s+child\)\s*=\s*self\.child\.take\(\)\s*\{\s*let\s+_\s*=\s*child\.start_kill\(\);/);
+      // Verify ChildProcessGuard struct and Drop implementation in kill_switch.rs
+      expect(killSwitchContent).toContain('pub struct ChildProcessGuard');
+      expect(killSwitchContent).toMatch(
+        /impl\s+Drop\s+for\s+ChildProcessGuard\s*\{\s*fn\s+drop\(&mut\s+self\)\s*\{\s*if\s+let\s+Some\(mut\s+child\)\s*=\s*self\.child\.take\(\)\s*\{\s*let\s+_\s*=\s*child\.start_kill\(\);/,
+      );
 
-      // Count occurrences of kill_on_drop(true)
-      const killOnDropMatches = content.match(/\.kill_on_drop\(true\)/g);
+      // Count occurrences of kill_on_drop(true) in streamer.rs
+      const killOnDropMatches = streamerContent.match(/\.kill_on_drop\(true\)/g);
       expect(killOnDropMatches).not.toBeNull();
       // Must be called in probe_vod_metadata, download_audio_stream, and start_ffmpeg_pcm_stream
       expect(killOnDropMatches?.length).toBeGreaterThanOrEqual(3);
 
-      // Verify assign_child_to_job_guard is invoked across all spawns
-      const assignMatches = content.match(/assign_child_to_job_guard\(&child\)/g);
+      // Verify assign_child_to_job_guard is invoked across all spawns in streamer.rs
+      const assignMatches = streamerContent.match(/assign_child_to_job_guard\(&child\)/g);
       expect(assignMatches).not.toBeNull();
       expect(assignMatches?.length).toBeGreaterThanOrEqual(3);
     });
@@ -234,7 +242,9 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
       expect(startFnIndex).toBeGreaterThan(0);
       const fnBody = content.slice(startFnIndex);
 
-      const registerIndex = fnBody.indexOf('register_task_token(&initial_task_id, cancellation_token.clone());');
+      const registerIndex = fnBody.indexOf(
+        'register_task_token(&initial_task_id, cancellation_token.clone());',
+      );
       const probeIndex = fnBody.indexOf('probe_vod_metadata(&url');
       expect(registerIndex).toBeGreaterThan(0);
       expect(probeIndex).toBeGreaterThan(0);
@@ -242,7 +252,7 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
 
       // Invariant: tokio::select! biased checking cancellation during probe
       expect(fnBody).toContain('biased;');
-      expect(fnBody).toContain('_ = cancellation_token.cancelled() =>');
+      expect(fnBody).toContain('() = cancellation_token.cancelled() =>');
 
       // Invariant: fallback for empty task_id cancellation
       expect(content).toContain('else if map.len() == 1');
@@ -414,13 +424,19 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
       const content = fs.readFileSync(streamerPath, 'utf-8');
 
       // Verify check in probe_vod_metadata
-      expect(content).toContain('if meta.is_live == Some(true) || meta.live_status.as_deref() == Some("is_live") {');
-      expect(content).toContain('return Err(AppError::Ingestion(IngestError::LiveStreamUnsupported));');
+      expect(content).toContain(
+        'if meta.is_live == Some(true) || meta.live_status.as_deref() == Some("is_live") {',
+      );
+      expect(content).toContain(
+        'return Err(AppError::Ingestion(IngestError::LiveStreamUnsupported));',
+      );
 
       // Verify LiveStreamUnsupported maps to ERR_INGEST_LIVE_STREAM_UNSUPPORTED
       const errorModPath = path.resolve(process.cwd(), 'src-tauri/src/error/mod.rs');
       const errContent = fs.readFileSync(errorModPath, 'utf-8');
-      expect(errContent).toContain('IngestError::LiveStreamUnsupported => codes::ERR_INGEST_LIVE_STREAM_UNSUPPORTED');
+      expect(errContent).toContain(
+        'IngestError::LiveStreamUnsupported => codes::ERR_INGEST_LIVE_STREAM_UNSUPPORTED',
+      );
     });
   });
 
@@ -446,7 +462,9 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
     it('should map DiskSpaceInsufficient to ERR_INGEST_DISK_FULL', () => {
       const errorModPath = path.resolve(process.cwd(), 'src-tauri/src/error/mod.rs');
       const errContent = fs.readFileSync(errorModPath, 'utf-8');
-      expect(errContent).toContain('IngestError::DiskSpaceInsufficient { .. } => codes::ERR_INGEST_DISK_FULL');
+      expect(errContent).toContain(
+        'IngestError::DiskSpaceInsufficient { .. } => codes::ERR_INGEST_DISK_FULL',
+      );
       expect(ERROR_CODES.INGEST_DISK_FULL).toBe('ERR_INGEST_DISK_FULL');
     });
   });
@@ -493,7 +511,9 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
       const content = fs.readFileSync(cookiesPath, 'utf-8');
 
       expect(content).toContain('static UA_COUNTER: AtomicUsize = AtomicUsize::new(0);');
-      expect(content).toContain('UA_COUNTER.fetch_add(1, Ordering::Relaxed) % DESKTOP_USER_AGENTS.len()');
+      expect(content).toContain(
+        'UA_COUNTER.fetch_add(1, Ordering::Relaxed) % DESKTOP_USER_AGENTS.len()',
+      );
     });
   });
 
@@ -528,7 +548,10 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
       let sizeIdx = 0;
 
       while (offset < rawBuffer.length) {
-        const size = Math.min(chunkSizes[sizeIdx % chunkSizes.length] ?? 31, rawBuffer.length - offset);
+        const size = Math.min(
+          chunkSizes[sizeIdx % chunkSizes.length] ?? 31,
+          rawBuffer.length - offset,
+        );
         chunks.push(rawBuffer.subarray(offset, offset + size));
         offset += size;
         sizeIdx++;

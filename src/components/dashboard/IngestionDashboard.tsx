@@ -110,23 +110,24 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
   return (
     <div
       data-testid="ingestion-dashboard"
-      className={`bg-bg-secondary/80 border border-border-dark rounded-xl p-5 space-y-5 text-slate-100 backdrop-blur-md shadow-xl ${className}`}
+      className={`space-y-5 rounded-xl border border-border-dark bg-bg-secondary/80 p-5 text-slate-100 shadow-xl backdrop-blur-md ${className}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border-dark pb-3">
         <div className="flex items-center space-x-2.5">
-          <div className="p-2 rounded-lg bg-accent-neuro/10 text-accent-neuro">
-            <DownloadCloud className="w-5 h-5" />
+          <div className="rounded-lg bg-accent-neuro/10 p-2 text-accent-neuro">
+            <DownloadCloud className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-100">
               Thu Nạp Luồng VOD Trực Tuyến
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-vedal/10 text-accent-vedal border border-accent-vedal/20">
+              <span className="rounded-full border border-accent-vedal/20 bg-accent-vedal/10 px-2 py-0.5 text-[10px] text-accent-vedal">
                 Audio-First
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Trích xuất luồng âm thanh nhẹ từ Twitch / YouTube (tiết kiệm &ge; 98.5% ổ đĩa &amp; băng thông)
+              Trích xuất luồng âm thanh nhẹ từ Twitch / YouTube (tiết kiệm &ge; 98.5% ổ đĩa &amp;
+              băng thông)
             </p>
           </div>
         </div>
@@ -155,16 +156,16 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
             onChange={handleUrlChange}
             placeholder="https://www.twitch.tv/videos/... hoặc https://www.youtube.com/watch?v=..."
             disabled={isIngesting}
-            className="flex-1 bg-bg-tertiary border border-border-dark rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-accent-neuro/60 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg border border-border-dark bg-bg-tertiary px-3 py-2 text-xs text-slate-100 transition-colors placeholder:text-slate-500 focus:border-accent-neuro/60 focus:outline-none disabled:opacity-50"
           />
           <button
             type="button"
             data-testid="probe-vod-button"
             onClick={() => void handleProbe()}
             disabled={!url.trim() || isProbing || isIngesting}
-            className="px-3 py-2 rounded-lg bg-bg-tertiary border border-border-dark text-slate-200 hover:bg-slate-700/60 hover:text-accent-neuro transition-colors text-xs font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 rounded-lg border border-border-dark bg-bg-tertiary px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700/60 hover:text-accent-neuro disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Search className={`w-3.5 h-3.5 ${isProbing ? 'animate-spin' : ''}`} />
+            <Search className={`h-3.5 w-3.5 ${isProbing ? 'animate-spin' : ''}`} />
             {isProbing ? 'Đang kiểm tra...' : 'Kiểm tra'}
           </button>
         </div>
@@ -174,23 +175,21 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
       {metadata && (
         <div
           data-testid="vod-metadata-card"
-          className="bg-bg-tertiary/60 border border-border-dark rounded-lg p-3 text-xs space-y-2"
+          className="space-y-2 rounded-lg border border-border-dark bg-bg-tertiary/60 p-3 text-xs"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
-              <span className="font-semibold text-slate-200 line-clamp-1">
-                {metadata.title}
-              </span>
-              <div className="flex items-center gap-4 text-slate-400 mt-1">
+              <span className="line-clamp-1 font-semibold text-slate-200">{metadata.title}</span>
+              <div className="mt-1 flex items-center gap-4 text-slate-400">
                 {metadata.uploader && (
                   <span className="flex items-center gap-1">
-                    <User className="w-3 h-3 text-accent-vedal" />
+                    <User className="h-3 w-3 text-accent-vedal" />
                     {metadata.uploader}
                   </span>
                 )}
                 {metadata.duration !== null && (
                   <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-accent-chat" />
+                    <Clock className="h-3 w-3 text-accent-chat" />
                     {formatDuration(metadata.duration)}
                   </span>
                 )}
@@ -200,28 +199,29 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
             {metadata.isLive ? (
               <span
                 data-testid="live-stream-badge"
-                className="px-2 py-0.5 rounded text-[10px] font-semibold bg-accent-evil/15 text-accent-evil border border-accent-evil/30 flex items-center gap-1 shrink-0"
+                className="flex shrink-0 items-center gap-1 rounded border border-accent-evil/30 bg-accent-evil/15 px-2 py-0.5 text-[10px] font-semibold text-accent-evil"
               >
-                <Radio className="w-3 h-3 animate-pulse" />
+                <Radio className="h-3 w-3 animate-pulse" />
                 ĐANG PHÁT TRỰC TIẾP
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-accent-vedal/10 text-accent-vedal border border-accent-vedal/20 shrink-0">
+              <span className="shrink-0 rounded border border-accent-vedal/20 bg-accent-vedal/10 px-2 py-0.5 text-[10px] font-medium text-accent-vedal">
                 VOD Sẵn Sàng
               </span>
             )}
           </div>
 
           {isLiveStreamBlocked && (
-            <div className="text-[11px] text-accent-evil bg-accent-evil/10 border border-accent-evil/20 rounded p-2">
-              ⚠️ <strong>Cảnh báo:</strong> Livestream đang phát trực tiếp không được hỗ trợ để tránh tràn bộ nhớ ổ đĩa. Vui lòng nạp VOD sau khi buổi phát trực tiếp kết thúc.
+            <div className="rounded border border-accent-evil/20 bg-accent-evil/10 p-2 text-[11px] text-accent-evil">
+              ⚠️ <strong>Cảnh báo:</strong> Livestream đang phát trực tiếp không được hỗ trợ để
+              tránh tràn bộ nhớ ổ đĩa. Vui lòng nạp VOD sau khi buổi phát trực tiếp kết thúc.
             </div>
           )}
         </div>
       )}
 
       {/* Audio-First Invariant Switch */}
-      <div className="flex items-start gap-3 bg-bg-tertiary/40 border border-border-dark rounded-lg p-3">
+      <div className="flex items-start gap-3 rounded-lg border border-border-dark bg-bg-tertiary/40 p-3">
         <input
           id="audio-first-checkbox"
           data-testid="audio-first-checkbox"
@@ -229,38 +229,46 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
           checked={audioOnly}
           onChange={(e) => setAudioOnly(e.target.checked)}
           disabled={isIngesting}
-          className="mt-0.5 rounded border-border-dark text-accent-neuro focus:ring-accent-neuro bg-bg-secondary cursor-pointer disabled:opacity-50"
+          className="mt-0.5 cursor-pointer rounded border-border-dark bg-bg-secondary text-accent-neuro focus:ring-accent-neuro disabled:opacity-50"
         />
-        <label htmlFor="audio-first-checkbox" className="text-xs cursor-pointer select-none">
-          <span className="font-medium text-slate-200 flex items-center gap-1.5">
-            <FileAudio className="w-3.5 h-3.5 text-accent-vedal" />
+        <label htmlFor="audio-first-checkbox" className="cursor-pointer select-none text-xs">
+          <span className="flex items-center gap-1.5 font-medium text-slate-200">
+            <FileAudio className="h-3.5 w-3.5 text-accent-vedal" />
             Kích hoạt Audio-First Invariant (Khuyên dùng)
           </span>
-          <span className="block text-slate-400 text-[11px] mt-0.5">
-            Chỉ tải luồng âm thanh nhẹ (&le; 450MB cho VOD 8 tiếng). Tiết kiệm &ge; 98.5% dung lượng mạng và ổ nhớ, hoàn tất trong &le; 90s.
+          <span className="mt-0.5 block text-[11px] text-slate-400">
+            Chỉ tải luồng âm thanh nhẹ (&le; 450MB cho VOD 8 tiếng). Tiết kiệm &ge; 98.5% dung lượng
+            mạng và ổ nhớ, hoàn tất trong &le; 90s.
           </span>
         </label>
       </div>
 
       {/* Anti-Bot & Cookie Settings Accordion */}
-      <div className="border border-border-dark rounded-lg overflow-hidden bg-bg-tertiary/20">
+      <div className="overflow-hidden rounded-lg border border-border-dark bg-bg-tertiary/20">
         <button
           type="button"
           data-testid="cookie-accordion-toggle"
           onClick={() => setIsCookieConfigOpen((prev) => !prev)}
-          className="w-full px-3 py-2 text-xs font-medium text-slate-300 flex items-center justify-between hover:bg-bg-tertiary/40 transition-colors"
+          className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-bg-tertiary/40"
         >
           <span className="flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-accent-chat" />
+            <Shield className="h-3.5 w-3.5 text-accent-chat" />
             Cấu hình Cookie & Vượt Rào Cản Anti-Bot (HTTP 403 / 429)
           </span>
-          {isCookieConfigOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          {isCookieConfigOpen ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
         </button>
 
         {isCookieConfigOpen && (
-          <div className="p-3 border-t border-border-dark space-y-3 text-xs bg-bg-tertiary/40">
+          <div className="space-y-3 border-t border-border-dark bg-bg-tertiary/40 p-3 text-xs">
             <div>
-              <label htmlFor="browser-cookies-select" className="block text-[11px] text-slate-400 mb-1">
+              <label
+                htmlFor="browser-cookies-select"
+                className="mb-1 block text-[11px] text-slate-400"
+              >
                 Trích xuất Cookie từ Trình duyệt Desktop:
               </label>
               <select
@@ -272,7 +280,7 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
                   setBrowserCookies(val === '' ? null : (val as BrowserCookieType));
                 }}
                 disabled={isIngesting}
-                className="w-full bg-bg-secondary border border-border-dark rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-accent-neuro/60"
+                className="w-full rounded border border-border-dark bg-bg-secondary px-2.5 py-1.5 text-xs text-slate-200 focus:border-accent-neuro/60 focus:outline-none"
               >
                 <option value="">Không sử dụng (Mặc định)</option>
                 <option value="chrome">Google Chrome</option>
@@ -282,7 +290,7 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
             </div>
 
             <div>
-              <label htmlFor="cookies-txt-input" className="block text-[11px] text-slate-400 mb-1">
+              <label htmlFor="cookies-txt-input" className="mb-1 block text-[11px] text-slate-400">
                 Hoặc đường dẫn tệp cookies.txt (Netscape format):
               </label>
               <input
@@ -293,7 +301,7 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
                 onChange={(e) => setCookiesPath(e.target.value)}
                 placeholder="C:\Users\...\cookies.txt"
                 disabled={isIngesting}
-                className="w-full bg-bg-secondary border border-border-dark rounded px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-accent-neuro/60"
+                className="w-full rounded border border-border-dark bg-bg-secondary px-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-accent-neuro/60 focus:outline-none"
               />
             </div>
           </div>
@@ -302,10 +310,13 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
 
       {/* Download Progress Monitor */}
       {isIngesting && progress && (
-        <div data-testid="ingestion-progress-box" className="space-y-2 bg-bg-tertiary/50 border border-border-dark rounded-lg p-3">
+        <div
+          data-testid="ingestion-progress-box"
+          className="space-y-2 rounded-lg border border-border-dark bg-bg-tertiary/50 p-3"
+        >
           <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-slate-300 flex items-center gap-1.5">
-              <DownloadCloud className="w-3.5 h-3.5 text-accent-neuro animate-pulse" />
+            <span className="flex items-center gap-1.5 font-medium text-slate-300">
+              <DownloadCloud className="h-3.5 w-3.5 animate-pulse text-accent-neuro" />
               Đang tải âm thanh: {progress.percent.toFixed(1)}%
             </span>
             <span className="text-[11px] text-slate-400">
@@ -313,10 +324,10 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
             </span>
           </div>
 
-          <div className="w-full bg-bg-secondary h-2 rounded-full overflow-hidden border border-border-dark">
+          <div className="h-2 w-full overflow-hidden rounded-full border border-border-dark bg-bg-secondary">
             <div
               data-testid="progress-bar-fill"
-              className="bg-accent-neuro h-full transition-all duration-300 ease-out"
+              className="h-full bg-accent-neuro transition-all duration-300 ease-out"
               style={{ width: `${Math.min(100, Math.max(0, progress.percent))}%` }}
             />
           </div>
@@ -327,18 +338,19 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
       {manifest && (
         <div
           data-testid="vod-manifest-success-card"
-          className="bg-accent-vedal/10 border border-accent-vedal/30 rounded-lg p-3 text-xs space-y-1.5 text-slate-200"
+          className="space-y-1.5 rounded-lg border border-accent-vedal/30 bg-accent-vedal/10 p-3 text-xs text-slate-200"
         >
-          <div className="flex items-center gap-1.5 text-accent-vedal font-semibold">
-            <CheckCircle2 className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 font-semibold text-accent-vedal">
+            <CheckCircle2 className="h-4 w-4" />
             Thu nạp thành công! Manifest Schema 5.2 đã được sinh.
           </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300 pt-1">
+          <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] text-slate-300">
             <div>
               <span className="text-slate-400">Mã VOD:</span> {manifest.vodId}
             </div>
             <div>
-              <span className="text-slate-400">Thời lượng:</span> {formatDuration(manifest.durationSeconds)}
+              <span className="text-slate-400">Thời lượng:</span>{' '}
+              {formatDuration(manifest.durationSeconds)}
             </div>
             <div className="col-span-2 truncate">
               <span className="text-slate-400">File âm thanh:</span> {manifest.audioPath}
@@ -348,15 +360,15 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
       )}
 
       {/* Control Buttons */}
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-dark">
+      <div className="flex items-center justify-end gap-2 border-t border-border-dark pt-2">
         {isIngesting ? (
           <button
             type="button"
             data-testid="cancel-ingest-button"
             onClick={() => void handleCancel()}
-            className="px-4 py-2 rounded-lg bg-accent-evil/15 text-accent-evil border border-accent-evil/30 hover:bg-accent-evil/25 transition-colors text-xs font-semibold flex items-center gap-1.5"
+            className="flex items-center gap-1.5 rounded-lg border border-accent-evil/30 bg-accent-evil/15 px-4 py-2 text-xs font-semibold text-accent-evil transition-colors hover:bg-accent-evil/25"
           >
-            <StopCircle className="w-4 h-4" />
+            <StopCircle className="h-4 w-4" />
             Hủy tác vụ
           </button>
         ) : (
@@ -365,9 +377,9 @@ export const IngestionDashboard: React.FC<IngestionDashboardProps> = ({
             data-testid="start-ingest-button"
             onClick={() => void handleStartIngest()}
             disabled={!url.trim() || isLiveStreamBlocked || isProbing}
-            className="px-5 py-2 rounded-lg bg-accent-neuro text-slate-900 hover:bg-accent-neuro/90 transition-colors text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-accent-neuro/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 rounded-lg bg-accent-neuro px-5 py-2 text-xs font-semibold text-slate-900 shadow-md shadow-accent-neuro/20 transition-colors hover:bg-accent-neuro/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <DownloadCloud className="w-4 h-4" />
+            <DownloadCloud className="h-4 w-4" />
             Bắt đầu thu nạp
           </button>
         )}

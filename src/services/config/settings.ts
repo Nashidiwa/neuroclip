@@ -189,8 +189,7 @@ export function toAppConfigJson(config: AppConfig): AppConfigJson {
         ? config.sidecarPaths.ffmpegPath
         : null,
     ytdlp_path:
-      typeof config.sidecarPaths?.ytdlpPath === 'string' &&
-      config.sidecarPaths.ytdlpPath.length > 0
+      typeof config.sidecarPaths?.ytdlpPath === 'string' && config.sidecarPaths.ytdlpPath.length > 0
         ? config.sidecarPaths.ytdlpPath
         : null,
     whisper_worker_path:

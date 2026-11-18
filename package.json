@@ -12,8 +12,10 @@
     "typecheck:tsc": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/test/suite.node.test.ts",
     "test:vitest": "vitest run",
+    "test:run": "vitest run",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

@@ -12,6 +12,8 @@
 
 export type SpeakerRole = 'vedal' | 'neuro' | 'evil' | 'guest' | 'chat' | 'unknown';
 
+export type GuardrailPolicy = 'auto_downgrade' | 'strict_reject';
+
 export const VALID_SPEAKER_ROLES: readonly SpeakerRole[] = [
   'vedal',
   'neuro',
@@ -240,11 +242,15 @@ export function isTranscriptSegmentJson(val: unknown): val is TranscriptSegmentJ
     isFiniteNum('end_sec') &&
     typeof obj['speaker_id'] === 'string' &&
     typeof obj['text_en'] === 'string' &&
-    (obj['text_vi'] === undefined || obj['text_vi'] === null || typeof obj['text_vi'] === 'string') &&
+    (obj['text_vi'] === undefined ||
+      obj['text_vi'] === null ||
+      typeof obj['text_vi'] === 'string') &&
     isFiniteNum('confidence') &&
     isFiniteNum('cps_score') &&
-    (obj['is_flagged_for_review'] === undefined || typeof obj['is_flagged_for_review'] === 'boolean') &&
-    (obj['words'] === undefined || (Array.isArray(obj['words']) && obj['words'].every(isWordTimingJson)))
+    (obj['is_flagged_for_review'] === undefined ||
+      typeof obj['is_flagged_for_review'] === 'boolean') &&
+    (obj['words'] === undefined ||
+      (Array.isArray(obj['words']) && obj['words'].every(isWordTimingJson)))
   );
 }
 

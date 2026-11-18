@@ -41,7 +41,7 @@ export * from '../../types/translation.ts';
 export async function translateVietsub(
   clipId: string,
   container: TranscriptSegmentsContainer,
-  options?: TranslateVietsubOptions
+  options?: TranslateVietsubOptions,
 ): Promise<TranscriptSegmentsContainer> {
   try {
     const wireContainer = toTranscriptSegmentsContainerJson(container);
@@ -82,7 +82,7 @@ export async function testGeminiConnection(apiKey: string): Promise<boolean> {
 export async function updateSpeakerRole(
   container: TranscriptSegmentsContainer,
   segmentId: string,
-  newSpeaker: string
+  newSpeaker: string,
 ): Promise<TranscriptSegmentsContainer> {
   try {
     const wireContainer = toTranscriptSegmentsContainerJson(container);
@@ -104,7 +104,7 @@ export async function updateSpeakerRole(
  * @returns Unlisten function to detach event subscription.
  */
 export async function listenTranslationProgress(
-  callback: (payload: TranslationProgressPayload) => void
+  callback: (payload: TranslationProgressPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<TranslationProgressPayloadJson>('translation:progress', (event) => {
     callback(normalizeTranslationProgressPayload(event.payload));

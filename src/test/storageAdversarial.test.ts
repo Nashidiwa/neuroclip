@@ -62,14 +62,23 @@ interface RustIngestError {
 
 type RustAppResult<T> =
   | { ok: true; value: T }
-  | { ok: false; error: { type: 'Ingestion'; inner: RustIngestError } | { type: 'Storage'; inner: RustStorageError } };
+  | {
+      ok: false;
+      error:
+        | { type: 'Ingestion'; inner: RustIngestError }
+        | { type: 'Storage'; inner: RustStorageError };
+    };
 
 /**
  * Faithful emulation of Rust `evaluate_disk_space` from `src-tauri/src/core/storage.rs`.
  */
-function rustEvaluateDiskSpace(freeMb: number | bigint, requiredMb: number | bigint): RustAppResult<DiskStatus> {
+function rustEvaluateDiskSpace(
+  freeMb: number | bigint,
+  requiredMb: number | bigint,
+): RustAppResult<DiskStatus> {
   const freeVal = typeof freeMb === 'bigint' ? freeMb : BigInt(Math.max(0, Math.floor(freeMb)));
-  const reqVal = typeof requiredMb === 'bigint' ? requiredMb : BigInt(Math.max(0, Math.floor(requiredMb)));
+  const reqVal =
+    typeof requiredMb === 'bigint' ? requiredMb : BigInt(Math.max(0, Math.floor(requiredMb)));
 
   if (freeVal >= reqVal) {
     const freeNum = Number(freeVal);
@@ -102,7 +111,9 @@ function rustEvaluateDiskSpace(freeMb: number | bigint, requiredMb: number | big
 /**
  * Faithful emulation of Rust `validate_project_id` from `src-tauri/src/core/storage.rs`.
  */
-function rustValidateProjectId(projectId: string): { ok: true; id: string } | { ok: false; error: RustStorageError } {
+function rustValidateProjectId(
+  projectId: string,
+): { ok: true; id: string } | { ok: false; error: RustStorageError } {
   const trimmed = projectId.trim();
   if (trimmed.length === 0) {
     return {
@@ -389,7 +400,7 @@ describe('TASK-M4-05 Adversarial Challenge: Backend Storage & Pre-flight Verific
       expect(storageRs).toContain("trimmed.contains('\\\\')");
       expect(storageRs).toContain("trimmed.contains(':')");
       expect(storageRs).toContain("trimmed.contains('\\0')");
-      expect(storageRs).toContain('c.is_ascii_alphanumeric() || c == \'_\' || c == \'-\'');
+      expect(storageRs).toContain("c.is_ascii_alphanumeric() || c == '_' || c == '-'");
     });
   });
 
@@ -408,8 +419,8 @@ describe('TASK-M4-05 Adversarial Challenge: Backend Storage & Pre-flight Verific
         'stream_chunk_002.tmp',
         'intermediate_audio.wav',
         'temp_resample.wav',
-        'old_buffer.TMP',     // Uppercase tmp
-        'old_sound.WAV',     // Uppercase wav
+        'old_buffer.TMP', // Uppercase tmp
+        'old_sound.WAV', // Uppercase wav
       ];
 
       // Files that MUST NEVER be pruned under any circumstances
@@ -419,8 +430,8 @@ describe('TASK-M4-05 Adversarial Challenge: Backend Storage & Pre-flight Verific
         'subtitles_neuro.ass',
         'subtitles_evil.srt',
         'rendered_highlight.mp4',
-        'final_cut.MP4',     // Uppercase MP4
-        'lyrics.ASS',        // Uppercase ASS
+        'final_cut.MP4', // Uppercase MP4
+        'lyrics.ASS', // Uppercase ASS
         'config_override.toml',
         'readme_notes.txt',
         'CAPITAL_PROJECT.JSON',
@@ -658,7 +669,9 @@ describe('TASK-M4-05 Adversarial Challenge: Backend Storage & Pre-flight Verific
       expect(useProjectStore.getState().storageError?.code).toBe('ERR_INGEST_DISK_FULL');
 
       // Step 2: Downstream initializeProject must be PROACTIVELY BLOCKED!
-      const initResultWhenFull = await useProjectStore.getState().initializeProject('neuro_project_01');
+      const initResultWhenFull = await useProjectStore
+        .getState()
+        .initializeProject('neuro_project_01');
       expect(initResultWhenFull).toBe(false);
       expect(useProjectStore.getState().projectId).toBeNull();
       expect(useProjectStore.getState().projectDir).toBeNull();
@@ -712,9 +725,15 @@ describe('TASK-M4-05 Adversarial Challenge: Backend Storage & Pre-flight Verific
   // ==========================================================================
   describe('6. Data Contracts & Serialization Type Guards', () => {
     it('isDiskStatusJson strictly validates wire payload schema', () => {
-      expect(isDiskStatusJson({ free_space_mb: 10000, is_sufficient: true, cache_dir: 'C:\\cache' })).toBe(true);
-      expect(isDiskStatusJson({ free_space_mb: '10000', is_sufficient: true, cache_dir: 'C:\\cache' })).toBe(false);
-      expect(isDiskStatusJson({ free_space_mb: 10000, is_sufficient: 'yes', cache_dir: 'C:\\cache' })).toBe(false);
+      expect(
+        isDiskStatusJson({ free_space_mb: 10000, is_sufficient: true, cache_dir: 'C:\\cache' }),
+      ).toBe(true);
+      expect(
+        isDiskStatusJson({ free_space_mb: '10000', is_sufficient: true, cache_dir: 'C:\\cache' }),
+      ).toBe(false);
+      expect(
+        isDiskStatusJson({ free_space_mb: 10000, is_sufficient: 'yes', cache_dir: 'C:\\cache' }),
+      ).toBe(false);
       expect(isDiskStatusJson(null)).toBe(false);
       expect(isDiskStatusJson(undefined)).toBe(false);
       expect(isDiskStatusJson('string')).toBe(false);
@@ -722,13 +741,19 @@ describe('TASK-M4-05 Adversarial Challenge: Backend Storage & Pre-flight Verific
     });
 
     it('isCacheCleanupResultJson strictly validates cleanup payload schema', () => {
-      expect(isCacheCleanupResultJson({ files_deleted: 5, bytes_freed: 5000, freed_mb: 5 })).toBe(true);
-      expect(isCacheCleanupResultJson({ files_deleted: '5', bytes_freed: 5000, freed_mb: 5 })).toBe(false);
+      expect(isCacheCleanupResultJson({ files_deleted: 5, bytes_freed: 5000, freed_mb: 5 })).toBe(
+        true,
+      );
+      expect(isCacheCleanupResultJson({ files_deleted: '5', bytes_freed: 5000, freed_mb: 5 })).toBe(
+        false,
+      );
       expect(isCacheCleanupResultJson(null)).toBe(false);
     });
 
     it('isStoragePathsJson strictly validates storage directory schema', () => {
-      expect(isStoragePathsJson({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' })).toBe(true);
+      expect(isStoragePathsJson({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' })).toBe(
+        true,
+      );
       expect(isStoragePathsJson({ cache_dir: 123, projects_dir: 'C:\\projects' })).toBe(false);
       expect(isStoragePathsJson({})).toBe(false);
     });

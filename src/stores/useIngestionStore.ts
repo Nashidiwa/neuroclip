@@ -8,7 +8,7 @@
  * Strict adherence to docs/CONVENTIONS.md (zero-any, monotonic sequence counter).
  */
 
-import { useSyncExternalStore } from 'react';
+import { createStore } from './createStore.ts';
 import {
   type VodManifest,
   type VodMetadata,
@@ -19,10 +19,7 @@ import {
   cancelVodIngestion,
   listenIngestProgress,
 } from '../services/ipc/ingestion.ts';
-import {
-  type IpcErrorResponse,
-  parseIpcError,
-} from '../services/ipc/error.ts';
+import { type IpcErrorResponse, parseIpcError } from '../services/ipc/error.ts';
 
 // ---------------------------------------------------------------------------
 // Store Interface Contract
@@ -58,80 +55,6 @@ export interface IngestionState {
   cancelIngestion: () => Promise<boolean>;
   clearError: () => void;
   reset: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Native Store Implementation (Zustand-Compatible Architecture)
-// ---------------------------------------------------------------------------
-
-type SetStateFn<T> = (
-  partial: Partial<T> | ((state: T) => Partial<T>),
-) => void;
-type GetStateFn<T> = () => T;
-type Listener<T> = (state: T, prevState: T) => void;
-
-interface StoreApi<T> {
-  getState: GetStateFn<T>;
-  setState: SetStateFn<T>;
-  subscribe: (listener: Listener<T>) => () => void;
-}
-
-type StoreHook<T> = {
-  (): T;
-  <U>(selector: (state: T) => U): U;
-} & StoreApi<T>;
-
-function createStore<T extends object>(
-  initializer: (set: SetStateFn<T>, get: GetStateFn<T>) => T,
-): StoreHook<T> {
-  let state: T;
-  const listeners = new Set<Listener<T>>();
-
-  const getState: GetStateFn<T> = () => state;
-
-  const setState: SetStateFn<T> = (partial) => {
-    const prevState = state;
-    const nextState =
-      typeof partial === 'function'
-        ? { ...prevState, ...partial(prevState) }
-        : { ...prevState, ...partial };
-
-    if (!Object.is(prevState, nextState)) {
-      state = nextState;
-      listeners.forEach((listener) => {
-        listener(state, prevState);
-      });
-    }
-  };
-
-  const subscribe = (listener: Listener<T>): (() => void) => {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  };
-
-  state = initializer(setState, getState);
-
-  const useStore = (<U>(selector?: (state: T) => U): T | U => {
-    return useSyncExternalStore(
-      (notify) => subscribe(notify),
-      () => {
-        const cur = getState();
-        return selector ? selector(cur) : cur;
-      },
-      () => {
-        const cur = getState();
-        return selector ? selector(cur) : cur;
-      },
-    );
-  }) as StoreHook<T>;
-
-  useStore.getState = getState;
-  useStore.setState = setState;
-  useStore.subscribe = subscribe;
-
-  return useStore;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,11 +105,7 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
     set({ isProbing: true, error: null });
 
     try {
-      const meta = await probeVod(
-        targetUrl,
-        get().cookiesPath,
-        get().browserCookies,
-      );
+      const meta = await probeVod(targetUrl, get().cookiesPath, get().browserCookies);
 
       if (seq === ingestionSeq) {
         set({

@@ -153,7 +153,8 @@ export class EmulatedAudioStreamValidator {
           }
           const chunk: EmulatedAudioChunk = {
             sequence: this.sequence,
-            timestampSec: this.totalSamplesProcessed / EmulatedAudioStreamValidator.TARGET_SAMPLE_RATE,
+            timestampSec:
+              this.totalSamplesProcessed / EmulatedAudioStreamValidator.TARGET_SAMPLE_RATE,
             samples: new Int16Array(0),
             rawBytesLen: chunkBytes.length,
             isLast: false,
@@ -231,7 +232,8 @@ export class EmulatedAudioStreamValidator {
       }
     }
 
-    const timestampSec = this.totalSamplesProcessed / EmulatedAudioStreamValidator.TARGET_SAMPLE_RATE;
+    const timestampSec =
+      this.totalSamplesProcessed / EmulatedAudioStreamValidator.TARGET_SAMPLE_RATE;
     this.totalSamplesProcessed += samplesList.length;
 
     const seq = this.sequence;
@@ -267,7 +269,9 @@ export class EmulatedAudioStreamValidator {
   }
 
   public getClippingRatio(): number {
-    return this.totalSamplesProcessed === 0 ? 0.0 : this.clippedSamplesCount / this.totalSamplesProcessed;
+    return this.totalSamplesProcessed === 0
+      ? 0.0
+      : this.clippedSamplesCount / this.totalSamplesProcessed;
   }
 
   public isWavContainer(): boolean {
@@ -583,7 +587,8 @@ describe('ADVERSARIAL STRESS TEST: Bounded Queue, RingBuffer & Stream Validator'
       const code = fs.readFileSync(validatorPath, 'utf8');
 
       // Verify validator.rs line 84 no longer calls AudioChunk::new with 3 arguments
-      const brokenCallRegex = /AudioChunk::new\s*\(\s*Vec::new\(\)\s*,\s*self\.sequence\s*,\s*false\s*\)/;
+      const brokenCallRegex =
+        /AudioChunk::new\s*\(\s*Vec::new\(\)\s*,\s*self\.sequence\s*,\s*false\s*\)/;
       const hasBrokenCall = brokenCallRegex.test(code);
       expect(
         hasBrokenCall,
@@ -591,7 +596,8 @@ describe('ADVERSARIAL STRESS TEST: Bounded Queue, RingBuffer & Stream Validator'
       ).toBe(false);
 
       // Verify validator.rs supplies all 5 required parameters
-      const validCallRegex = /AudioChunk::new\s*\(\s*self\.sequence\s*,\s*self\.current_timestamp_sec\(\)\s*,\s*Vec::new\(\)\s*,\s*chunk_bytes\.len\(\)\s*,\s*false,?\s*\)/;
+      const validCallRegex =
+        /AudioChunk::new\s*\(\s*self\.sequence\s*,\s*self\.current_timestamp_sec\(\)\s*,\s*Vec::new\(\)\s*,\s*chunk_bytes\.len\(\)\s*,\s*false,?\s*\)/;
       expect(validCallRegex.test(code)).toBe(true);
 
       // Also verify that AudioChunk::new in buffer.rs takes 5 arguments:

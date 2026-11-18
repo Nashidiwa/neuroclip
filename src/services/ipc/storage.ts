@@ -7,11 +7,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import {
-  ERROR_CODES,
-  parseIpcError,
-  type IpcErrorResponse,
-} from './error.ts';
+import { ERROR_CODES, parseIpcError, type IpcErrorResponse } from './error.ts';
 
 // ---------------------------------------------------------------------------
 // Data Contracts: Pre-flight Disk Status
@@ -102,10 +98,7 @@ export interface CacheCleanupResult {
 export function isCacheCleanupResultJson(val: unknown): val is CacheCleanupResultJson {
   if (typeof val !== 'object' || val === null) return false;
   const obj = val as Record<string, unknown>;
-  return (
-    typeof obj['files_deleted'] === 'number' &&
-    typeof obj['bytes_freed'] === 'number'
-  );
+  return typeof obj['files_deleted'] === 'number' && typeof obj['bytes_freed'] === 'number';
 }
 
 /**
@@ -113,7 +106,8 @@ export function isCacheCleanupResultJson(val: unknown): val is CacheCleanupResul
  */
 export function toCacheCleanupResult(raw: CacheCleanupResultJson): CacheCleanupResult {
   const bytesFreed = raw.bytes_freed;
-  const freedMb = raw.freed_mb !== undefined ? raw.freed_mb : Math.floor(bytesFreed / (1024 * 1024));
+  const freedMb =
+    raw.freed_mb !== undefined ? raw.freed_mb : Math.floor(bytesFreed / (1024 * 1024));
   return {
     filesDeleted: raw.files_deleted,
     bytesFreed,
@@ -148,10 +142,7 @@ export interface StoragePaths {
 export function isStoragePathsJson(val: unknown): val is StoragePathsJson {
   if (typeof val !== 'object' || val === null) return false;
   const obj = val as Record<string, unknown>;
-  return (
-    typeof obj['cache_dir'] === 'string' &&
-    typeof obj['projects_dir'] === 'string'
-  );
+  return typeof obj['cache_dir'] === 'string' && typeof obj['projects_dir'] === 'string';
 }
 
 /**
@@ -250,7 +241,10 @@ export async function cleanExpiredCache(
 export async function initializeStorage(customCacheDir?: string): Promise<StoragePaths> {
   try {
     const raw: unknown = await invoke('initialize_storage', {
-      customCacheDir: customCacheDir !== undefined && customCacheDir.trim().length > 0 ? customCacheDir.trim() : null,
+      customCacheDir:
+        customCacheDir !== undefined && customCacheDir.trim().length > 0
+          ? customCacheDir.trim()
+          : null,
     });
     if (!isStoragePathsJson(raw)) {
       throw {

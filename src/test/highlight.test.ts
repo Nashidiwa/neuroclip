@@ -28,6 +28,7 @@ import {
   type HighlightClustersContainerJson,
 } from '../types/highlight.ts';
 import { useHighlightStore, highlightStore } from '../stores/useHighlightStore.ts';
+import { ERROR_CODES } from '../services/ipc/error.ts';
 import { HighlightViewer } from '../components/highlight/HighlightViewer.tsx';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -291,6 +292,42 @@ describe('TASK-M4-12: Reactive Highlight Store', () => {
     });
 
     expect(result.current.clusters[0]?.isBookmarked).toBe(true);
+  });
+
+  it('rejects toggleBookmark with ERROR_CODES.INTERNAL_ERROR when vodId is null', async () => {
+    const { result } = renderHook(() => useHighlightStore());
+    expect(result.current.vodId).toBeNull();
+
+    await act(async () => {
+      await expect(result.current.toggleBookmark('cluster_1', true)).rejects.toMatchObject({
+        code: ERROR_CODES.INTERNAL_ERROR,
+        recoverable: false,
+      });
+    });
+
+    expect(result.current.error?.code).toBe(ERROR_CODES.INTERNAL_ERROR);
+    expect(result.current.error?.recoverable).toBe(false);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects toggleBookmark with ERROR_CODES.INTERNAL_ERROR when vodId is whitespace-only without invoking IPC', async () => {
+    act(() => {
+      highlightStore.setState({ vodId: '   ' });
+    });
+
+    const { result } = renderHook(() => useHighlightStore());
+    expect(result.current.vodId).toBe('   ');
+
+    await act(async () => {
+      await expect(result.current.toggleBookmark('cluster_1', true)).rejects.toMatchObject({
+        code: ERROR_CODES.INTERNAL_ERROR,
+        recoverable: false,
+      });
+    });
+
+    expect(result.current.error?.code).toBe(ERROR_CODES.INTERNAL_ERROR);
+    expect(result.current.error?.recoverable).toBe(false);
+    expect(mockedInvoke).toHaveBeenCalledTimes(0);
   });
 });
 

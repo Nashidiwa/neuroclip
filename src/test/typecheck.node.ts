@@ -14,7 +14,11 @@ assert.strictEqual(opts.noImplicitAny, true, 'noImplicitAny must be true');
 assert.strictEqual(opts.strictNullChecks, true, 'strictNullChecks must be true');
 assert.strictEqual(opts.strictFunctionTypes, true, 'strictFunctionTypes must be true');
 assert.strictEqual(opts.noUncheckedIndexedAccess, true, 'noUncheckedIndexedAccess must be true');
-assert.strictEqual(opts.exactOptionalPropertyTypes, true, 'exactOptionalPropertyTypes must be true');
+assert.strictEqual(
+  opts.exactOptionalPropertyTypes,
+  true,
+  'exactOptionalPropertyTypes must be true',
+);
 assert.deepStrictEqual(opts.paths['@/*'], ['src/*'], 'paths alias @/* must be configured');
 
 // 2. Scan for prohibited 'any' usage
@@ -41,4 +45,6 @@ for (const file of tsFiles) {
   assert.strictEqual(matches, null, `Prohibited 'any' found in ${file}`);
 }
 
-console.log(`TypeScript typecheck passed: ${tsFiles.length} files verified with zero 'any' and strict mode!`);
+console.log(
+  `TypeScript typecheck passed: ${tsFiles.length} files verified with zero 'any' and strict mode!`,
+);

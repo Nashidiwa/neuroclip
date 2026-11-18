@@ -126,9 +126,15 @@ describe('sidecar IPC client (TASK-M4-03)', () => {
     expect(isSidecarProgressPayload('string')).toBe(false);
     expect(isSidecarProgressPayload({ task_id: '   ', percentage: 10 })).toBe(false);
     expect(isSidecarProgressPayload({ task_id: 't1', percentage: Number.NaN })).toBe(false);
-    expect(isSidecarProgressPayload({ task_id: 't1', percentage: Number.POSITIVE_INFINITY })).toBe(false);
-    expect(isSidecarProgressPayload({ task_id: 't1', percentage: 10, current_fps: '60' })).toBe(false);
-    expect(isSidecarProgressPayload({ task_id: 't1', percentage: 10, eta_sec: Number.NaN })).toBe(false);
+    expect(isSidecarProgressPayload({ task_id: 't1', percentage: Number.POSITIVE_INFINITY })).toBe(
+      false,
+    );
+    expect(isSidecarProgressPayload({ task_id: 't1', percentage: 10, current_fps: '60' })).toBe(
+      false,
+    );
+    expect(isSidecarProgressPayload({ task_id: 't1', percentage: 10, eta_sec: Number.NaN })).toBe(
+      false,
+    );
   });
 
   it('parses sidecar IPC errors into canonical IpcErrorResponse', () => {

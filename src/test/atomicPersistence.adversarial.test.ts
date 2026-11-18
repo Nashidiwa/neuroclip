@@ -261,7 +261,10 @@ describe('ADVERSARIAL STRESS TEST: Atomic Storage & Concurrency Resilience', () 
 
       await simulateAtomicSaveJson(targetConfigPath, payload);
 
-      const loadedRaw = simulateAtomicLoadJson<AppConfigJson>(targetConfigPath, toAppConfigJson(DEFAULT_APP_CONFIG));
+      const loadedRaw = simulateAtomicLoadJson<AppConfigJson>(
+        targetConfigPath,
+        toAppConfigJson(DEFAULT_APP_CONFIG),
+      );
       const loadedDomain = toAppConfig(loadedRaw);
 
       expect(loadedDomain.outputDirectory).toBe(unicodeOutputDir);

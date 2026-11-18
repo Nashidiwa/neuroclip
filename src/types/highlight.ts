@@ -22,7 +22,7 @@ export const DEFAULT_RMS_BLOCK_DURATION_SEC = 0.5;
 export const DEFAULT_AUDIO_SAMPLE_RATE = 16000;
 export const DEFAULT_AUDIO_BASELINE_WINDOW_SEC = 30.0;
 export const SILENCE_FLOOR_DBFS = -96.0;
-export const SILENCE_FLOOR_AMPLITUDE = 1.5848931924611136e-5;
+export const SILENCE_FLOOR_AMPLITUDE = 1.584893192461114e-5;
 export const DEFAULT_PEAK_DB_SPIKE_THRESHOLD = 18.0;
 export const DEFAULT_PEAK_SIGMA_THRESHOLD = 2.5;
 export const EPSILON_RMS = 1e-6;
@@ -268,11 +268,17 @@ export function isEmoteDensityPointJson(val: unknown): val is EmoteDensityPointJ
     obj['e_ratio'] >= 0.0 &&
     obj['e_ratio'] <= 1.0 &&
     (obj['total_tokens'] === undefined ||
-      (typeof obj['total_tokens'] === 'number' && Number.isInteger(obj['total_tokens']) && obj['total_tokens'] >= 0)) &&
+      (typeof obj['total_tokens'] === 'number' &&
+        Number.isInteger(obj['total_tokens']) &&
+        obj['total_tokens'] >= 0)) &&
     (obj['emote_count'] === undefined ||
-      (typeof obj['emote_count'] === 'number' && Number.isInteger(obj['emote_count']) && obj['emote_count'] >= 0)) &&
+      (typeof obj['emote_count'] === 'number' &&
+        Number.isInteger(obj['emote_count']) &&
+        obj['emote_count'] >= 0)) &&
     (obj['weighted_score'] === undefined ||
-      (typeof obj['weighted_score'] === 'number' && Number.isFinite(obj['weighted_score']) && obj['weighted_score'] >= 0))
+      (typeof obj['weighted_score'] === 'number' &&
+        Number.isFinite(obj['weighted_score']) &&
+        obj['weighted_score'] >= 0))
   );
 }
 
@@ -463,9 +469,7 @@ export function isAudioRmsPoint(val: unknown): val is AudioRmsPoint {
   );
 }
 
-export function isAudioRmsSeriesResponseJson(
-  val: unknown,
-): val is AudioRmsSeriesResponseJson {
+export function isAudioRmsSeriesResponseJson(val: unknown): val is AudioRmsSeriesResponseJson {
   if (typeof val !== 'object' || val === null) {
     return false;
   }
@@ -611,12 +615,10 @@ export function isAudioRmsPeak(
 
   const isDbPeak = deltaDb >= dbThreshold;
   const isSigmaPeak =
-    baselineStdDevRms > EPSILON_RMS &&
-    (rms - baselineMeanRms) >= sigmaThreshold * baselineStdDevRms;
+    baselineStdDevRms > EPSILON_RMS && rms - baselineMeanRms >= sigmaThreshold * baselineStdDevRms;
 
   return isDbPeak || isSigmaPeak;
 }
-
 
 // ===========================================================================
 // TASK-M4-12: Multimodal Fusion & Highlight Clustering Types (Schema 5.4)
@@ -629,8 +631,8 @@ export const MIN_PRE_ROLL_OFFSET_SEC = 14.5; // 4.5s latency + 10.0s pre-roll
 export const MAX_PRE_ROLL_BUFFER_SEC = 20.0; // Dynamic padding limit
 export const MIN_CLUSTER_DURATION_SEC = 15.0;
 export const CLUSTER_MERGE_DISTANCE_SEC = 30.0;
-export const MAX_CLUSTER_OVERLAP_RATIO = 0.50; // > 50% overlap triggers NMS
-export const FUSION_WEIGHT_Z_SCORE = 0.60;
+export const MAX_CLUSTER_OVERLAP_RATIO = 0.5; // > 50% overlap triggers NMS
+export const FUSION_WEIGHT_Z_SCORE = 0.6;
 export const FUSION_WEIGHT_EMOTE = 0.25;
 export const FUSION_WEIGHT_RMS = 0.15;
 export const FUSION_AUDIO_ONLY_WEIGHT_RMS = 1.0;
@@ -776,9 +778,7 @@ export function isHighlightClustersContainerJson(
   );
 }
 
-export function isHighlightClustersContainer(
-  val: unknown,
-): val is HighlightClustersContainer {
+export function isHighlightClustersContainer(val: unknown): val is HighlightClustersContainer {
   if (typeof val !== 'object' || val === null) {
     return false;
   }
@@ -905,19 +905,12 @@ export function formatDuration(seconds: number): string {
  * Score = (0.6 * Z_norm + 0.25 * E_ratio + 0.15 * RMS_normalized) * 100.0
  * where Z_norm = clamp(Z_adj / 10.0, 0.0, 1.0)
  */
-export function calculateMultimodalScore(
-  zNorm: number,
-  eRatio: number,
-  rmsNorm: number,
-): number {
+export function calculateMultimodalScore(zNorm: number, eRatio: number, rmsNorm: number): number {
   const z = Math.min(1.0, Math.max(0.0, Number.isFinite(zNorm) ? zNorm : 0.0));
   const e = Math.min(1.0, Math.max(0.0, Number.isFinite(eRatio) ? eRatio : 0.0));
   const rms = Math.min(1.0, Math.max(0.0, Number.isFinite(rmsNorm) ? rmsNorm : 0.0));
 
-  const rawScore =
-    FUSION_WEIGHT_Z_SCORE * z +
-    FUSION_WEIGHT_EMOTE * e +
-    FUSION_WEIGHT_RMS * rms;
+  const rawScore = FUSION_WEIGHT_Z_SCORE * z + FUSION_WEIGHT_EMOTE * e + FUSION_WEIGHT_RMS * rms;
 
   return Math.min(100.0, Math.max(0.0, Math.round(rawScore * 1000.0) / 10.0));
 }
@@ -928,7 +921,10 @@ export function calculateMultimodalScore(
  */
 export function calculateAudioOnlyScore(rmsNorm: number): number {
   const rms = Math.min(1.0, Math.max(0.0, Number.isFinite(rmsNorm) ? rmsNorm : 0.0));
-  return Math.min(100.0, Math.max(0.0, Math.round(FUSION_AUDIO_ONLY_WEIGHT_RMS * rms * 1000.0) / 10.0));
+  return Math.min(
+    100.0,
+    Math.max(0.0, Math.round(FUSION_AUDIO_ONLY_WEIGHT_RMS * rms * 1000.0) / 10.0),
+  );
 }
 
 /**
@@ -957,7 +953,7 @@ export function computeHighlightBounds(
   const initialPreRoll = options?.preRollSec ?? DEFAULT_PRE_ROLL_BUFFER_SEC;
   const targetPostRoll = options?.postRollSec ?? DEFAULT_POST_ROLL_BUFFER_SEC;
 
-  let endSec = Math.min(duration, peakSec + targetPostRoll);
+  const endSec = Math.min(duration, peakSec + targetPostRoll);
   const baseStart = Math.max(0.0, peakSec - latency - initialPreRoll);
   let startSec = baseStart;
 

@@ -10,11 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import {
-  redactSecret,
-  sanitizeLogString,
-  sanitizeLogContext,
-} from '../services/logging/redactor';
+import { redactSecret, sanitizeLogString, sanitizeLogContext } from '../services/logging/redactor';
 
 // ---------------------------------------------------------------------------
 // Helpers: Node.js behavioral emulation of Rust secrets.rs and rotation.rs
@@ -144,8 +140,7 @@ function rustPruneLogs(logDir: string, policy: RetentionPolicy): PruneReport {
     const sizeBytes = stat.size;
     const mtimeMs = stat.mtimeMs;
 
-    const isExpired =
-      policy.maxAgeDays === 0 ? true : now - mtimeMs > maxAgeMs;
+    const isExpired = policy.maxAgeDays === 0 ? true : now - mtimeMs > maxAgeMs;
 
     if (isExpired) {
       try {

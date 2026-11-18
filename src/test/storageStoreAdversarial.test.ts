@@ -25,10 +25,7 @@ import {
   checkPreflightStorage,
   cleanExpiredCache,
 } from '../services/ipc/storage.ts';
-import {
-  ERROR_CODES,
-  type IpcErrorResponse,
-} from '../services/ipc/error.ts';
+import { ERROR_CODES, type IpcErrorResponse } from '../services/ipc/error.ts';
 import { ErrorBanner } from '../components/common/ErrorBanner.tsx';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -289,9 +286,9 @@ describe('CHALLENGER 2 ADVERSARIAL SUITE: Storage Preflight & IPC Subsystem (TAS
 
         // Valid
         expect(isCacheCleanupResultJson({ files_deleted: 5, bytes_freed: 1000 })).toBe(true);
-        expect(
-          isCacheCleanupResultJson({ files_deleted: 0, bytes_freed: 0, freed_mb: 0 }),
-        ).toBe(true);
+        expect(isCacheCleanupResultJson({ files_deleted: 0, bytes_freed: 0, freed_mb: 0 })).toBe(
+          true,
+        );
       });
     });
 
@@ -305,9 +302,9 @@ describe('CHALLENGER 2 ADVERSARIAL SUITE: Storage Preflight & IPC Subsystem (TAS
         expect(isStoragePathsJson({ cache_dir: 123, projects_dir: 'C:\\projects' })).toBe(false);
 
         // Valid
-        expect(
-          isStoragePathsJson({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' }),
-        ).toBe(true);
+        expect(isStoragePathsJson({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' })).toBe(
+          true,
+        );
       });
     });
 
@@ -338,11 +335,13 @@ describe('CHALLENGER 2 ADVERSARIAL SUITE: Storage Preflight & IPC Subsystem (TAS
 
         // 2. Store Level Rejection & State Protection
         mockedInvoke.mockResolvedValueOnce(malformedPayload);
-        await expect(useProjectStore.getState().checkPreflight()).rejects.toSatisfy((err: unknown) => {
-          if (typeof err !== 'object' || err === null || !('code' in err)) return false;
-          const code = (err as { code: string }).code;
-          return code === ERROR_CODES.STORAGE_DISK_CHECK_FAILED;
-        });
+        await expect(useProjectStore.getState().checkPreflight()).rejects.toSatisfy(
+          (err: unknown) => {
+            if (typeof err !== 'object' || err === null || !('code' in err)) return false;
+            const code = (err as { code: string }).code;
+            return code === ERROR_CODES.STORAGE_DISK_CHECK_FAILED;
+          },
+        );
 
         const state = useProjectStore.getState();
 
@@ -507,7 +506,9 @@ describe('CHALLENGER 2 ADVERSARIAL SUITE: Storage Preflight & IPC Subsystem (TAS
 
       for (let cycle = 1; cycle <= 10; cycle++) {
         // Step A: Full C: drive
-        await useProjectStore.getState().setCustomCacheDir('C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache');
+        await useProjectStore
+          .getState()
+          .setCustomCacheDir('C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache');
         let state = useProjectStore.getState();
         expect(state.isInsufficientSpace).toBe(true);
         expect(state.storageError).not.toBeNull();

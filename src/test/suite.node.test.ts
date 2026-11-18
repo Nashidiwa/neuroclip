@@ -3,8 +3,19 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import Ajv from 'ajv';
-import { loadTheme, resolveBackdropConfig, THEME_PALETTE, WINDOW_GEOMETRY } from '../styles/theme.ts';
-import { ERROR_CODES, ERROR_MESSAGES_VI, getFriendlyErrorMessage, isIpcError, parseIpcError } from '../services/ipc/error.ts';
+import {
+  loadTheme,
+  resolveBackdropConfig,
+  THEME_PALETTE,
+  WINDOW_GEOMETRY,
+} from '../styles/theme.ts';
+import {
+  ERROR_CODES,
+  ERROR_MESSAGES_VI,
+  getFriendlyErrorMessage,
+  isIpcError,
+  parseIpcError,
+} from '../services/ipc/error.ts';
 import {
   type HardwareProfileJson,
   toHardwareProfile,
@@ -164,10 +175,22 @@ describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(theme.bgTertiary.toUpperCase(), '#242738', 'bgTertiary must be #242738');
 
       // VTuber character accent colors
-      assert.strictEqual(theme.accentNeuro.toUpperCase(), '#FFB6C1', 'Neuro accent must be #FFB6C1');
+      assert.strictEqual(
+        theme.accentNeuro.toUpperCase(),
+        '#FFB6C1',
+        'Neuro accent must be #FFB6C1',
+      );
       assert.strictEqual(theme.accentEvil.toUpperCase(), '#FF0055', 'Evil accent must be #FF0055');
-      assert.strictEqual(theme.accentVedal.toUpperCase(), '#98FB98', 'Vedal accent must be #98FB98');
-      assert.strictEqual(theme.accentGuest.toUpperCase(), '#FFD700', 'Guest accent must be #FFD700');
+      assert.strictEqual(
+        theme.accentVedal.toUpperCase(),
+        '#98FB98',
+        'Vedal accent must be #98FB98',
+      );
+      assert.strictEqual(
+        theme.accentGuest.toUpperCase(),
+        '#FFD700',
+        'Guest accent must be #FFD700',
+      );
       assert.strictEqual(theme.accentChat.toUpperCase(), '#87CEEB', 'Chat accent must be #87CEEB');
 
       // Border token
@@ -211,12 +234,32 @@ describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
 
       const windowConfig = conf.app.windows[0];
       assert.ok(windowConfig, 'Default window configuration must exist');
-      assert.strictEqual(windowConfig.width, WINDOW_GEOMETRY.defaultWidth, 'Default width must match WINDOW_GEOMETRY');
-      assert.strictEqual(windowConfig.height, WINDOW_GEOMETRY.defaultHeight, 'Default height must match WINDOW_GEOMETRY');
-      assert.strictEqual(windowConfig.minWidth, WINDOW_GEOMETRY.minWidth, 'Minimum width must match WINDOW_GEOMETRY');
-      assert.strictEqual(windowConfig.minHeight, WINDOW_GEOMETRY.minHeight, 'Minimum height must match WINDOW_GEOMETRY');
+      assert.strictEqual(
+        windowConfig.width,
+        WINDOW_GEOMETRY.defaultWidth,
+        'Default width must match WINDOW_GEOMETRY',
+      );
+      assert.strictEqual(
+        windowConfig.height,
+        WINDOW_GEOMETRY.defaultHeight,
+        'Default height must match WINDOW_GEOMETRY',
+      );
+      assert.strictEqual(
+        windowConfig.minWidth,
+        WINDOW_GEOMETRY.minWidth,
+        'Minimum width must match WINDOW_GEOMETRY',
+      );
+      assert.strictEqual(
+        windowConfig.minHeight,
+        WINDOW_GEOMETRY.minHeight,
+        'Minimum height must match WINDOW_GEOMETRY',
+      );
       assert.strictEqual(windowConfig.transparent, true, 'Window must support transparency');
-      assert.strictEqual(windowConfig.decorations, false, 'Window decorations must be false for frameless acrylic');
+      assert.strictEqual(
+        windowConfig.decorations,
+        false,
+        'Window decorations must be false for frameless acrylic',
+      );
       assert.deepStrictEqual(windowConfig.windowEffects.effects, ['acrylic', 'mica']);
     });
   });
@@ -255,13 +298,14 @@ describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(fs.existsSync(themeCssPath), true, 'src/styles/theme.css must exist');
 
       const content = fs.readFileSync(themeCssPath, 'utf8');
-      assert.ok(content.includes('--color-bg-primary: #12131C;'));
-      assert.ok(content.includes('--color-bg-secondary: #1A1C28;'));
-      assert.ok(content.includes('--color-accent-neuro: #FFB6C1;'));
-      assert.ok(content.includes('--color-accent-evil: #FF0055;'));
-      assert.ok(content.includes('--color-accent-vedal: #98FB98;'));
-      assert.ok(content.includes('--color-accent-guest: #FFD700;'));
-      assert.ok(content.includes('--color-accent-chat: #87CEEB;'));
+      const normalizedContent = content.toLowerCase();
+      assert.ok(normalizedContent.includes('--color-bg-primary: #12131c;'));
+      assert.ok(normalizedContent.includes('--color-bg-secondary: #1a1c28;'));
+      assert.ok(normalizedContent.includes('--color-accent-neuro: #ffb6c1;'));
+      assert.ok(normalizedContent.includes('--color-accent-evil: #ff0055;'));
+      assert.ok(normalizedContent.includes('--color-accent-vedal: #98fb98;'));
+      assert.ok(normalizedContent.includes('--color-accent-guest: #ffd700;'));
+      assert.ok(normalizedContent.includes('--color-accent-chat: #87ceeb;'));
       assert.ok(content.includes('.acrylic-window'));
       assert.ok(content.includes('.solid-window-fallback'));
     });
@@ -364,6 +408,11 @@ describe('TASK-M4-02 Test Suite: Core Crate, Unified Error Handling & IPC Protoc
         'ERR_STT_CUDA_OOM',
         'ERR_STT_INVALID_API_KEY',
         'ERR_STT_VAD_FAILED',
+        'ERR_STT_MODEL_NOT_FOUND',
+        'ERR_STT_MODEL_INTEGRITY_FAILED',
+        'ERR_STT_SIDECAR_FAILED',
+        'ERR_STT_PARSER_FAILED',
+        'ERR_STT_INVALID_TIMESTAMP',
         'ERR_TRANSLATE_SAFETY_FILTER',
         'ERR_TRANSLATE_INVALID_API_KEY',
         'ERR_TRANSLATE_API_FAILED',
@@ -408,10 +457,19 @@ describe('TASK-M4-02 Test Suite: Core Crate, Unified Error Handling & IPC Protoc
       const content = fs.readFileSync(modPath, 'utf8');
       assert.ok(content.includes('pub struct IpcErrorResponse'), 'Must define IpcErrorResponse');
       assert.ok(content.includes('pub enum AppError'), 'Must define AppError enum');
-      assert.ok(content.includes('impl Serialize for AppError'), 'Must implement Serialize for AppError');
+      assert.ok(
+        content.includes('impl Serialize for AppError'),
+        'Must implement Serialize for AppError',
+      );
       assert.ok(content.includes('pub fn code(&self) ->'), 'Must implement code method');
-      assert.ok(content.includes('pub fn is_recoverable(&self) -> bool'), 'Must implement is_recoverable');
-      assert.ok(content.includes('pub fn to_ipc_response(&self) -> IpcErrorResponse'), 'Must implement to_ipc_response');
+      assert.ok(
+        content.includes('pub fn is_recoverable(&self) -> bool'),
+        'Must implement is_recoverable',
+      );
+      assert.ok(
+        content.includes('pub fn to_ipc_response(&self) -> IpcErrorResponse'),
+        'Must implement to_ipc_response',
+      );
     });
 
     it('should verify src-tauri/src/lib.rs exports error module and ping returns Result<String, AppError>', () => {
@@ -526,7 +584,7 @@ describe('TASK-M4-02 Test Suite: Core Crate, Unified Error Handling & IPC Protoc
   });
 });
 
-describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Management', () => {
+describe('TASK-M4-27 / TASK-M4-28 (legacy label TASK-M4-03): Shared Types, Hardware Profile & Config Management', () => {
   const HARDWARE_PROFILE_SCHEMA_5_1 = {
     $schema: 'http://json-schema.org/draft-07/schema#',
     title: 'HardwareProfile',
@@ -714,10 +772,16 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
 
     it('should correctly classify all 10 QA benchmark scenarios (TC-HW-01..10)', () => {
       // TC-HW-01: RTX 4090 24GB + 32GB RAM -> offline_local
-      assert.strictEqual(evaluateRecommendation(32768, 'NVIDIA', 24576, true).mode, 'offline_local');
+      assert.strictEqual(
+        evaluateRecommendation(32768, 'NVIDIA', 24576, true).mode,
+        'offline_local',
+      );
 
       // TC-HW-02: RTX 3080 10GB + 32GB RAM -> offline_local
-      assert.strictEqual(evaluateRecommendation(32768, 'NVIDIA', 10240, true).mode, 'offline_local');
+      assert.strictEqual(
+        evaluateRecommendation(32768, 'NVIDIA', 10240, true).mode,
+        'offline_local',
+      );
 
       // TC-HW-03: RTX 3060 Ti 8GB + 16GB RAM -> offline_local
       assert.strictEqual(evaluateRecommendation(16384, 'NVIDIA', 8192, true).mode, 'offline_local');
@@ -842,10 +906,22 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
       assert.ok(content.includes('pub mod config;'), 'lib.rs must export config module');
       assert.ok(content.includes('pub mod commands;'), 'lib.rs must export commands module');
       assert.ok(content.includes('.manage(AppState::default())'), 'lib.rs must manage AppState');
-      assert.ok(content.includes('commands::get_app_config'), 'lib.rs must register get_app_config');
-      assert.ok(content.includes('commands::save_app_config'), 'lib.rs must register save_app_config');
-      assert.ok(content.includes('commands::get_hardware_profile'), 'lib.rs must register get_hardware_profile');
-      assert.ok(content.includes('commands::detect_hardware'), 'lib.rs must register detect_hardware');
+      assert.ok(
+        content.includes('commands::get_app_config'),
+        'lib.rs must register get_app_config',
+      );
+      assert.ok(
+        content.includes('commands::save_app_config'),
+        'lib.rs must register save_app_config',
+      );
+      assert.ok(
+        content.includes('commands::get_hardware_profile'),
+        'lib.rs must register get_hardware_profile',
+      );
+      assert.ok(
+        content.includes('commands::detect_hardware'),
+        'lib.rs must register detect_hardware',
+      );
     });
 
     it('should verify zero forbidden unwrap/expect/panic calls in all new Rust production files', () => {
@@ -866,11 +942,7 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
 
           for (let i = 0; i < lines.length; i += 1) {
             const line = lines[i]?.trim() ?? '';
-            if (
-              line.startsWith('//') ||
-              line.startsWith('/*') ||
-              line.startsWith('*')
-            ) {
+            if (line.startsWith('//') || line.startsWith('/*') || line.startsWith('*')) {
               continue;
             }
             const match = line.match(forbiddenPattern);
@@ -979,7 +1051,12 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
       // Scenario 1: Intel Iris Xe (0000) + NVIDIA RTX 3060 Laptop (0001) -> selects RTX 3060
       const laptopRig: MockGpuCandidate[] = [
         { vendor: 'Intel', model: 'Intel Iris Xe Graphics', vramMb: 0, cudaSupported: false },
-        { vendor: 'NVIDIA', model: 'NVIDIA GeForce RTX 3060 Laptop GPU', vramMb: 6144, cudaSupported: true },
+        {
+          vendor: 'NVIDIA',
+          model: 'NVIDIA GeForce RTX 3060 Laptop GPU',
+          vramMb: 6144,
+          cudaSupported: true,
+        },
       ];
       const selectedLaptop = selectOptimalGpu(laptopRig);
       assert.strictEqual(selectedLaptop?.model, 'NVIDIA GeForce RTX 3060 Laptop GPU');
@@ -988,9 +1065,17 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
       // Scenario 2: AMD Radeon 680M (0000) + NVIDIA RTX 4070 Laptop (0001) -> selects RTX 4070
       const amdNvidiaRig: MockGpuCandidate[] = [
         { vendor: 'AMD', model: 'AMD Radeon 680M', vramMb: 512, cudaSupported: false },
-        { vendor: 'NVIDIA', model: 'NVIDIA GeForce RTX 4070 Laptop GPU', vramMb: 8192, cudaSupported: true },
+        {
+          vendor: 'NVIDIA',
+          model: 'NVIDIA GeForce RTX 4070 Laptop GPU',
+          vramMb: 8192,
+          cudaSupported: true,
+        },
       ];
-      assert.strictEqual(selectOptimalGpu(amdNvidiaRig)?.model, 'NVIDIA GeForce RTX 4070 Laptop GPU');
+      assert.strictEqual(
+        selectOptimalGpu(amdNvidiaRig)?.model,
+        'NVIDIA GeForce RTX 4070 Laptop GPU',
+      );
 
       // Scenario 3: Dual NVIDIA GPUs (e.g. GTX 1650 4GB at 0000 + RTX 4090 24GB at 0001) -> selects highest VRAM
       const dualNvidiaRig: MockGpuCandidate[] = [
@@ -1015,14 +1100,8 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
       const writeLockIndex = fnBody.indexOf('state.config.write()');
       const atomicSaveIndex = fnBody.indexOf('atomic_save_json');
 
-      assert.ok(
-        writeLockIndex !== -1,
-        'save_app_config must acquire state.config.write() lock',
-      );
-      assert.ok(
-        atomicSaveIndex !== -1,
-        'save_app_config must call atomic_save_json',
-      );
+      assert.ok(writeLockIndex !== -1, 'save_app_config must acquire state.config.write() lock');
+      assert.ok(atomicSaveIndex !== -1, 'save_app_config must call atomic_save_json');
       assert.ok(
         writeLockIndex < atomicSaveIndex,
         'state.config.write() MUST be acquired BEFORE calling atomic_save_json to eliminate concurrency lock inversion',
@@ -1036,9 +1115,7 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
       const content = fs.readFileSync(atomicRsPath, 'utf8');
 
       // 1. Verify atomic sequence counter usage (AtomicU64 or AtomicUsize)
-      const hasAtomicCounter =
-        content.includes('AtomicU64') ||
-        content.includes('AtomicUsize');
+      const hasAtomicCounter = content.includes('AtomicU64') || content.includes('AtomicUsize');
       assert.ok(
         hasAtomicCounter,
         'atomic.rs must define an atomic sequence counter (AtomicU64 / AtomicUsize) to prevent intra-process timestamp collisions',
@@ -1051,9 +1128,7 @@ describe('TASK-M4-03 Test Suite: Shared Types, Hardware Profile & Config Managem
       );
 
       // 3. Verify process ID incorporation
-      const hasPid =
-        content.includes('std::process::id()') ||
-        content.includes('process::id()');
+      const hasPid = content.includes('std::process::id()') || content.includes('process::id()');
       assert.ok(
         hasPid,
         'atomic.rs must incorporate process ID (process::id()) in temporary file name to prevent multi-process collisions',
@@ -1091,8 +1166,16 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
   describe('UT-04.2: Edge Cases (Short Keys & Boundaries)', () => {
     it('should mask keys <= 8 characters completely as [REDACTED]', () => {
       assert.strictEqual(redactSecret(''), '[REDACTED]', 'Empty string must return [REDACTED]');
-      assert.strictEqual(redactSecret('short'), '[REDACTED]', '5-char string must return [REDACTED]');
-      assert.strictEqual(redactSecret('12345678'), '[REDACTED]', '8-char boundary string must return [REDACTED]');
+      assert.strictEqual(
+        redactSecret('short'),
+        '[REDACTED]',
+        '5-char string must return [REDACTED]',
+      );
+      assert.strictEqual(
+        redactSecret('12345678'),
+        '[REDACTED]',
+        '8-char boundary string must return [REDACTED]',
+      );
     });
 
     it('should correctly redact 9-character boundary string', () => {
@@ -1129,8 +1212,16 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
       assert.strictEqual(sanitized.includes(groq), false, 'Must not contain raw Groq key');
       assert.strictEqual(sanitized.includes(gemini), false, 'Must not contain raw Gemini key');
       assert.strictEqual(sanitized.includes(openai), false, 'Must not contain raw OpenAI key');
-      assert.strictEqual(sanitized.includes('1234567890abcdef1234'), false, 'Must not contain raw Twitch token');
-      assert.strictEqual(sanitized.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6'), false, 'Must not contain raw Bearer token');
+      assert.strictEqual(
+        sanitized.includes('1234567890abcdef1234'),
+        false,
+        'Must not contain raw Twitch token',
+      );
+      assert.strictEqual(
+        sanitized.includes('eyJhbGciOiJIUzI1NiIsInR5cCI6'),
+        false,
+        'Must not contain raw Bearer token',
+      );
 
       // Verify presence of sanitized tokens
       assert.ok(sanitized.includes('gsk_[REDACTED]dcba'));
@@ -1161,13 +1252,31 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
       const libPath = path.resolve('src-tauri/src/lib.rs');
       const content = fs.readFileSync(libPath, 'utf8');
 
+      const coreModPath = path.resolve('src-tauri/src/core/mod.rs');
+      const coreModContent = fs.readFileSync(coreModPath, 'utf8');
+
       assert.ok(content.includes('pub mod logging;'), 'lib.rs must export pub mod logging;');
-      assert.ok(content.includes('pub mod core {'), 'lib.rs must export pub mod core module alias');
-      assert.ok(content.includes('pub use crate::logging;'), 'lib.rs core module must re-export logging');
-      assert.ok(content.includes('commands::get_recent_logs'), 'lib.rs must register get_recent_logs command');
-      assert.ok(content.includes('commands::clear_logs'), 'lib.rs must register clear_logs command');
-      assert.ok(content.includes('commands::log_frontend_event'), 'lib.rs must register log_frontend_event command');
-      assert.ok(content.includes('logging::init_logging()'), 'lib.rs must initialize logging in run()');
+      assert.ok(content.includes('pub mod core;'), 'lib.rs must export pub mod core;');
+      assert.ok(
+        coreModContent.includes('pub use crate::logging;'),
+        'core/mod.rs must re-export logging',
+      );
+      assert.ok(
+        content.includes('commands::get_recent_logs'),
+        'lib.rs must register get_recent_logs command',
+      );
+      assert.ok(
+        content.includes('commands::clear_logs'),
+        'lib.rs must register clear_logs command',
+      );
+      assert.ok(
+        content.includes('commands::log_frontend_event'),
+        'lib.rs must register log_frontend_event command',
+      );
+      assert.ok(
+        content.includes('logging::init_logging()'),
+        'lib.rs must initialize logging in run()',
+      );
     });
 
     it('should verify src-tauri/Cargo.toml includes regex = "1.10"', () => {
@@ -1214,16 +1323,28 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
       const secretsPath = path.resolve('src-tauri/src/logging/secrets.rs');
       const content = fs.readFileSync(secretsPath, 'utf8');
 
-      assert.ok(content.includes('pub struct RedactingWriter<W: Write>'), 'Must define RedactingWriter');
-      assert.ok(content.includes('impl<W: Write> Write for RedactingWriter<W>'), 'Must implement Write for RedactingWriter');
-      assert.ok(content.includes('redact_secrets_in_text'), 'RedactingWriter must call redact_secrets_in_text');
+      assert.ok(
+        content.includes('pub struct RedactingWriter<W: Write>'),
+        'Must define RedactingWriter',
+      );
+      assert.ok(
+        content.includes('impl<W: Write> Write for RedactingWriter<W>'),
+        'Must implement Write for RedactingWriter',
+      );
+      assert.ok(
+        content.includes('redact_secrets_in_text'),
+        'RedactingWriter must call redact_secrets_in_text',
+      );
     });
 
     it('should assert RetentionPolicy constants match SSOT specifications (14 days, 50MB ceiling, 30MB low-water mark)', () => {
       const rotationPath = path.resolve('src-tauri/src/logging/rotation.rs');
       const content = fs.readFileSync(rotationPath, 'utf8');
 
-      assert.ok(content.includes('max_age_days: 14'), 'RetentionPolicy default max_age_days must be 14');
+      assert.ok(
+        content.includes('max_age_days: 14'),
+        'RetentionPolicy default max_age_days must be 14',
+      );
       assert.ok(
         content.includes('50 * 1024 * 1024'),
         'RetentionPolicy default max_dir_size_bytes must be 50MB (50 * 1024 * 1024)',
@@ -1261,7 +1382,11 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
 
       for (const relPath of frontendFiles) {
         const fullPath = path.resolve(relPath);
-        assert.strictEqual(fs.existsSync(fullPath), true, `Frontend file ${relPath} must exist on disk`);
+        assert.strictEqual(
+          fs.existsSync(fullPath),
+          true,
+          `Frontend file ${relPath} must exist on disk`,
+        );
       }
     });
 
@@ -1276,8 +1401,16 @@ describe('TASK-M4-04 Test Suite: Logging, Rotation, Redaction, IPC & Tracing Sub
         file: 'ingestion.rs',
       };
 
-      assert.strictEqual(isLogEntryJson(validJson), true, 'Valid LogEntryJson must pass type guard');
-      assert.strictEqual(isLogEntryJson({ bad: 'payload' }), false, 'Malformed payload must be rejected');
+      assert.strictEqual(
+        isLogEntryJson(validJson),
+        true,
+        'Valid LogEntryJson must pass type guard',
+      );
+      assert.strictEqual(
+        isLogEntryJson({ bad: 'payload' }),
+        false,
+        'Malformed payload must be rejected',
+      );
 
       const domain = toLogEntry(validJson);
       assert.strictEqual(domain.level, 'warn', 'Wire WARN must normalize to lowercase warn');
@@ -1318,8 +1451,16 @@ describe('TASK-M4-05 Test Suite: Storage Preflight Check, Cache Management & Pro
         cache_dir: 'C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache',
       };
 
-      assert.strictEqual(isDiskStatusJson(wireJson), true, 'Valid DiskStatusJson must pass type guard');
-      assert.strictEqual(isDiskStatusJson({ bad: 123 }), false, 'Malformed payload must be rejected');
+      assert.strictEqual(
+        isDiskStatusJson(wireJson),
+        true,
+        'Valid DiskStatusJson must pass type guard',
+      );
+      assert.strictEqual(
+        isDiskStatusJson({ bad: 123 }),
+        false,
+        'Malformed payload must be rejected',
+      );
 
       const domain = toDiskStatus(wireJson);
       assert.strictEqual(domain.freeSpaceMb, 20480);
@@ -1495,14 +1636,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       $schema: 'http://json-schema.org/draft-07/schema#',
       title: 'VodManifest',
       type: 'object',
-      required: [
-        'vod_id',
-        'source_type',
-        'title',
-        'duration_seconds',
-        'audio_path',
-        'created_at',
-      ],
+      required: ['vod_id', 'source_type', 'title', 'duration_seconds', 'audio_path', 'created_at'],
       properties: {
         vod_id: { type: 'string' },
         source_type: {
@@ -1684,8 +1818,14 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       const validatorPath = path.resolve('src-tauri/src/ingestion/validator.rs');
       const content = fs.readFileSync(validatorPath, 'utf8');
 
-      assert.ok(content.includes('carry_byte: Option<u8>'), 'Must maintain carry_byte state for odd bytes');
-      assert.ok(content.includes('WAV_HEADER_SIZE: usize = 44'), 'Must define 44-byte WAV header size');
+      assert.ok(
+        content.includes('carry_byte: Option<u8>'),
+        'Must maintain carry_byte state for odd bytes',
+      );
+      assert.ok(
+        content.includes('WAV_HEADER_SIZE: usize = 44'),
+        'Must define 44-byte WAV header size',
+      );
       assert.ok(content.includes('b"RIFF"'), 'Must detect RIFF header');
       assert.ok(content.includes('b"WAVE"'), 'Must detect WAVE magic bytes');
     });
@@ -1717,23 +1857,62 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       const cookiesPath = path.resolve('src-tauri/src/ingestion/cookies.rs');
       const content = fs.readFileSync(cookiesPath, 'utf8');
 
-      assert.ok(content.includes('Windows NT 10.0; Win64; x64'), 'Must target Windows 10/11 64-bit');
-      assert.ok(content.includes('get_rotated_desktop_user_agent'), 'Must provide UA rotation mechanism');
+      assert.ok(
+        content.includes('Windows NT 10.0; Win64; x64'),
+        'Must target Windows 10/11 64-bit',
+      );
+      assert.ok(
+        content.includes('get_rotated_desktop_user_agent'),
+        'Must provide UA rotation mechanism',
+      );
     });
   });
 
   describe('ED-06.3: Dual-layer Process Lifecycle & Live Stream Guardrail AST Checks', () => {
     it('should assert Dual-Layer Process Lifecycle: kill_on_drop, ChildProcessGuard, and Windows Job Object', () => {
       const streamerPath = path.resolve('src-tauri/src/ingestion/streamer.rs');
-      const content = fs.readFileSync(streamerPath, 'utf8');
+      const streamerContent = fs.readFileSync(streamerPath, 'utf8');
+      const killSwitchPath = path.resolve('src-tauri/src/sidecar/kill_switch.rs');
+      const killSwitchContent = fs.readFileSync(killSwitchPath, 'utf8');
 
-      assert.ok(content.includes('kill_on_drop(true)'), 'Command must set kill_on_drop(true)');
-      assert.ok(content.includes('pub struct ChildProcessGuard'), 'Must define ChildProcessGuard');
-      assert.ok(content.includes('start_kill()'), 'ChildProcessGuard drop must call start_kill()');
-      assert.ok(content.includes('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'), 'Must configure JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE');
-      assert.ok(content.includes('assign_child_to_job_guard'), 'Must assign spawned processes to Windows Job Object');
-      assert.ok(content.includes('assign_process'), 'WindowsJobObjectGuard must implement assign_process');
-      assert.ok(content.includes('assign_child_process'), 'WindowsJobObjectGuard must implement assign_child_process');
+      assert.ok(
+        streamerContent.includes('kill_on_drop(true)'),
+        'Command must set kill_on_drop(true)',
+      );
+      assert.ok(
+        streamerContent.includes(
+          'pub use crate::sidecar::{assign_child_to_job_guard, ChildProcessGuard, WindowsJobObjectGuard};',
+        ),
+        'streamer.rs must re-export sidecar kill_switch guards',
+      );
+      assert.ok(
+        streamerContent.includes('assign_child_to_job_guard'),
+        'streamer.rs must assign spawned processes to Windows Job Object',
+      );
+      assert.ok(
+        killSwitchContent.includes('pub struct ChildProcessGuard'),
+        'kill_switch.rs must define ChildProcessGuard',
+      );
+      assert.ok(
+        killSwitchContent.includes('start_kill()'),
+        'ChildProcessGuard drop must call start_kill()',
+      );
+      assert.ok(
+        killSwitchContent.includes('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'),
+        'kill_switch.rs must configure JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE',
+      );
+      assert.ok(
+        killSwitchContent.includes('assign_child_to_job_guard'),
+        'kill_switch.rs must define assign_child_to_job_guard',
+      );
+      assert.ok(
+        killSwitchContent.includes('assign_process'),
+        'WindowsJobObjectGuard must implement assign_process',
+      );
+      assert.ok(
+        killSwitchContent.includes('assign_child_process'),
+        'WindowsJobObjectGuard must implement assign_child_process',
+      );
     });
 
     it('should assert fast live stream rejection guardrail checks is_live flag', () => {
@@ -1772,10 +1951,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
         content.includes('commands::cancel_vod_ingestion'),
         'lib.rs must register cancel_vod_ingestion command',
       );
-      assert.ok(
-        content.includes('commands::probe_vod'),
-        'lib.rs must register probe_vod command',
-      );
+      assert.ok(content.includes('commands::probe_vod'), 'lib.rs must register probe_vod command');
       assert.ok(
         content.includes('commands::get_vod_manifest'),
         'lib.rs must register get_vod_manifest command',
@@ -1787,7 +1963,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
     });
   });
 
-  describe('TASK-M4-07: YouTube Live Chat / Twitch VOD Chat Extraction & Normalizer Contracts', () => {
+  describe('TASK-M4-08 (legacy label TASK-M4-07): YouTube Live Chat / Twitch VOD Chat Extraction & Normalizer Contracts', () => {
     it('should assert Schema 5.3 Chat Parser & Heatmap modules exist in Backend Rust', () => {
       const parserPath = path.resolve('src-tauri/src/ingestion/chat_parser.rs');
       const twitchPath = path.resolve('src-tauri/src/ingestion/twitch_gql.rs');
@@ -1801,11 +1977,23 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
 
       const parserContent = fs.readFileSync(parserPath, 'utf8');
       assert.ok(parserContent.includes('pub struct ChatEvent'), 'Must define ChatEvent');
-      assert.ok(parserContent.includes('pub struct ChatEventsContainer'), 'Must define ChatEventsContainer');
-      assert.ok(parserContent.includes('pub struct ChatDensityPoint'), 'Must define ChatDensityPoint');
-      assert.ok(parserContent.includes('pub struct ChatHeatmapResponse'), 'Must define ChatHeatmapResponse');
+      assert.ok(
+        parserContent.includes('pub struct ChatEventsContainer'),
+        'Must define ChatEventsContainer',
+      );
+      assert.ok(
+        parserContent.includes('pub struct ChatDensityPoint'),
+        'Must define ChatDensityPoint',
+      );
+      assert.ok(
+        parserContent.includes('pub struct ChatHeatmapResponse'),
+        'Must define ChatHeatmapResponse',
+      );
       assert.ok(parserContent.includes('NEURO_SWARM_EMOTES'), 'Must define Swarm emote dictionary');
-      assert.ok(parserContent.includes('StreamingChatNormalizer'), 'Must define StreamingChatNormalizer');
+      assert.ok(
+        parserContent.includes('StreamingChatNormalizer'),
+        'Must define StreamingChatNormalizer',
+      );
     });
 
     it('should assert Tauri IPC chat commands are registered in lib.rs', () => {
@@ -1837,14 +2025,23 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
 
       const typesContent = fs.readFileSync(typesPath, 'utf8');
       assert.ok(typesContent.includes('isChatEventJson'), 'Must export isChatEventJson guard');
-      assert.ok(typesContent.includes('isChatEventsContainerJson'), 'Must export isChatEventsContainerJson guard');
-      assert.ok(typesContent.includes('isChatDensityPointJson'), 'Must export isChatDensityPointJson guard');
-      assert.ok(typesContent.includes('isChatHeatmapResponseJson'), 'Must export isChatHeatmapResponseJson guard');
+      assert.ok(
+        typesContent.includes('isChatEventsContainerJson'),
+        'Must export isChatEventsContainerJson guard',
+      );
+      assert.ok(
+        typesContent.includes('isChatDensityPointJson'),
+        'Must export isChatDensityPointJson guard',
+      );
+      assert.ok(
+        typesContent.includes('isChatHeatmapResponseJson'),
+        'Must export isChatHeatmapResponseJson guard',
+      );
       assert.ok(typesContent.includes('normalizeChatEvent'), 'Must export normalizeChatEvent');
     });
   });
 
-  describe('TASK-M4-08: Whisper Local STT & Transcription Pipeline Contracts', () => {
+  describe('TASK-M4-24 / Whisper.cpp Sidecar & VAD (legacy label TASK-M4-08): Whisper Local STT & Transcription Pipeline Contracts', () => {
     it('should assert Schema 5.5 / 5.6 STT modules exist in Backend Rust', () => {
       const modelMgrPath = path.resolve('src-tauri/src/stt/model_manager.rs');
       const sidecarPath = path.resolve('src-tauri/src/stt/whisper_sidecar.rs');
@@ -1862,13 +2059,22 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
 
       const parserContent = fs.readFileSync(parserPath, 'utf8');
       assert.ok(parserContent.includes('pub struct WordTiming'), 'Must define WordTiming');
-      assert.ok(parserContent.includes('pub struct TranscriptSegment'), 'Must define TranscriptSegment');
-      assert.ok(parserContent.includes('pub struct TranscriptSegmentsContainer'), 'Must define TranscriptSegmentsContainer');
+      assert.ok(
+        parserContent.includes('pub struct TranscriptSegment'),
+        'Must define TranscriptSegment',
+      );
+      assert.ok(
+        parserContent.includes('pub struct TranscriptSegmentsContainer'),
+        'Must define TranscriptSegmentsContainer',
+      );
 
       const exportContent = fs.readFileSync(exportPath, 'utf8');
       assert.ok(exportContent.includes('generate_ass_script'), 'Must define generate_ass_script');
       assert.ok(exportContent.includes('generate_srt_script'), 'Must define generate_srt_script');
-      assert.ok(exportContent.includes('pub struct SubtitleProject'), 'Must define SubtitleProject');
+      assert.ok(
+        exportContent.includes('pub struct SubtitleProject'),
+        'Must define SubtitleProject',
+      );
     });
 
     it('should assert Tauri IPC STT commands are registered in lib.rs', () => {
@@ -1904,10 +2110,22 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
 
       const typesContent = fs.readFileSync(typesPath, 'utf8');
       assert.ok(typesContent.includes('isWordTimingJson'), 'Must export isWordTimingJson guard');
-      assert.ok(typesContent.includes('isTranscriptSegmentJson'), 'Must export isTranscriptSegmentJson guard');
-      assert.ok(typesContent.includes('isTranscriptSegmentsContainerJson'), 'Must export isTranscriptSegmentsContainerJson guard');
-      assert.ok(typesContent.includes('isSubtitleProjectJson'), 'Must export isSubtitleProjectJson guard');
-      assert.ok(typesContent.includes('normalizeTranscriptSegment'), 'Must export normalizeTranscriptSegment');
+      assert.ok(
+        typesContent.includes('isTranscriptSegmentJson'),
+        'Must export isTranscriptSegmentJson guard',
+      );
+      assert.ok(
+        typesContent.includes('isTranscriptSegmentsContainerJson'),
+        'Must export isTranscriptSegmentsContainerJson guard',
+      );
+      assert.ok(
+        typesContent.includes('isSubtitleProjectJson'),
+        'Must export isSubtitleProjectJson guard',
+      );
+      assert.ok(
+        typesContent.includes('normalizeTranscriptSegment'),
+        'Must export normalizeTranscriptSegment',
+      );
     });
   });
 
@@ -1925,21 +2143,48 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.ok(fs.existsSync(testPath), 'highlight_zscore_test.rs must exist');
 
       const libContent = fs.readFileSync(libPath, 'utf8');
-      assert.ok(libContent.includes('pub mod highlight;'), 'lib.rs must register pub mod highlight;');
+      assert.ok(
+        libContent.includes('pub mod highlight;'),
+        'lib.rs must register pub mod highlight;',
+      );
       assert.ok(libContent.includes('ChatBucket'), 'lib.rs must export ChatBucket');
       assert.ok(libContent.includes('ChatVelocityPoint'), 'lib.rs must export ChatVelocityPoint');
-      assert.ok(libContent.includes('calculate_adjusted_zscore'), 'lib.rs must export calculate_adjusted_zscore');
-      assert.ok(libContent.includes('compute_chat_velocity_series'), 'lib.rs must export compute_chat_velocity_series');
+      assert.ok(
+        libContent.includes('calculate_adjusted_zscore'),
+        'lib.rs must export calculate_adjusted_zscore',
+      );
+      assert.ok(
+        libContent.includes('compute_chat_velocity_series'),
+        'lib.rs must export compute_chat_velocity_series',
+      );
 
       const bucketContent = fs.readFileSync(bucketPath, 'utf8');
-      assert.ok(bucketContent.includes('pub struct ChatBucket'), 'bucket.rs must define ChatBucket');
-      assert.ok(bucketContent.includes('DEFAULT_BUCKET_WIDTH_SEC'), 'bucket.rs must define DEFAULT_BUCKET_WIDTH_SEC');
-      assert.ok(bucketContent.includes('SPAM_BOT_MAX_MESSAGES_PER_AUTHOR'), 'bucket.rs must define SPAM_BOT_MAX_MESSAGES_PER_AUTHOR');
+      assert.ok(
+        bucketContent.includes('pub struct ChatBucket'),
+        'bucket.rs must define ChatBucket',
+      );
+      assert.ok(
+        bucketContent.includes('DEFAULT_BUCKET_WIDTH_SEC'),
+        'bucket.rs must define DEFAULT_BUCKET_WIDTH_SEC',
+      );
+      assert.ok(
+        bucketContent.includes('SPAM_BOT_MAX_MESSAGES_PER_AUTHOR'),
+        'bucket.rs must define SPAM_BOT_MAX_MESSAGES_PER_AUTHOR',
+      );
 
       const zscoreContent = fs.readFileSync(zscorePath, 'utf8');
-      assert.ok(zscoreContent.includes('pub struct ChatVelocityPoint'), 'zscore.rs must define ChatVelocityPoint');
-      assert.ok(zscoreContent.includes('MESSAGE_FLOOR_THRESHOLD'), 'zscore.rs must define MESSAGE_FLOOR_THRESHOLD');
-      assert.ok(zscoreContent.includes('SMOOTHING_EPSILON'), 'zscore.rs must define SMOOTHING_EPSILON');
+      assert.ok(
+        zscoreContent.includes('pub struct ChatVelocityPoint'),
+        'zscore.rs must define ChatVelocityPoint',
+      );
+      assert.ok(
+        zscoreContent.includes('MESSAGE_FLOOR_THRESHOLD'),
+        'zscore.rs must define MESSAGE_FLOOR_THRESHOLD',
+      );
+      assert.ok(
+        zscoreContent.includes('SMOOTHING_EPSILON'),
+        'zscore.rs must define SMOOTHING_EPSILON',
+      );
     });
 
     it('should assert zero-panic invariant in Rust highlight library code (CONVENTIONS.md §2.4)', () => {
@@ -2019,7 +2264,13 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.strictEqual(calculateAdjustedZScore(0, 0.0, 0.0), 0.0);
 
       // UT-09.2: X = 45, mu = 10.0, sigma = 0.0, epsilon = 0.5 => Z = (45 - 10) / (0.0 + 0.5) = 70.0
-      const z70 = calculateAdjustedZScore(45, 10.0, 0.0, SMOOTHING_EPSILON, MESSAGE_FLOOR_THRESHOLD);
+      const z70 = calculateAdjustedZScore(
+        45,
+        10.0,
+        0.0,
+        SMOOTHING_EPSILON,
+        MESSAGE_FLOOR_THRESHOLD,
+      );
       assert.ok(Math.abs(z70 - 70.0) < 1e-6, `Expected Z=70.0, got ${z70}`);
 
       // UT-09.3: Spam bot clamp: 20 msgs by single author clamped to max 3 => effective=3 < 15 => Z=0.0
@@ -2058,22 +2309,52 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       const libContent = fs.readFileSync(libPath, 'utf8');
       assert.ok(libContent.includes('SwarmDictionary'), 'lib.rs must export SwarmDictionary');
       assert.ok(libContent.includes('SwarmEmoteCategory'), 'lib.rs must export SwarmEmoteCategory');
-      assert.ok(libContent.includes('SwarmEmoteDefinition'), 'lib.rs must export SwarmEmoteDefinition');
+      assert.ok(
+        libContent.includes('SwarmEmoteDefinition'),
+        'lib.rs must export SwarmEmoteDefinition',
+      );
       assert.ok(libContent.includes('EmoteDensityPoint'), 'lib.rs must export EmoteDensityPoint');
-      assert.ok(libContent.includes('compute_emote_density_series'), 'lib.rs must export compute_emote_density_series');
-      assert.ok(libContent.includes('extract_swarm_emotes'), 'lib.rs must export extract_swarm_emotes');
+      assert.ok(
+        libContent.includes('compute_emote_density_series'),
+        'lib.rs must export compute_emote_density_series',
+      );
+      assert.ok(
+        libContent.includes('extract_swarm_emotes'),
+        'lib.rs must export extract_swarm_emotes',
+      );
       assert.ok(libContent.includes('is_swarm_emote'), 'lib.rs must export is_swarm_emote');
 
       const dictContent = fs.readFileSync(dictPath, 'utf8');
-      assert.ok(dictContent.includes('pub struct SwarmDictionary'), 'swarm_dict.rs must define SwarmDictionary');
-      assert.ok(dictContent.includes('pub enum SwarmEmoteCategory'), 'swarm_dict.rs must define SwarmEmoteCategory');
-      assert.ok(dictContent.includes('pub struct SwarmEmoteDefinition'), 'swarm_dict.rs must define SwarmEmoteDefinition');
+      assert.ok(
+        dictContent.includes('pub struct SwarmDictionary'),
+        'swarm_dict.rs must define SwarmDictionary',
+      );
+      assert.ok(
+        dictContent.includes('pub enum SwarmEmoteCategory'),
+        'swarm_dict.rs must define SwarmEmoteCategory',
+      );
+      assert.ok(
+        dictContent.includes('pub struct SwarmEmoteDefinition'),
+        'swarm_dict.rs must define SwarmEmoteDefinition',
+      );
 
       const filterContent = fs.readFileSync(filterPath, 'utf8');
-      assert.ok(filterContent.includes('pub struct EmoteDensityPoint'), 'emote_filter.rs must define EmoteDensityPoint');
-      assert.ok(filterContent.includes('MAX_TOP_EMOTES_PER_BUCKET'), 'emote_filter.rs must define MAX_TOP_EMOTES_PER_BUCKET');
-      assert.ok(filterContent.includes('calculate_emote_ratio'), 'emote_filter.rs must define calculate_emote_ratio');
-      assert.ok(filterContent.includes('extract_message_tokens'), 'emote_filter.rs must define extract_message_tokens');
+      assert.ok(
+        filterContent.includes('pub struct EmoteDensityPoint'),
+        'emote_filter.rs must define EmoteDensityPoint',
+      );
+      assert.ok(
+        filterContent.includes('MAX_TOP_EMOTES_PER_BUCKET'),
+        'emote_filter.rs must define MAX_TOP_EMOTES_PER_BUCKET',
+      );
+      assert.ok(
+        filterContent.includes('calculate_emote_ratio'),
+        'emote_filter.rs must define calculate_emote_ratio',
+      );
+      assert.ok(
+        filterContent.includes('extract_message_tokens'),
+        'emote_filter.rs must define extract_message_tokens',
+      );
     });
 
     it('should assert zero-panic invariant in Rust highlight emote library code (CONVENTIONS.md §2.4)', () => {
@@ -2113,7 +2394,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       const validPoint: EmoteDensityPointJson = {
         timestamp_sec: 10.0,
         top_emotes: ['KEKW', 'Tutel', '💀'],
-        e_ratio: 0.50,
+        e_ratio: 0.5,
         total_tokens: 50,
         emote_count: 25,
         weighted_score: 1.8,
@@ -2126,7 +2407,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       const normalized: EmoteDensityPoint = normalizeEmoteDensityPoint(validPoint);
       assert.strictEqual(normalized.timestampSec, 10.0);
       assert.deepStrictEqual(normalized.topEmotes, ['KEKW', 'Tutel', '💀']);
-      assert.strictEqual(normalized.eRatio, 0.50);
+      assert.strictEqual(normalized.eRatio, 0.5);
       assert.strictEqual(normalized.totalTokens, 50);
       assert.strictEqual(normalized.emoteCount, 25);
       assert.strictEqual(normalized.swarmCount, 25);
@@ -2135,7 +2416,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       // Snake_case aliases matching Rust JSON contract
       assert.strictEqual(normalized.timestamp_sec, 10.0);
       assert.deepStrictEqual(normalized.top_emotes, ['KEKW', 'Tutel', '💀']);
-      assert.strictEqual(normalized.e_ratio, 0.50);
+      assert.strictEqual(normalized.e_ratio, 0.5);
       assert.strictEqual(normalized.total_tokens, 50);
       assert.strictEqual(normalized.emote_count, 25);
       assert.strictEqual(normalized.swarm_count, 25);
@@ -2147,7 +2428,7 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
     it('should verify pure mathematical invariants: UT-10.1, UT-10.2, UT-10.3', () => {
       // UT-10.3: Emote ratio formula: 50 tokens, 25 swarm emotes => 0.50 (50%)
       const ratio50 = calculateEmoteRatio(25, 50);
-      assert.strictEqual(ratio50, 0.50);
+      assert.strictEqual(ratio50, 0.5);
 
       // Edge case: 0 tokens => 0.0 (no division by zero)
       assert.strictEqual(calculateEmoteRatio(0, 0), 0.0);
@@ -2182,27 +2463,57 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
 
       const modContent = fs.readFileSync(highlightModPath, 'utf8');
       assert.ok(modContent.includes('pub mod audio_rms;'), 'mod.rs must declare audio_rms module');
-      assert.ok(modContent.includes('pub mod energy_analyzer;'), 'mod.rs must declare energy_analyzer module');
+      assert.ok(
+        modContent.includes('pub mod energy_analyzer;'),
+        'mod.rs must declare energy_analyzer module',
+      );
       assert.ok(modContent.includes('AudioBlockMetrics'), 'mod.rs must export AudioBlockMetrics');
       assert.ok(modContent.includes('AudioRmsPoint'), 'mod.rs must export AudioRmsPoint');
-      assert.ok(modContent.includes('AudioRmsSeriesResponse'), 'mod.rs must export AudioRmsSeriesResponse');
+      assert.ok(
+        modContent.includes('AudioRmsSeriesResponse'),
+        'mod.rs must export AudioRmsSeriesResponse',
+      );
 
       const libContent = fs.readFileSync(libPath, 'utf8');
       assert.ok(libContent.includes('AudioRmsPoint'), 'lib.rs must export AudioRmsPoint');
       assert.ok(libContent.includes('calculate_raw_rms'), 'lib.rs must export calculate_raw_rms');
-      assert.ok(libContent.includes('detect_energy_peaks'), 'lib.rs must export detect_energy_peaks');
+      assert.ok(
+        libContent.includes('detect_energy_peaks'),
+        'lib.rs must export detect_energy_peaks',
+      );
 
       const rmsContent = fs.readFileSync(audioRmsPath, 'utf8');
-      assert.ok(rmsContent.includes('pub struct AudioBlockMetrics'), 'audio_rms.rs must define AudioBlockMetrics');
-      assert.ok(rmsContent.includes('calculate_raw_rms'), 'audio_rms.rs must define calculate_raw_rms');
+      assert.ok(
+        rmsContent.includes('pub struct AudioBlockMetrics'),
+        'audio_rms.rs must define AudioBlockMetrics',
+      );
+      assert.ok(
+        rmsContent.includes('calculate_raw_rms'),
+        'audio_rms.rs must define calculate_raw_rms',
+      );
       assert.ok(rmsContent.includes('rms_to_dbfs'), 'audio_rms.rs must define rms_to_dbfs');
-      assert.ok(rmsContent.includes('SILENCE_FLOOR_DBFS'), 'audio_rms.rs must define SILENCE_FLOOR_DBFS');
+      assert.ok(
+        rmsContent.includes('SILENCE_FLOOR_DBFS'),
+        'audio_rms.rs must define SILENCE_FLOOR_DBFS',
+      );
 
       const analyzerContent = fs.readFileSync(energyAnalyzerPath, 'utf8');
-      assert.ok(analyzerContent.includes('pub struct AudioRmsPoint'), 'energy_analyzer.rs must define AudioRmsPoint');
-      assert.ok(analyzerContent.includes('pub struct AudioRmsSeriesResponse'), 'energy_analyzer.rs must define AudioRmsSeriesResponse');
-      assert.ok(analyzerContent.includes('detect_energy_peaks'), 'energy_analyzer.rs must define detect_energy_peaks');
-      assert.ok(analyzerContent.includes('analyze_wav_file'), 'energy_analyzer.rs must define analyze_wav_file');
+      assert.ok(
+        analyzerContent.includes('pub struct AudioRmsPoint'),
+        'energy_analyzer.rs must define AudioRmsPoint',
+      );
+      assert.ok(
+        analyzerContent.includes('pub struct AudioRmsSeriesResponse'),
+        'energy_analyzer.rs must define AudioRmsSeriesResponse',
+      );
+      assert.ok(
+        analyzerContent.includes('detect_energy_peaks'),
+        'energy_analyzer.rs must define detect_energy_peaks',
+      );
+      assert.ok(
+        analyzerContent.includes('analyze_wav_file'),
+        'energy_analyzer.rs must define analyze_wav_file',
+      );
     });
 
     it('should assert zero-panic invariant in Rust highlight audio RMS code (CONVENTIONS.md §2.4)', () => {
@@ -2248,8 +2559,14 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
         z_score: 3.2,
       };
       assert.strictEqual(isAudioRmsPointJson(validPoint), true);
-      assert.strictEqual(isAudioRmsPointJson({ timestamp_sec: -1, rms_energy: 0.5, is_peak: true }), false);
-      assert.strictEqual(isAudioRmsPointJson({ timestamp_sec: 1.0, rms_energy: 1.5, is_peak: true }), false);
+      assert.strictEqual(
+        isAudioRmsPointJson({ timestamp_sec: -1, rms_energy: 0.5, is_peak: true }),
+        false,
+      );
+      assert.strictEqual(
+        isAudioRmsPointJson({ timestamp_sec: 1.0, rms_energy: 1.5, is_peak: true }),
+        false,
+      );
       assert.strictEqual(isAudioRmsPointJson(null), false);
       assert.strictEqual(isAudioRmsPointJson(undefined), false);
 
@@ -2281,7 +2598,8 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       };
       assert.strictEqual(isAudioRmsSeriesResponseJson(validResponse), true);
 
-      const normalizedResponse: AudioRmsSeriesResponse = normalizeAudioRmsSeriesResponse(validResponse);
+      const normalizedResponse: AudioRmsSeriesResponse =
+        normalizeAudioRmsSeriesResponse(validResponse);
       assert.strictEqual(normalizedResponse.vodId, 'vod_test_123');
       assert.strictEqual(normalizedResponse.blockDurationSec, 0.5);
       assert.strictEqual(normalizedResponse.baselineWindowSec, 30.0);
@@ -2329,8 +2647,8 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.strictEqual(isNormalPeak, false, '+1dB variation must not trigger peak');
 
       // UT-11.2: Statistical outlier >= 2.5 sigma triggers peak
-      const outlierRms = 0.10 + 2.8 * 0.02; // Mean 0.10, std dev 0.02 -> 2.8 sigma
-      const isOutlierPeak = isAudioRmsPeak(outlierRms, 0.10, 0.02, -20.0, -20.0);
+      const outlierRms = 0.1 + 2.8 * 0.02; // Mean 0.10, std dev 0.02 -> 2.8 sigma
+      const isOutlierPeak = isAudioRmsPeak(outlierRms, 0.1, 0.02, -20.0, -20.0);
       assert.strictEqual(isOutlierPeak, true, '2.8 sigma outlier must trigger peak');
 
       // Silence cannot be peak
@@ -2407,7 +2725,14 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
             type: 'array',
             items: {
               type: 'object',
-              required: ['cluster_id', 'start_sec', 'end_sec', 'peak_sec', 'score', 'primary_reason'],
+              required: [
+                'cluster_id',
+                'start_sec',
+                'end_sec',
+                'peak_sec',
+                'score',
+                'primary_reason',
+              ],
               properties: {
                 cluster_id: { type: 'string' },
                 start_sec: { type: 'number' },
@@ -2542,8 +2867,8 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(MAX_PRE_ROLL_BUFFER_SEC, 20.0);
       assert.strictEqual(MIN_CLUSTER_DURATION_SEC, 15.0);
       assert.strictEqual(CLUSTER_MERGE_DISTANCE_SEC, 30.0);
-      assert.strictEqual(MAX_CLUSTER_OVERLAP_RATIO, 0.50);
-      assert.strictEqual(FUSION_WEIGHT_Z_SCORE, 0.60);
+      assert.strictEqual(MAX_CLUSTER_OVERLAP_RATIO, 0.5);
+      assert.strictEqual(FUSION_WEIGHT_Z_SCORE, 0.6);
       assert.strictEqual(FUSION_WEIGHT_EMOTE, 0.25);
       assert.strictEqual(FUSION_WEIGHT_RMS, 0.15);
       assert.strictEqual(FUSION_AUDIO_ONLY_WEIGHT_RMS, 1.0);
@@ -2651,9 +2976,15 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
         keyframeAligned: true,
       };
 
-      assert.ok(isSliceResultJson(rawCamelPayload), 'isSliceResultJson must accept camelCase payload');
+      assert.ok(
+        isSliceResultJson(rawCamelPayload),
+        'isSliceResultJson must accept camelCase payload',
+      );
       const domainFromCamel = normalizeSliceResult(rawCamelPayload);
-      assert.ok(isSliceResult(domainFromCamel), 'normalizeSliceResult must produce valid SliceResult from camelCase payload');
+      assert.ok(
+        isSliceResult(domainFromCamel),
+        'normalizeSliceResult must produce valid SliceResult from camelCase payload',
+      );
       assert.strictEqual(domainFromCamel.clipPath, 'C:/NeuroClip/projects/vod_2/clips/clip_2.mp4');
       assert.strictEqual(domainFromCamel.clip_path, 'C:/NeuroClip/projects/vod_2/clips/clip_2.mp4');
       assert.strictEqual(domainFromCamel.durationSeconds, 15.0);
@@ -2682,7 +3013,10 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
     it('should register and resolve Vietnamese messages for range slicer error codes', () => {
       // Verify ERROR_CODES definitions
       assert.strictEqual(ERROR_CODES.INGEST_SLICE_FAILED, 'ERR_INGEST_SLICE_FAILED');
-      assert.strictEqual(ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED, 'ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED');
+      assert.strictEqual(
+        ERROR_CODES.INGEST_KEYFRAME_ALIGNMENT_FAILED,
+        'ERR_INGEST_KEYFRAME_ALIGNMENT_FAILED',
+      );
       assert.strictEqual(ERROR_CODES.INGEST_INVALID_TIME_RANGE, 'ERR_INGEST_INVALID_TIME_RANGE');
 
       // Verify ERROR_MESSAGES_VI entries
@@ -2741,13 +3075,13 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(isKeyframeAligned(80.0, 0.0), false, '80ms drift must exceed alignment');
 
       // AC-13.3: Initial Video Frame Presentation Delay (<= 50ms = 0.050s)
-      assert.strictEqual(isKeyframeAligned(10.0, 0.000), true, '0ms delay passes');
-      assert.strictEqual(isKeyframeAligned(10.0, 0.050), true, '50ms boundary delay passes');
-      assert.strictEqual(isKeyframeAligned(10.0, 0.120), false, '120ms freeze delay must fail');
+      assert.strictEqual(isKeyframeAligned(10.0, 0.0), true, '0ms delay passes');
+      assert.strictEqual(isKeyframeAligned(10.0, 0.05), true, '50ms boundary delay passes');
+      assert.strictEqual(isKeyframeAligned(10.0, 0.12), false, '120ms freeze delay must fail');
 
       // Constants verification
       assert.strictEqual(MAX_KEYFRAME_DRIFT_MS, 50.0);
-      assert.strictEqual(MAX_INITIAL_PTS_DELAY_SEC, 0.050);
+      assert.strictEqual(MAX_INITIAL_PTS_DELAY_SEC, 0.05);
       assert.strictEqual(MIN_SLICING_DISK_SPACE_MB, 500);
       assert.strictEqual(FULL_VOD_REFERENCE_SIZE_MB, 30720);
     });
@@ -2770,14 +3104,23 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
 
       const groqContent = fs.readFileSync(groqPath, 'utf8');
       assert.ok(groqContent.includes('pub struct GroqClient'), 'Must define GroqClient');
-      assert.ok(groqContent.includes('pub struct GroqClientConfig'), 'Must define GroqClientConfig');
-      assert.ok(groqContent.includes('pub struct GroqVerboseJsonResponse'), 'Must define GroqVerboseJsonResponse');
+      assert.ok(
+        groqContent.includes('pub struct GroqClientConfig'),
+        'Must define GroqClientConfig',
+      );
+      assert.ok(
+        groqContent.includes('pub struct GroqVerboseJsonResponse'),
+        'Must define GroqVerboseJsonResponse',
+      );
       assert.ok(groqContent.includes('SAFE_CHUNK_BYTES'), 'Must define SAFE_CHUNK_BYTES');
       assert.ok(groqContent.includes('MAX_PAYLOAD_BYTES'), 'Must define MAX_PAYLOAD_BYTES');
       assert.ok(groqContent.includes('DEFAULT_OVERLAP_MS'), 'Must define DEFAULT_OVERLAP_MS');
 
       const cmdContent = fs.readFileSync(cmdPath, 'utf8');
-      assert.ok(cmdContent.includes('pub async fn transcribe_highlight_clip'), 'Must define transcribe_highlight_clip command');
+      assert.ok(
+        cmdContent.includes('pub async fn transcribe_highlight_clip'),
+        'Must define transcribe_highlight_clip command',
+      );
 
       const libContent = fs.readFileSync(libPath, 'utf8');
       assert.ok(
@@ -2868,49 +3211,146 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.ok(fs.existsSync(modelMgrPath), 'model_manager.rs must exist');
 
       const workerContent = fs.readFileSync(workerPath, 'utf8');
-      assert.ok(workerContent.includes('pub struct FasterWhisperConfig'), 'Must define FasterWhisperConfig');
+      assert.ok(
+        workerContent.includes('pub struct FasterWhisperConfig'),
+        'Must define FasterWhisperConfig',
+      );
       assert.ok(workerContent.includes('pub enum GuardrailPolicy'), 'Must define GuardrailPolicy');
-      assert.ok(workerContent.includes('pub struct GuardrailDecision'), 'Must define GuardrailDecision');
-      assert.ok(workerContent.includes('pub fn build_worker_command_args'), 'Must define build_worker_command_args');
-      assert.ok(workerContent.includes('pub fn build_faster_whisper_command_args'), 'Must define build_faster_whisper_command_args');
-      assert.ok(workerContent.includes('pub fn evaluate_hardware_guardrail'), 'Must define evaluate_hardware_guardrail');
-      assert.ok(workerContent.includes('pub fn check_hardware_guardrail'), 'Must define check_hardware_guardrail');
-      assert.ok(workerContent.includes('pub fn enforce_hardware_guardrail'), 'Must define enforce_hardware_guardrail');
-      assert.ok(workerContent.includes('pub fn estimate_vram_usage_mb'), 'Must define estimate_vram_usage_mb');
-      assert.ok(workerContent.includes('pub fn map_faster_whisper_to_container'), 'Must define map_faster_whisper_to_container');
-      assert.ok(workerContent.includes('pub fn parse_faster_whisper_json'), 'Must define parse_faster_whisper_json');
-      assert.ok(workerContent.includes('pub async fn run_faster_whisper_worker'), 'Must define run_faster_whisper_worker');
-      assert.ok(workerContent.includes('assign_child_to_job_guard'), 'Must assign child to Windows Job Object');
+      assert.ok(
+        workerContent.includes('pub struct GuardrailDecision'),
+        'Must define GuardrailDecision',
+      );
+      assert.ok(
+        workerContent.includes('pub fn build_worker_command_args'),
+        'Must define build_worker_command_args',
+      );
+      assert.ok(
+        workerContent.includes('pub fn build_faster_whisper_command_args'),
+        'Must define build_faster_whisper_command_args',
+      );
+      assert.ok(
+        workerContent.includes('pub fn evaluate_hardware_guardrail'),
+        'Must define evaluate_hardware_guardrail',
+      );
+      assert.ok(
+        workerContent.includes('pub fn check_hardware_guardrail'),
+        'Must define check_hardware_guardrail',
+      );
+      assert.ok(
+        workerContent.includes('pub fn enforce_hardware_guardrail'),
+        'Must define enforce_hardware_guardrail',
+      );
+      assert.ok(
+        workerContent.includes('pub fn estimate_vram_usage_mb'),
+        'Must define estimate_vram_usage_mb',
+      );
+      assert.ok(
+        workerContent.includes('pub fn map_faster_whisper_to_container'),
+        'Must define map_faster_whisper_to_container',
+      );
+      assert.ok(
+        workerContent.includes('pub fn parse_faster_whisper_json'),
+        'Must define parse_faster_whisper_json',
+      );
+      assert.ok(
+        workerContent.includes('pub async fn run_faster_whisper_worker'),
+        'Must define run_faster_whisper_worker',
+      );
+      assert.ok(
+        workerContent.includes('assign_child_to_job_guard'),
+        'Must assign child to Windows Job Object',
+      );
 
       const modelMgrContent = fs.readFileSync(modelMgrPath, 'utf8');
-      assert.ok(modelMgrContent.includes('faster-whisper-medium-int8'), 'Must include faster-whisper-medium-int8 in catalog');
-      assert.ok(modelMgrContent.includes('faster-whisper-small-int8'), 'Must include faster-whisper-small-int8 in catalog');
-      assert.ok(modelMgrContent.includes('is_whisper_large'), 'Must export is_whisper_large helper');
+      assert.ok(
+        modelMgrContent.includes('faster-whisper-medium-int8'),
+        'Must include faster-whisper-medium-int8 in catalog',
+      );
+      assert.ok(
+        modelMgrContent.includes('faster-whisper-small-int8'),
+        'Must include faster-whisper-small-int8 in catalog',
+      );
+      assert.ok(
+        modelMgrContent.includes('is_whisper_large'),
+        'Must export is_whisper_large helper',
+      );
 
       const sttModContent = fs.readFileSync(sttModPath, 'utf8');
-      assert.ok(sttModContent.includes('pub mod faster_whisper_worker;'), 'stt/mod.rs must register faster_whisper_worker');
+      assert.ok(
+        sttModContent.includes('pub mod faster_whisper_worker;'),
+        'stt/mod.rs must register faster_whisper_worker',
+      );
     });
 
     it('should assert zero-panic clippy invariant in faster_whisper_worker.rs', () => {
-      const workerContent = fs.readFileSync(path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'), 'utf8');
-      assert.ok(!workerContent.includes('.unwrap()'), 'faster_whisper_worker.rs must not contain .unwrap()');
-      assert.ok(!workerContent.includes('.expect('), 'faster_whisper_worker.rs must not contain .expect()');
-      assert.ok(!workerContent.includes('panic!('), 'faster_whisper_worker.rs must not contain panic!()');
+      const workerContent = fs.readFileSync(
+        path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'),
+        'utf8',
+      );
+      assert.ok(
+        !workerContent.includes('.unwrap()'),
+        'faster_whisper_worker.rs must not contain .unwrap()',
+      );
+      assert.ok(
+        !workerContent.includes('.expect('),
+        'faster_whisper_worker.rs must not contain .expect()',
+      );
+      assert.ok(
+        !workerContent.includes('panic!('),
+        'faster_whisper_worker.rs must not contain panic!()',
+      );
     });
 
     it('should verify hardware guardrail thresholds and VRAM cap mathematical constants', () => {
-      const workerContent = fs.readFileSync(path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'), 'utf8');
-      assert.ok(workerContent.includes('MIN_LARGE_VRAM_MB: u64 = 2500;'), 'MIN_LARGE_VRAM_MB must be 2500MB');
-      assert.ok(workerContent.includes('MAX_INT8_VRAM_CAP_MB: u64 = 1800;'), 'MAX_INT8_VRAM_CAP_MB must be 1800MB');
-      assert.ok(workerContent.includes('DEFAULT_FASTER_WHISPER_MODEL: &str = "medium";'), 'Default model must be medium');
-      assert.ok(workerContent.includes('DEFAULT_FASTER_WHISPER_QUANTIZATION: &str = "int8";'), 'Default quantization must be int8');
-      assert.ok(workerContent.includes('DEFAULT_FASTER_WHISPER_DEVICE: &str = "auto";'), 'Default device must be auto');
+      const workerContent = fs.readFileSync(
+        path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'),
+        'utf8',
+      );
+      assert.ok(
+        workerContent.includes('MIN_LARGE_VRAM_MB: u64 = 2500;'),
+        'MIN_LARGE_VRAM_MB must be 2500MB',
+      );
+      assert.ok(
+        workerContent.includes('MAX_INT8_VRAM_CAP_MB: u64 = 1800;'),
+        'MAX_INT8_VRAM_CAP_MB must be 1800MB',
+      );
+      assert.ok(
+        workerContent.includes('DEFAULT_FASTER_WHISPER_MODEL: &str = "medium";'),
+        'Default model must be medium',
+      );
+      assert.ok(
+        workerContent.includes('DEFAULT_FASTER_WHISPER_QUANTIZATION: &str = "int8";'),
+        'Default quantization must be int8',
+      );
+      assert.ok(
+        workerContent.includes('DEFAULT_FASTER_WHISPER_DEVICE: &str = "auto";'),
+        'Default device must be auto',
+      );
     });
 
-    it('should verify error codes contain ERR_STT_CUDA_OOM and ERR_STT_VRAM_INSUFFICIENT', () => {
+    it('should verify error codes contain all 11 ERR_STT_* codes in codes.rs and error.ts', () => {
       const codesContent = fs.readFileSync(path.resolve('src-tauri/src/error/codes.rs'), 'utf8');
-      assert.ok(codesContent.includes('ERR_STT_CUDA_OOM'), 'codes.rs must define ERR_STT_CUDA_OOM');
-      assert.ok(codesContent.includes('ERR_STT_VRAM_INSUFFICIENT'), 'codes.rs must define ERR_STT_VRAM_INSUFFICIENT');
+      const tsSttCodes = [
+        ERROR_CODES.STT_RATE_LIMIT,
+        ERROR_CODES.STT_PAYLOAD_TOO_LARGE,
+        ERROR_CODES.STT_VRAM_INSUFFICIENT,
+        ERROR_CODES.STT_CUDA_OOM,
+        ERROR_CODES.STT_INVALID_API_KEY,
+        ERROR_CODES.STT_VAD_FAILED,
+        ERROR_CODES.STT_MODEL_NOT_FOUND,
+        ERROR_CODES.STT_MODEL_INTEGRITY_FAILED,
+        ERROR_CODES.STT_SIDECAR_FAILED,
+        ERROR_CODES.STT_PARSER_FAILED,
+        ERROR_CODES.STT_INVALID_TIMESTAMP,
+      ];
+
+      for (const sttCode of tsSttCodes) {
+        assert.ok(codesContent.includes(sttCode), `codes.rs must define ${sttCode}`);
+        assert.ok(
+          (ERROR_MESSAGES_VI[sttCode] ?? '').length > 0,
+          `ERROR_MESSAGES_VI must define localized message for ${sttCode}`,
+        );
+      }
     });
   });
 
@@ -2930,17 +3370,44 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
 
       const clientContent = fs.readFileSync(clientPath, 'utf8');
       assert.ok(clientContent.includes('pub struct GeminiClient'), 'Must define GeminiClient');
-      assert.ok(clientContent.includes('pub struct GeminiClientConfig'), 'Must define GeminiClientConfig');
-      assert.ok(clientContent.includes('pub fn build_safety_settings'), 'Must define build_safety_settings');
-      assert.ok(clientContent.includes('pub fn is_safety_blocked'), 'Must define is_safety_blocked');
-      assert.ok(clientContent.includes('pub fn apply_safety_fallback'), 'Must define apply_safety_fallback');
-      assert.ok(clientContent.includes('pub fn strip_markdown_code_fence'), 'Must define strip_markdown_code_fence');
+      assert.ok(
+        clientContent.includes('pub struct GeminiClientConfig'),
+        'Must define GeminiClientConfig',
+      );
+      assert.ok(
+        clientContent.includes('pub fn build_safety_settings'),
+        'Must define build_safety_settings',
+      );
+      assert.ok(
+        clientContent.includes('pub fn is_safety_blocked'),
+        'Must define is_safety_blocked',
+      );
+      assert.ok(
+        clientContent.includes('pub fn apply_safety_fallback'),
+        'Must define apply_safety_fallback',
+      );
+      assert.ok(
+        clientContent.includes('pub fn strip_markdown_code_fence'),
+        'Must define strip_markdown_code_fence',
+      );
 
       const promptContent = fs.readFileSync(promptPath, 'utf8');
-      assert.ok(promptContent.includes('pub const THEATRICAL_FRAMING_INSTRUCTION'), 'Must define THEATRICAL_FRAMING_INSTRUCTION');
-      assert.ok(promptContent.includes('pub const SUBTITLE_GUIDELINES'), 'Must define SUBTITLE_GUIDELINES');
-      assert.ok(promptContent.includes('pub fn build_system_instruction'), 'Must define build_system_instruction');
-      assert.ok(promptContent.includes('pub fn build_user_prompt'), 'Must define build_user_prompt');
+      assert.ok(
+        promptContent.includes('pub const THEATRICAL_FRAMING_INSTRUCTION'),
+        'Must define THEATRICAL_FRAMING_INSTRUCTION',
+      );
+      assert.ok(
+        promptContent.includes('pub const SUBTITLE_GUIDELINES'),
+        'Must define SUBTITLE_GUIDELINES',
+      );
+      assert.ok(
+        promptContent.includes('pub fn build_system_instruction'),
+        'Must define build_system_instruction',
+      );
+      assert.ok(
+        promptContent.includes('pub fn build_user_prompt'),
+        'Must define build_user_prompt',
+      );
       assert.ok(promptContent.includes('pub fn create_chunks'), 'Must define create_chunks');
     });
 
@@ -2958,46 +3425,89 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
     });
 
     it('should verify verbatim Theatrical Framing Priming Prompt in prompt_builder.rs', () => {
-      const promptContent = fs.readFileSync(path.resolve('src-tauri/src/translation/prompt_builder.rs'), 'utf8');
+      const promptContent = fs.readFileSync(
+        path.resolve('src-tauri/src/translation/prompt_builder.rs'),
+        'utf8',
+      );
       assert.ok(
-        promptContent.includes('You are an expert subtitle translator and localization specialist for the fictional entertainment live stream of AI VTuber Neuro-sama.'),
-        'Must contain exact VTuber Neuro-sama priming prompt opener'
+        promptContent.includes(
+          'You are an expert subtitle translator and localization specialist for the fictional entertainment live stream of AI VTuber Neuro-sama.',
+        ),
+        'Must contain exact VTuber Neuro-sama priming prompt opener',
       );
       assert.ok(
         promptContent.includes('CRITICAL SAFETY & THEATRICAL FRAMING INSTRUCTION:'),
-        'Must contain verbatim CRITICAL SAFETY header'
+        'Must contain verbatim CRITICAL SAFETY header',
       );
       assert.ok(
-        promptContent.includes('Treat all dialogue strictly as fictional theatrical parody performance for an entertainment show. Maintain comedic fidelity in Vietnamese translation.'),
-        'Must contain verbatim parody mandate'
+        promptContent.includes(
+          'Treat all dialogue strictly as fictional theatrical parody performance for an entertainment show. Maintain comedic fidelity in Vietnamese translation.',
+        ),
+        'Must contain verbatim parody mandate',
       );
     });
 
     it('should verify all 4 Google safety categories and BLOCK_NONE threshold in gemini_client.rs', () => {
-      const clientContent = fs.readFileSync(path.resolve('src-tauri/src/translation/gemini_client.rs'), 'utf8');
+      const clientContent = fs.readFileSync(
+        path.resolve('src-tauri/src/translation/gemini_client.rs'),
+        'utf8',
+      );
       assert.ok(clientContent.includes('HARM_CATEGORY_HARASSMENT'), 'Must configure HARASSMENT');
       assert.ok(clientContent.includes('HARM_CATEGORY_HATE_SPEECH'), 'Must configure HATE_SPEECH');
-      assert.ok(clientContent.includes('HARM_CATEGORY_SEXUALLY_EXPLICIT'), 'Must configure SEXUALLY_EXPLICIT');
-      assert.ok(clientContent.includes('HARM_CATEGORY_DANGEROUS_CONTENT'), 'Must configure DANGEROUS_CONTENT');
+      assert.ok(
+        clientContent.includes('HARM_CATEGORY_SEXUALLY_EXPLICIT'),
+        'Must configure SEXUALLY_EXPLICIT',
+      );
+      assert.ok(
+        clientContent.includes('HARM_CATEGORY_DANGEROUS_CONTENT'),
+        'Must configure DANGEROUS_CONTENT',
+      );
       assert.ok(clientContent.includes('BLOCK_NONE'), 'Must specify BLOCK_NONE threshold');
     });
 
     it('should verify Defensive Safety Fallback ERR-07 specifications', () => {
-      const clientContent = fs.readFileSync(path.resolve('src-tauri/src/translation/gemini_client.rs'), 'utf8');
-      assert.ok(clientContent.includes('[Cần dịch thủ công do bộ lọc an toàn AI]'), 'Must include safety fallback prefix');
-      assert.ok(clientContent.includes('is_flagged_for_review = true'), 'Must set is_flagged_for_review flag');
+      const clientContent = fs.readFileSync(
+        path.resolve('src-tauri/src/translation/gemini_client.rs'),
+        'utf8',
+      );
+      assert.ok(
+        clientContent.includes('[Cần dịch thủ công do bộ lọc an toàn AI]'),
+        'Must include safety fallback prefix',
+      );
+      assert.ok(
+        clientContent.includes('is_flagged_for_review = true'),
+        'Must set is_flagged_for_review flag',
+      );
     });
 
     it('should verify canonical translation error codes in codes.rs and error.ts', () => {
       const rustCodes = fs.readFileSync(path.resolve('src-tauri/src/error/codes.rs'), 'utf8');
-      assert.ok(rustCodes.includes('ERR_TRANSLATE_SAFETY_FILTER'), 'codes.rs must define ERR_TRANSLATE_SAFETY_FILTER');
-      assert.ok(rustCodes.includes('ERR_TRANSLATE_INVALID_API_KEY'), 'codes.rs must define ERR_TRANSLATE_INVALID_API_KEY');
-      assert.ok(rustCodes.includes('ERR_TRANSLATE_API_FAILED'), 'codes.rs must define ERR_TRANSLATE_API_FAILED');
+      assert.ok(
+        rustCodes.includes('ERR_TRANSLATE_SAFETY_FILTER'),
+        'codes.rs must define ERR_TRANSLATE_SAFETY_FILTER',
+      );
+      assert.ok(
+        rustCodes.includes('ERR_TRANSLATE_INVALID_API_KEY'),
+        'codes.rs must define ERR_TRANSLATE_INVALID_API_KEY',
+      );
+      assert.ok(
+        rustCodes.includes('ERR_TRANSLATE_API_FAILED'),
+        'codes.rs must define ERR_TRANSLATE_API_FAILED',
+      );
 
       const tsError = fs.readFileSync(path.resolve('src/services/ipc/error.ts'), 'utf8');
-      assert.ok(tsError.includes('ERR_TRANSLATE_SAFETY_FILTER'), 'error.ts must define ERR_TRANSLATE_SAFETY_FILTER');
-      assert.ok(tsError.includes('ERR_TRANSLATE_INVALID_API_KEY'), 'error.ts must define ERR_TRANSLATE_INVALID_API_KEY');
-      assert.ok(tsError.includes('ERR_TRANSLATE_API_FAILED'), 'error.ts must define ERR_TRANSLATE_API_FAILED');
+      assert.ok(
+        tsError.includes('ERR_TRANSLATE_SAFETY_FILTER'),
+        'error.ts must define ERR_TRANSLATE_SAFETY_FILTER',
+      );
+      assert.ok(
+        tsError.includes('ERR_TRANSLATE_INVALID_API_KEY'),
+        'error.ts must define ERR_TRANSLATE_INVALID_API_KEY',
+      );
+      assert.ok(
+        tsError.includes('ERR_TRANSLATE_API_FAILED'),
+        'error.ts must define ERR_TRANSLATE_API_FAILED',
+      );
     });
 
     it('should verify frontend translation IPC contracts and normalization helpers', () => {
@@ -3007,6 +3517,18 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.ok(fs.existsSync(typesPath), 'src/types/translation.ts must exist');
       assert.ok(fs.existsSync(ipcPath), 'src/services/ipc/translation.ts must exist');
 
+      assert.strictEqual(typeof translateVietsub, 'function');
+      assert.strictEqual(typeof testGeminiConnection, 'function');
+      assert.strictEqual(typeof updateSpeakerRole, 'function');
+      assert.strictEqual(typeof listenTranslationProgress, 'function');
+
+      const options: TranslateVietsubOptions = {
+        apiKey: 'AIza_test_key',
+        model: 'gemini-1.5-flash',
+      };
+      assert.strictEqual(options.apiKey, 'AIza_test_key');
+      assert.strictEqual(options.model, 'gemini-1.5-flash');
+
       // Test normalizeTranslationProgressPayload
       const testPayload: TranslationProgressPayloadJson = {
         clip_id: 'test_clip_m4_17',
@@ -3014,7 +3536,8 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
         total_count: 30,
       };
 
-      const normalized = normalizeTranslationProgressPayload(testPayload);
+      const normalized: TranslationProgressPayload =
+        normalizeTranslationProgressPayload(testPayload);
       assert.strictEqual(normalized.clipId, 'test_clip_m4_17');
       assert.strictEqual(normalized.translatedCount, 15);
       assert.strictEqual(normalized.totalCount, 30);
@@ -3029,8 +3552,3 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
     });
   });
 });
-
-
-
-
-

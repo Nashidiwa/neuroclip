@@ -22,11 +22,7 @@ import {
 } from 'lucide-react';
 import { ErrorBanner } from '@/components/common/ErrorBanner';
 import { ERROR_CODES, parseIpcError, type IpcErrorResponse } from '@/services/ipc/error.ts';
-import {
-  importLocalVideo,
-  toLocalAssetUrl,
-  type VodManifest,
-} from '@/services/ipc/ingestion.ts';
+import { importLocalVideo, toLocalAssetUrl, type VodManifest } from '@/services/ipc/ingestion.ts';
 
 export const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.mov', '.ts', '.flv'] as const;
 
@@ -268,24 +264,24 @@ export const DropZone: React.FC<DropZoneProps> = ({
   return (
     <div
       data-testid="local-dropzone-container"
-      className={`bg-bg-secondary/80 border border-border-dark rounded-xl p-5 space-y-4 text-slate-100 backdrop-blur-md shadow-xl ${className}`}
+      className={`space-y-4 rounded-xl border border-border-dark bg-bg-secondary/80 p-5 text-slate-100 shadow-xl backdrop-blur-md ${className}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border-dark pb-3">
         <div className="flex items-center space-x-2.5">
-          <div className="p-2 rounded-lg bg-accent-neuro/10 text-accent-neuro">
-            <HardDrive className="w-5 h-5" />
+          <div className="rounded-lg bg-accent-neuro/10 p-2 text-accent-neuro">
+            <HardDrive className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wide text-slate-100">
               Nhập Video Cục Bộ (Offline)
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-vedal/10 text-accent-vedal border border-accent-vedal/20">
+              <span className="rounded-full border border-accent-vedal/20 bg-accent-vedal/10 px-2 py-0.5 text-[10px] text-accent-vedal">
                 100% Offline
               </span>
             </h2>
             <p className="text-xs text-slate-400">
-              Kéo thả hoặc chọn tệp video có sẵn trên máy để trích xuất âm thanh 16kHz &amp; phát qua{' '}
-              <code className="text-accent-neuro">asset://</code>
+              Kéo thả hoặc chọn tệp video có sẵn trên máy để trích xuất âm thanh 16kHz &amp; phát
+              qua <code className="text-accent-neuro">asset://</code>
             </p>
           </div>
         </div>
@@ -318,28 +314,29 @@ export const DropZone: React.FC<DropZoneProps> = ({
             handleBrowseClick();
           }
         }}
-        className={`relative rounded-xl border-2 border-dashed p-6 text-center transition-all cursor-pointer select-none ${
+        className={`relative cursor-pointer select-none rounded-xl border-2 border-dashed p-6 text-center transition-all ${
           isDragging
             ? 'border-accent-neuro bg-accent-neuro/10'
             : 'border-border-dark bg-bg-tertiary/40 hover:border-accent-neuro/60 hover:bg-bg-tertiary/70'
-        } ${disabled || isImporting ? 'opacity-60 cursor-not-allowed' : ''}`}
+        } ${disabled || isImporting ? 'cursor-not-allowed opacity-60' : ''}`}
       >
         <input
           ref={fileInputRef}
           type="file"
           data-testid="dropzone-file-input"
           accept={SUPPORTED_VIDEO_EXTENSIONS.join(',')}
+          onClick={(e) => e.stopPropagation()}
           onChange={handleFileInputChange}
           disabled={disabled || isImporting}
           className="hidden"
         />
 
         <div className="flex flex-col items-center justify-center space-y-2.5">
-          <div className="p-3 rounded-full bg-bg-secondary border border-border-dark text-accent-neuro">
+          <div className="rounded-full border border-border-dark bg-bg-secondary p-3 text-accent-neuro">
             {isImporting ? (
-              <Loader2 className="w-6 h-6 animate-spin" data-testid="dropzone-loading-icon" />
+              <Loader2 className="h-6 w-6 animate-spin" data-testid="dropzone-loading-icon" />
             ) : (
-              <UploadCloud className="w-6 h-6" />
+              <UploadCloud className="h-6 w-6" />
             )}
           </div>
 
@@ -361,7 +358,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
               <span
                 key={ext}
                 data-testid={`supported-ext-${ext.slice(1)}`}
-                className="text-[11px] font-mono px-2 py-0.5 rounded bg-bg-secondary text-slate-300 border border-border-dark"
+                className="rounded border border-border-dark bg-bg-secondary px-2 py-0.5 font-mono text-[11px] text-slate-300"
               >
                 {ext}
               </span>
@@ -380,15 +377,15 @@ export const DropZone: React.FC<DropZoneProps> = ({
           onChange={(e) => setManualPath(e.target.value)}
           disabled={disabled || isImporting}
           placeholder="Hoặc dán đường dẫn tệp video cục bộ (VD: D:\Videos\neuro_vod.mp4)"
-          className="flex-1 bg-bg-primary border border-border-dark rounded-lg px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-accent-neuro"
+          className="flex-1 rounded-lg border border-border-dark bg-bg-primary px-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-accent-neuro focus:outline-none"
         />
         <button
           type="submit"
           data-testid="dropzone-path-submit"
           disabled={disabled || isImporting || manualPath.trim().length === 0}
-          className="px-3 py-2 rounded-lg text-xs font-semibold bg-accent-neuro/15 text-accent-neuro border border-accent-neuro/40 hover:bg-accent-neuro/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+          className="flex items-center gap-1.5 rounded-lg border border-accent-neuro/40 bg-accent-neuro/15 px-3 py-2 text-xs font-semibold text-accent-neuro transition-colors hover:bg-accent-neuro/25 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <FolderOpen className="w-3.5 h-3.5" />
+          <FolderOpen className="h-3.5 w-3.5" />
           <span>Nhập Tệp</span>
         </button>
       </form>
@@ -397,36 +394,36 @@ export const DropZone: React.FC<DropZoneProps> = ({
       {manifest && (
         <div
           data-testid="dropzone-manifest-card"
-          className="rounded-lg bg-bg-primary/80 border border-accent-vedal/30 p-3.5 space-y-2 text-xs"
+          className="space-y-2 rounded-lg border border-accent-vedal/30 bg-bg-primary/80 p-3.5 text-xs"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-accent-vedal font-semibold">
-              <CheckCircle2 className="w-4 h-4" />
+            <div className="flex items-center gap-2 font-semibold text-accent-vedal">
+              <CheckCircle2 className="h-4 w-4" />
               <span>Đã nhập video cục bộ thành công</span>
             </div>
-            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-bg-tertiary text-slate-300 border border-border-dark">
+            <span className="rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 font-mono text-[11px] text-slate-300">
               {manifest.sourceType}
             </span>
           </div>
 
           <div className="grid grid-cols-1 gap-1.5 text-slate-300">
             <div className="flex items-center gap-2 truncate">
-              <FileVideo className="w-3.5 h-3.5 text-accent-neuro flex-shrink-0" />
+              <FileVideo className="h-3.5 w-3.5 flex-shrink-0 text-accent-neuro" />
               <span className="truncate font-medium text-slate-100">{manifest.title}</span>
             </div>
             {manifest.localVideoPath && (
-              <div className="text-[11px] font-mono text-slate-400 truncate">
+              <div className="truncate font-mono text-[11px] text-slate-400">
                 Video: {manifest.localVideoPath}
               </div>
             )}
-            <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 truncate">
-              <FileAudio className="w-3.5 h-3.5 text-accent-vedal flex-shrink-0" />
+            <div className="flex items-center gap-2 truncate font-mono text-[11px] text-slate-400">
+              <FileAudio className="h-3.5 w-3.5 flex-shrink-0 text-accent-vedal" />
               <span className="truncate">WAV 16kHz: {manifest.audioPath}</span>
             </div>
             {localAssetPreviewUrl && (
               <div
                 data-testid="dropzone-asset-url"
-                className="text-[11px] font-mono text-accent-chat truncate"
+                className="truncate font-mono text-[11px] text-accent-chat"
               >
                 Stream: {localAssetPreviewUrl}
               </div>

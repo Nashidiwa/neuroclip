@@ -76,46 +76,47 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
     <div
       role="alert"
       data-testid="error-banner"
-      className={`rounded-lg bg-bg-secondary/95 border border-border-dark border-l-4 ${borderAccentClass} shadow-md overflow-hidden transition-all text-slate-100 ${className}`}
+      className={`rounded-lg border border-l-4 border-border-dark bg-bg-secondary/95 ${borderAccentClass} overflow-hidden text-slate-100 shadow-md transition-all ${className}`}
     >
       <div className={`flex items-start justify-between gap-3 ${compact ? 'p-3' : 'p-4'}`}>
         {/* Left side: Icon + Content */}
-        <div className="flex items-start gap-3 flex-1 min-w-0">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className={`mt-0.5 flex-shrink-0 ${iconColorClass}`}>
             {isRecoverable ? (
-              <AlertTriangle className="w-5 h-5" data-testid="icon-recoverable" />
+              <AlertTriangle className="h-5 w-5" data-testid="icon-recoverable" />
             ) : (
-              <AlertCircle className="w-5 h-5" data-testid="icon-unrecoverable" />
+              <AlertCircle className="h-5 w-5" data-testid="icon-unrecoverable" />
             )}
           </div>
 
-          <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="min-w-0 flex-1 space-y-1.5">
             {/* Header: Title / Badge */}
-            <div className="flex items-center flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {title !== undefined && title.length > 0 && (
-                <span className="font-semibold text-xs text-white tracking-wide">
-                  {title}
-                </span>
+                <span className="text-xs font-semibold tracking-wide text-white">{title}</span>
               )}
               <span
                 data-testid="error-code-badge"
-                className="font-mono text-[11px] font-medium px-2 py-0.5 rounded bg-bg-tertiary text-accent-neuro border border-border-dark select-all"
+                className="select-all rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 font-mono text-[11px] font-medium text-accent-neuro"
               >
                 {errorObj.code}
               </span>
               {isRecoverable ? (
-                <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-accent-vedal/10 text-accent-vedal border border-accent-vedal/30">
+                <span className="py-0.2 rounded border border-accent-vedal/30 bg-accent-vedal/10 px-1.5 text-[10px] font-medium text-accent-vedal">
                   Có thể thử lại
                 </span>
               ) : (
-                <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-accent-evil/10 text-accent-evil border border-accent-evil/30">
+                <span className="py-0.2 rounded border border-accent-evil/30 bg-accent-evil/10 px-1.5 text-[10px] font-medium text-accent-evil">
                   Lỗi nghiêm trọng
                 </span>
               )}
             </div>
 
             {/* Error Message in Vietnamese */}
-            <p className="text-xs text-slate-200 leading-relaxed break-words" data-testid="error-message">
+            <p
+              className="break-words text-xs leading-relaxed text-slate-200"
+              data-testid="error-message"
+            >
               {errorObj.message}
             </p>
 
@@ -126,16 +127,16 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
                   type="button"
                   data-testid="toggle-details-btn"
                   onClick={() => setIsDetailsOpen((prev) => !prev)}
-                  className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition-colors underline-offset-2 hover:underline focus:outline-none"
+                  className="flex items-center gap-1 text-[11px] text-slate-400 underline-offset-2 transition-colors hover:text-white hover:underline focus:outline-none"
                 >
                   {isDetailsOpen ? (
                     <>
-                      <ChevronUp className="w-3.5 h-3.5" />
+                      <ChevronUp className="h-3.5 w-3.5" />
                       <span>Ẩn chi tiết kỹ thuật</span>
                     </>
                   ) : (
                     <>
-                      <ChevronDown className="w-3.5 h-3.5" />
+                      <ChevronDown className="h-3.5 w-3.5" />
                       <span>Xem chi tiết lỗi kỹ thuật</span>
                     </>
                   )}
@@ -146,16 +147,16 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
         </div>
 
         {/* Right side: Actions (Retry, Dismiss) */}
-        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+        <div className="ml-2 flex flex-shrink-0 items-center gap-2">
           {showRetry && (
             <button
               type="button"
               data-testid="error-retry-btn"
               onClick={onRetry}
               title="Thử lại thao tác này"
-              className="px-3 py-1.5 text-xs font-semibold rounded bg-accent-vedal/15 text-accent-vedal border border-accent-vedal/40 hover:bg-accent-vedal/25 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm"
+              className="flex items-center gap-1.5 rounded border border-accent-vedal/40 bg-accent-vedal/15 px-3 py-1.5 text-xs font-semibold text-accent-vedal shadow-sm transition-all hover:bg-accent-vedal/25 active:scale-95"
             >
-              <RefreshCw className="w-3 h-3 animate-none" />
+              <RefreshCw className="h-3 w-3 animate-none" />
               <span>Thử lại</span>
             </button>
           )}
@@ -166,9 +167,9 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
               data-testid="error-dismiss-btn"
               onClick={onDismiss}
               title="Đóng thông báo"
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-bg-tertiary rounded transition-colors"
+              className="rounded p-1.5 text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-white"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -178,7 +179,7 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
       {hasDetails && isDetailsOpen && (
         <div
           data-testid="error-details-panel"
-          className="border-t border-border-dark bg-bg-primary/95 p-3 space-y-2 select-text"
+          className="select-text space-y-2 border-t border-border-dark bg-bg-primary/95 p-3"
         >
           <div className="flex items-center justify-between text-[11px] text-slate-400">
             <span className="font-mono">Technical Details / Stack Trace:</span>
@@ -186,23 +187,23 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
               type="button"
               data-testid="copy-details-btn"
               onClick={handleCopy}
-              className="flex items-center gap-1 text-[11px] text-slate-300 hover:text-white bg-bg-tertiary px-2 py-0.5 rounded border border-border-dark transition-colors"
+              className="flex items-center gap-1 rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 text-[11px] text-slate-300 transition-colors hover:text-white"
             >
               {isCopied ? (
                 <>
-                  <Check className="w-3 h-3 text-accent-vedal" />
+                  <Check className="h-3 w-3 text-accent-vedal" />
                   <span className="text-accent-vedal">Đã sao chép!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-3 h-3" />
+                  <Copy className="h-3 w-3" />
                   <span>Sao chép mã lỗi</span>
                 </>
               )}
             </button>
           </div>
 
-          <pre className="text-[11px] font-mono text-slate-300 bg-bg-secondary p-2.5 rounded border border-border-dark/60 overflow-x-auto max-h-48 whitespace-pre-wrap break-all leading-normal">
+          <pre className="max-h-48 overflow-x-auto whitespace-pre-wrap break-all rounded border border-border-dark/60 bg-bg-secondary p-2.5 font-mono text-[11px] leading-normal text-slate-300">
             {errorObj.details}
           </pre>
         </div>

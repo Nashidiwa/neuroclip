@@ -53,9 +53,7 @@ export async function detectHighlights(
  * @param vodId Unique identifier for the VOD.
  * @returns HighlightClustersContainer adhering to Schema 5.4.
  */
-export async function getHighlightClusters(
-  vodId: string,
-): Promise<HighlightClustersContainer> {
+export async function getHighlightClusters(vodId: string): Promise<HighlightClustersContainer> {
   try {
     const raw = await invoke<HighlightClustersContainerJson>('get_highlight_clusters', {
       vodId,

@@ -52,8 +52,7 @@ export function isSidecarProgressPayload(val: unknown): val is SidecarProgressPa
 
   const rawTaskId = obj['task_id'] !== undefined ? obj['task_id'] : obj['taskId'];
   const hasTaskId = typeof rawTaskId === 'string' && rawTaskId.trim().length > 0;
-  const hasPercentage =
-    typeof obj['percentage'] === 'number' && Number.isFinite(obj['percentage']);
+  const hasPercentage = typeof obj['percentage'] === 'number' && Number.isFinite(obj['percentage']);
   const rawFps = obj['current_fps'] !== undefined ? obj['current_fps'] : obj['currentFps'];
   const rawEta = obj['eta_sec'] !== undefined ? obj['eta_sec'] : obj['etaSec'];
   const validFps = isFiniteNumberOrNullish(rawFps);
@@ -65,9 +64,7 @@ export function isSidecarProgressPayload(val: unknown): val is SidecarProgressPa
 /**
  * Normalize wire `sidecar:progress` payload into dual camelCase/snake_case domain model.
  */
-export function normalizeSidecarProgress(
-  raw: SidecarProgressPayloadJson,
-): SidecarProgressEvent {
+export function normalizeSidecarProgress(raw: SidecarProgressPayloadJson): SidecarProgressEvent {
   const rawTaskId = raw.task_id !== undefined ? raw.task_id : raw.taskId;
   const taskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
   const rawFps = raw.current_fps !== undefined ? raw.current_fps : raw.currentFps;

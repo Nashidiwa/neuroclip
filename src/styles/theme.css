@@ -1,14 +1,15 @@
 :root {
-  --color-bg-primary: #12131C;
-  --color-bg-secondary: #1A1C28;
+  --color-bg-primary: #12131c;
+  --color-bg-secondary: #1a1c28;
   --color-bg-tertiary: #242738;
-  --color-accent-neuro: #FFB6C1;
-  --color-accent-evil: #FF0055;
-  --color-accent-vedal: #98FB98;
-  --color-accent-guest: #FFD700;
-  --color-accent-chat: #87CEEB;
-  --color-border: #2E3247;
-  --font-family-base: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --color-accent-neuro: #ffb6c1;
+  --color-accent-evil: #ff0055;
+  --color-accent-vedal: #98fb98;
+  --color-accent-guest: #ffd700;
+  --color-accent-chat: #87ceeb;
+  --color-border: #2e3247;
+  --font-family-base:
+    'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Acrylic/Mica effect when supported */

@@ -13,7 +13,7 @@
 export const MAX_KEYFRAME_DRIFT_MS = 50.0;
 
 /** Maximum allowable start presentation timestamp in seconds (AC-13.3). */
-export const MAX_INITIAL_PTS_DELAY_SEC = 0.050;
+export const MAX_INITIAL_PTS_DELAY_SEC = 0.05;
 
 /** Minimum free disk space in MB required for pre-flight check. */
 export const MIN_SLICING_DISK_SPACE_MB = 500;
@@ -126,10 +126,14 @@ export function isSliceResultJson(val: unknown): val is SliceResultJson {
   }
   const obj = val as Record<string, unknown>;
   const hasClipPath = typeof obj['clip_path'] === 'string' || typeof obj['clipPath'] === 'string';
-  const hasDuration = typeof obj['duration_seconds'] === 'number' || typeof obj['durationSeconds'] === 'number';
-  const hasFileSize = typeof obj['file_size_bytes'] === 'number' || typeof obj['fileSizeBytes'] === 'number';
-  const hasDrift = typeof obj['stream_drift_ms'] === 'number' || typeof obj['streamDriftMs'] === 'number';
-  const hasKeyframe = typeof obj['keyframe_aligned'] === 'boolean' || typeof obj['keyframeAligned'] === 'boolean';
+  const hasDuration =
+    typeof obj['duration_seconds'] === 'number' || typeof obj['durationSeconds'] === 'number';
+  const hasFileSize =
+    typeof obj['file_size_bytes'] === 'number' || typeof obj['fileSizeBytes'] === 'number';
+  const hasDrift =
+    typeof obj['stream_drift_ms'] === 'number' || typeof obj['streamDriftMs'] === 'number';
+  const hasKeyframe =
+    typeof obj['keyframe_aligned'] === 'boolean' || typeof obj['keyframeAligned'] === 'boolean';
 
   return hasClipPath && hasDuration && hasFileSize && hasDrift && hasKeyframe;
 }
@@ -144,10 +148,14 @@ export function isSliceResult(val: unknown): val is SliceResult {
   }
   const obj = val as Record<string, unknown>;
   const hasClipPath = typeof obj['clipPath'] === 'string' || typeof obj['clip_path'] === 'string';
-  const hasDuration = typeof obj['durationSeconds'] === 'number' || typeof obj['duration_seconds'] === 'number';
-  const hasFileSize = typeof obj['fileSizeBytes'] === 'number' || typeof obj['file_size_bytes'] === 'number';
-  const hasDrift = typeof obj['streamDriftMs'] === 'number' || typeof obj['stream_drift_ms'] === 'number';
-  const hasKeyframe = typeof obj['keyframeAligned'] === 'boolean' || typeof obj['keyframe_aligned'] === 'boolean';
+  const hasDuration =
+    typeof obj['durationSeconds'] === 'number' || typeof obj['duration_seconds'] === 'number';
+  const hasFileSize =
+    typeof obj['fileSizeBytes'] === 'number' || typeof obj['file_size_bytes'] === 'number';
+  const hasDrift =
+    typeof obj['streamDriftMs'] === 'number' || typeof obj['stream_drift_ms'] === 'number';
+  const hasKeyframe =
+    typeof obj['keyframeAligned'] === 'boolean' || typeof obj['keyframe_aligned'] === 'boolean';
 
   return hasClipPath && hasDuration && hasFileSize && hasDrift && hasKeyframe;
 }
@@ -178,23 +186,29 @@ export function isSliceVideoSegmentRequestJson(val: unknown): val is SliceVideoS
 export function normalizeSliceResult(json: SliceResultJson): SliceResult {
   const obj = json as Record<string, unknown>;
 
-  const clipPath = (typeof json.clip_path === 'string'
-    ? json.clip_path
-    : typeof obj['clipPath'] === 'string'
-      ? (obj['clipPath'] as string)
-      : '') as string;
+  const clipPath = (
+    typeof json.clip_path === 'string'
+      ? json.clip_path
+      : typeof obj['clipPath'] === 'string'
+        ? (obj['clipPath'] as string)
+        : ''
+  ) as string;
 
-  const durationSeconds = (typeof json.duration_seconds === 'number'
-    ? json.duration_seconds
-    : typeof obj['durationSeconds'] === 'number'
-      ? (obj['durationSeconds'] as number)
-      : 0) as number;
+  const durationSeconds = (
+    typeof json.duration_seconds === 'number'
+      ? json.duration_seconds
+      : typeof obj['durationSeconds'] === 'number'
+        ? (obj['durationSeconds'] as number)
+        : 0
+  ) as number;
 
-  const fileSizeBytes = (typeof json.file_size_bytes === 'number'
-    ? json.file_size_bytes
-    : typeof obj['fileSizeBytes'] === 'number'
-      ? (obj['fileSizeBytes'] as number)
-      : 0) as number;
+  const fileSizeBytes = (
+    typeof json.file_size_bytes === 'number'
+      ? json.file_size_bytes
+      : typeof obj['fileSizeBytes'] === 'number'
+        ? (obj['fileSizeBytes'] as number)
+        : 0
+  ) as number;
 
   const rawVideo = json.video_duration !== undefined ? json.video_duration : obj['videoDuration'];
   const videoDuration = typeof rawVideo === 'number' ? rawVideo : null;
@@ -202,18 +216,22 @@ export function normalizeSliceResult(json: SliceResultJson): SliceResult {
   const rawAudio = json.audio_duration !== undefined ? json.audio_duration : obj['audioDuration'];
   const audioDuration = typeof rawAudio === 'number' ? rawAudio : null;
 
-  const rawDrift = typeof json.stream_drift_ms === 'number'
-    ? json.stream_drift_ms
-    : typeof obj['streamDriftMs'] === 'number'
-      ? (obj['streamDriftMs'] as number)
-      : 0;
-  const driftMs = Number((typeof rawDrift === 'number' && Number.isFinite(rawDrift) ? rawDrift : 0).toFixed(3));
+  const rawDrift =
+    typeof json.stream_drift_ms === 'number'
+      ? json.stream_drift_ms
+      : typeof obj['streamDriftMs'] === 'number'
+        ? (obj['streamDriftMs'] as number)
+        : 0;
+  const driftMs = Number(
+    (typeof rawDrift === 'number' && Number.isFinite(rawDrift) ? rawDrift : 0).toFixed(3),
+  );
 
-  const rawKeyframe = typeof json.keyframe_aligned === 'boolean'
-    ? json.keyframe_aligned
-    : typeof obj['keyframeAligned'] === 'boolean'
-      ? (obj['keyframeAligned'] as boolean)
-      : false;
+  const rawKeyframe =
+    typeof json.keyframe_aligned === 'boolean'
+      ? json.keyframe_aligned
+      : typeof obj['keyframeAligned'] === 'boolean'
+        ? (obj['keyframeAligned'] as boolean)
+        : false;
   const keyframeAligned = Boolean(rawKeyframe);
 
   const fileSizeMb = Number((fileSizeBytes / (1024 * 1024)).toFixed(3));
@@ -308,9 +326,6 @@ export function calculateBandwidthSavings(
  * @param videoStartTimeSec Optional start presentation timestamp in seconds.
  * @returns True if drift <= 50ms and start PTS <= 50ms.
  */
-export function isKeyframeAligned(
-  driftMs: number,
-  videoStartTimeSec: number = 0.0,
-): boolean {
+export function isKeyframeAligned(driftMs: number, videoStartTimeSec: number = 0.0): boolean {
   return driftMs <= MAX_KEYFRAME_DRIFT_MS && videoStartTimeSec <= MAX_INITIAL_PTS_DELAY_SEC;
 }

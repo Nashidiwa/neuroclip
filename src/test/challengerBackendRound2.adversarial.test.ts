@@ -357,11 +357,19 @@ describe('CHALLENGER ROUND 2 ADVERSARIAL TEST SUITE', () => {
   // =========================================================================
   describe('2. File Rotation Pattern Matching in rotation.rs', () => {
     const requiredTestCases = [
-      { filename: 'neuroclip-config.json', expected: false, reason: 'Config JSON file must be rejected' },
+      {
+        filename: 'neuroclip-config.json',
+        expected: false,
+        reason: 'Config JSON file must be rejected',
+      },
       { filename: 'neuroclip.txt', expected: false, reason: 'Plain text file must be rejected' },
       { filename: 'neuroclip-backup.bak', expected: false, reason: 'Backup file must be rejected' },
       { filename: 'neuroclip.ass', expected: false, reason: 'Subtitle file must be rejected' },
-      { filename: 'neuroclip-2026-11-10.log', expected: true, reason: 'Standard daily dated .log file must match' },
+      {
+        filename: 'neuroclip-2026-11-10.log',
+        expected: true,
+        reason: 'Standard daily dated .log file must match',
+      },
       { filename: 'neuroclip.log', expected: true, reason: 'Standard main .log file must match' },
     ];
 
@@ -387,7 +395,7 @@ describe('CHALLENGER ROUND 2 ADVERSARIAL TEST SUITE', () => {
         'random_app.log',
         'neuroclip-invalid-date-format',
         'neuroclip-20261110', // Missing dashes
-        'neuroclip-2026-1-1',  // Invalid date length
+        'neuroclip-2026-1-1', // Invalid date length
         'neuroclip.',
         'neuroclip-',
       ];
@@ -405,9 +413,9 @@ describe('CHALLENGER ROUND 2 ADVERSARIAL TEST SUITE', () => {
         'neuroclip-2026-11-09.log',
         'neuroclip-trace.log',
         'neuroclip-test.log',
-        'neuroclip.2026-11-10',    // Tracing-appender rolling without extension
-        'neuroclip-2026-11-10',   // Tracing-appender rolling without extension
-        'neuroclip-.2026-11-10',  // Tracing-appender prefix variant
+        'neuroclip.2026-11-10', // Tracing-appender rolling without extension
+        'neuroclip-2026-11-10', // Tracing-appender rolling without extension
+        'neuroclip-.2026-11-10', // Tracing-appender prefix variant
       ];
 
       for (const validLog of validLogFiles) {
@@ -457,7 +465,7 @@ describe('CHALLENGER ROUND 2 ADVERSARIAL TEST SUITE', () => {
       // Check helper and pattern matching
       expect(code).toContain('fn is_daily_date_suffix(s: &str) -> bool');
       expect(code).toContain('pub fn is_neuroclip_log_file(filename: &str) -> bool');
-      expect(code).toContain('filename.ends_with(".log")');
+      expect(code).toContain('ext.eq_ignore_ascii_case("log")');
 
       // Invariant: zero forbidden calls outside test
       const prodCode = code.split('#[cfg(test)]')[0]!;

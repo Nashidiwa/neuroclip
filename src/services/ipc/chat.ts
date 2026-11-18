@@ -49,10 +49,7 @@ export interface ChatFallbackPayload {
  * @param url Full streaming URL (Twitch or YouTube).
  * @returns Path to the normalized `chat_events.json`.
  */
-export async function startChatExtraction(
-  vodId: string,
-  url: string
-): Promise<string> {
+export async function startChatExtraction(vodId: string, url: string): Promise<string> {
   try {
     return await invoke<string>('start_chat_extraction', {
       vodId,
@@ -74,7 +71,7 @@ export async function startChatExtraction(
 export async function getChatEvents(
   vodId: string,
   limit?: number,
-  offset?: number
+  offset?: number,
 ): Promise<ChatEventsContainer> {
   try {
     const raw = await invoke<ChatEventsContainerJson>('get_chat_events', {
@@ -97,7 +94,7 @@ export async function getChatEvents(
  */
 export async function getChatVelocityHeatmap(
   vodId: string,
-  windowSec?: number
+  windowSec?: number,
 ): Promise<ChatHeatmapResponse> {
   try {
     const raw = await invoke<ChatHeatmapResponseJson>('get_chat_velocity_heatmap', {
@@ -118,7 +115,7 @@ export async function getChatVelocityHeatmap(
  * Subscribe to chat extraction progress events.
  */
 export async function listenChatProgress(
-  callback: (payload: ChatProgressPayload) => void
+  callback: (payload: ChatProgressPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<ChatProgressPayload>('chat:progress', (event) => {
     callback(event.payload);
@@ -129,7 +126,7 @@ export async function listenChatProgress(
  * Subscribe to ERR-05 chat fallback notifications when chat replay is unavailable.
  */
 export async function listenChatFallback(
-  callback: (payload: ChatFallbackPayload) => void
+  callback: (payload: ChatFallbackPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<ChatFallbackPayload>('chat:fallback', (event) => {
     callback(event.payload);

@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  useProjectStore,
-  MIN_REQUIRED_DISK_SPACE_MB,
-} from '../stores/useProjectStore.ts';
+import { useProjectStore, MIN_REQUIRED_DISK_SPACE_MB } from '../stores/useProjectStore.ts';
 import {
   type DiskStatusJson,
   type CacheCleanupResultJson,
@@ -108,7 +105,9 @@ describe('TASK-M4-05: Project & Storage Store Subsystem (useProjectStore)', () =
       expect(state.storageError?.recoverable).toBe(true);
       expect(state.storageError?.message).toContain('3276MB');
       expect(state.storageError?.message).toContain('5120MB');
-      expect(state.storageError?.details).toContain('C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache');
+      expect(state.storageError?.details).toContain(
+        'C:\\Users\\User\\AppData\\Local\\NeuroClip\\cache',
+      );
     });
   });
 
@@ -164,7 +163,9 @@ describe('TASK-M4-05: Project & Storage Store Subsystem (useProjectStore)', () =
         cache_dir: 'D:\\NeuroClipCache',
       });
 
-      const redirectedStatus = await useProjectStore.getState().setCustomCacheDir('D:\\NeuroClipCache');
+      const redirectedStatus = await useProjectStore
+        .getState()
+        .setCustomCacheDir('D:\\NeuroClipCache');
 
       expect(redirectedStatus.freeSpaceMb).toBe(51200);
       expect(redirectedStatus.isSufficient).toBe(true);
@@ -353,7 +354,9 @@ describe('TASK-M4-05: Project & Storage Store Subsystem (useProjectStore)', () =
         }),
       );
 
-      expect(screen.getByTestId('error-code-badge')).toHaveTextContent(ERROR_CODES.INGEST_DISK_FULL);
+      expect(screen.getByTestId('error-code-badge')).toHaveTextContent(
+        ERROR_CODES.INGEST_DISK_FULL,
+      );
       expect(screen.getByTestId('error-message')).toHaveTextContent('Dung lượng ổ đĩa không đủ');
       expect(screen.getByTestId('error-retry-btn')).toBeInTheDocument();
 
@@ -394,7 +397,9 @@ describe('TASK-M4-05: Project & Storage Store Subsystem (useProjectStore)', () =
       expect(isCacheCleanupResultJson({ files_deleted: 3, bytes_freed: 1024 })).toBe(true);
       expect(isCacheCleanupResultJson({ bad: 'entry' })).toBe(false);
 
-      expect(isStoragePathsJson({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' })).toBe(true);
+      expect(isStoragePathsJson({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' })).toBe(
+        true,
+      );
       expect(isStoragePathsJson({ only_cache: 'C:\\cache' })).toBe(false);
 
       const paths = toStoragePaths({ cache_dir: 'C:\\cache', projects_dir: 'C:\\projects' });

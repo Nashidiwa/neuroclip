@@ -238,5 +238,31 @@ describe('TASK-M4-02: Unified IPC Error Service (IT-02.1)', () => {
       expect(ERROR_MESSAGES_VI[ERROR_CODES.TRANSLATE_SAFETY_FILTER]).toBeDefined();
       expect(ERROR_MESSAGES_VI[ERROR_CODES.EXPORT_CAPCUT_NOT_FOUND]).toBeDefined();
     });
+
+    it('should include all 11 ERR_STT_* codes and map every ERROR_CODES entry to a non-empty ERROR_MESSAGES_VI string', () => {
+      const sttPairs: ReadonlyArray<readonly [string, string]> = [
+        [ERROR_CODES.STT_CUDA_OOM, ERROR_CODES.ERR_STT_CUDA_OOM],
+        [ERROR_CODES.STT_MODEL_NOT_FOUND, ERROR_CODES.ERR_STT_MODEL_NOT_FOUND],
+        [ERROR_CODES.STT_MODEL_INTEGRITY_FAILED, ERROR_CODES.ERR_STT_MODEL_INTEGRITY_FAILED],
+        [ERROR_CODES.STT_SIDECAR_FAILED, ERROR_CODES.ERR_STT_SIDECAR_FAILED],
+        [ERROR_CODES.STT_PARSER_FAILED, ERROR_CODES.ERR_STT_PARSER_FAILED],
+        [ERROR_CODES.STT_INVALID_TIMESTAMP, ERROR_CODES.ERR_STT_INVALID_TIMESTAMP],
+      ];
+
+      for (const [shortCode, directAlias] of sttPairs) {
+        expect(shortCode).toBe(directAlias);
+        expect(shortCode.startsWith('ERR_STT_')).toBe(true);
+        const msg = getFriendlyErrorMessage(shortCode);
+        expect(msg.length).toBeGreaterThan(0);
+        expect(msg).not.toBe('Đã xảy ra lỗi không xác định.');
+      }
+
+      const uniqueCodes = new Set(Object.values(ERROR_CODES));
+      for (const code of uniqueCodes) {
+        const message = ERROR_MESSAGES_VI[code];
+        expect(message, `Missing ERROR_MESSAGES_VI for ${code}`).toBeDefined();
+        expect((message ?? '').trim().length).toBeGreaterThan(0);
+      }
+    });
   });
 });

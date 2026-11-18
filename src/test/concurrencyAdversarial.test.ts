@@ -18,10 +18,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { useProjectStore, MIN_REQUIRED_DISK_SPACE_MB } from '../stores/useProjectStore.ts';
-import {
-  type DiskStatusJson,
-  type CacheCleanupResultJson,
-} from '../services/ipc/storage.ts';
+import { type DiskStatusJson, type CacheCleanupResultJson } from '../services/ipc/storage.ts';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -277,7 +274,9 @@ describe('CHALLENGER 1 (R2): Extreme Concurrency & Store Race Condition Harness'
         } satisfies DiskStatusJson;
       }
       if (cmd === 'initialize_project') {
-        throw new Error('FATAL: initialize_project backend IPC MUST NOT be called when space is insufficient!');
+        throw new Error(
+          'FATAL: initialize_project backend IPC MUST NOT be called when space is insufficient!',
+        );
       }
       throw new Error(`Unexpected command: ${cmd}`);
     });

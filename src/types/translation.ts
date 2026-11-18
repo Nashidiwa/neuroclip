@@ -55,12 +55,13 @@ export interface TranslatedSegmentItem {
  * Normalize wire JSON `translation:progress` event into frontend domain model.
  */
 export function normalizeTranslationProgressPayload(
-  raw: TranslationProgressPayloadJson
+  raw: TranslationProgressPayloadJson,
 ): TranslationProgressPayload {
   const clipId = raw.clipId ?? raw.clip_id ?? '';
   const translatedCount = raw.translatedCount ?? raw.translated_count ?? 0;
   const totalCount = raw.totalCount ?? raw.total_count ?? 0;
-  const percent = totalCount > 0 ? Math.min(100, Math.round((translatedCount / totalCount) * 100)) : 0;
+  const percent =
+    totalCount > 0 ? Math.min(100, Math.round((translatedCount / totalCount) * 100)) : 0;
 
   return {
     clipId,

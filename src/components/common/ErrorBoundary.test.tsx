@@ -93,11 +93,7 @@ describe('TASK-M4-02: React ErrorBoundary Component (IT-02.2)', () => {
         fallback={({ error, resetErrorBoundary }) => (
           <div data-testid="custom-render-fallback">
             <span data-testid="custom-error-code">{error.code}</span>
-            <button
-              type="button"
-              data-testid="custom-retry-btn"
-              onClick={resetErrorBoundary}
-            >
+            <button type="button" data-testid="custom-retry-btn" onClick={resetErrorBoundary}>
               Phục hồi
             </button>
           </div>
@@ -122,15 +118,8 @@ describe('TASK-M4-02: React ErrorBoundary Component (IT-02.2)', () => {
 
       return (
         <ErrorBoundary onReset={onReset}>
-          <ThrowingChild
-            shouldThrow={hasExploded}
-            message="Lỗi có thể khắc phục khi retry"
-          />
-          <button
-            type="button"
-            data-testid="fix-issue-btn"
-            onClick={() => setHasExploded(false)}
-          >
+          <ThrowingChild shouldThrow={hasExploded} message="Lỗi có thể khắc phục khi retry" />
+          <button type="button" data-testid="fix-issue-btn" onClick={() => setHasExploded(false)}>
             Sửa lỗi
           </button>
         </ErrorBoundary>

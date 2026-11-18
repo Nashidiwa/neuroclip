@@ -8,7 +8,7 @@
  * Strict adherence to docs/CONVENTIONS.md (zero-any, exactOptionalPropertyTypes).
  */
 
-import { useSyncExternalStore } from 'react';
+import { createStore } from './createStore.ts';
 import {
   type DiskStatus,
   type CacheCleanupResult,
@@ -16,11 +16,7 @@ import {
   cleanExpiredCache,
   initializeProject as initializeProjectIpc,
 } from '../services/ipc/storage.ts';
-import {
-  type IpcErrorResponse,
-  ERROR_CODES,
-  parseIpcError,
-} from '../services/ipc/error.ts';
+import { type IpcErrorResponse, ERROR_CODES, parseIpcError } from '../services/ipc/error.ts';
 
 /// Minimum required free disk space threshold (5GB = 5120MB).
 export const MIN_REQUIRED_DISK_SPACE_MB = 5120;
@@ -60,80 +56,6 @@ export interface ProjectState {
 }
 
 // ---------------------------------------------------------------------------
-// Native Store Core Implementation (Zustand-Compatible Architecture)
-// ---------------------------------------------------------------------------
-
-type SetStateFn<T> = (
-  partial: Partial<T> | ((state: T) => Partial<T>),
-) => void;
-type GetStateFn<T> = () => T;
-type Listener<T> = (state: T, prevState: T) => void;
-
-interface StoreApi<T> {
-  getState: GetStateFn<T>;
-  setState: SetStateFn<T>;
-  subscribe: (listener: Listener<T>) => () => void;
-}
-
-type StoreHook<T> = {
-  (): T;
-  <U>(selector: (state: T) => U): U;
-} & StoreApi<T>;
-
-function createStore<T extends object>(
-  initializer: (set: SetStateFn<T>, get: GetStateFn<T>) => T,
-): StoreHook<T> {
-  let state: T;
-  const listeners = new Set<Listener<T>>();
-
-  const getState: GetStateFn<T> = () => state;
-
-  const setState: SetStateFn<T> = (partial) => {
-    const prevState = state;
-    const nextState =
-      typeof partial === 'function'
-        ? { ...prevState, ...partial(prevState) }
-        : { ...prevState, ...partial };
-
-    if (!Object.is(prevState, nextState)) {
-      state = nextState;
-      listeners.forEach((listener) => {
-        listener(state, prevState);
-      });
-    }
-  };
-
-  const subscribe = (listener: Listener<T>): (() => void) => {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  };
-
-  state = initializer(setState, getState);
-
-  const useStore = (<U>(selector?: (state: T) => U): T | U => {
-    return useSyncExternalStore(
-      (notify) => subscribe(notify),
-      () => {
-        const cur = getState();
-        return selector ? selector(cur) : cur;
-      },
-      () => {
-        const cur = getState();
-        return selector ? selector(cur) : cur;
-      },
-    );
-  }) as StoreHook<T>;
-
-  useStore.getState = getState;
-  useStore.setState = setState;
-  useStore.subscribe = subscribe;
-
-  return useStore;
-}
-
-// ---------------------------------------------------------------------------
 // Project Store Instance
 // ---------------------------------------------------------------------------
 
@@ -165,7 +87,8 @@ export const useProjectStore = createStore<ProjectState>((set, get) => ({
         return status;
       }
 
-      const isInsufficient = !status.is_sufficient || status.free_space_mb < MIN_REQUIRED_DISK_SPACE_MB;
+      const isInsufficient =
+        !status.is_sufficient || status.free_space_mb < MIN_REQUIRED_DISK_SPACE_MB;
 
       if (isInsufficient) {
         const errorResponse: IpcErrorResponse = {
@@ -252,7 +175,8 @@ export const useProjectStore = createStore<ProjectState>((set, get) => ({
       const projectDir = await initializeProjectIpc(projectId);
       set({
         projectId,
-        projectName: projectName !== undefined && projectName.trim().length > 0 ? projectName : projectId,
+        projectName:
+          projectName !== undefined && projectName.trim().length > 0 ? projectName : projectId,
         projectDir,
       });
       return true;

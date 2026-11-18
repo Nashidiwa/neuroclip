@@ -81,7 +81,7 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
         return a.startSec - b.startSec;
       }
       if (sortBy === 'duration') {
-        return (b.endSec - b.startSec) - (a.endSec - a.startSec);
+        return b.endSec - b.startSec - (a.endSec - a.startSec);
       }
       return 0;
     });
@@ -102,45 +102,45 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
   const getReasonIcon = (reason: string): React.ReactElement => {
     const lower = reason.toLowerCase();
     if (lower.includes('audio') || lower.includes('rms') || lower.includes('âm thanh')) {
-      return <Volume2 className="w-3 h-3 text-accent-vedal mr-1 shrink-0" />;
+      return <Volume2 className="mr-1 h-3 w-3 shrink-0 text-accent-vedal" />;
     }
     if (lower.includes('chat') || lower.includes('emote') || lower.includes('kekw')) {
-      return <MessageSquare className="w-3 h-3 text-accent-chat mr-1 shrink-0" />;
+      return <MessageSquare className="mr-1 h-3 w-3 shrink-0 text-accent-chat" />;
     }
-    return <Sparkles className="w-3 h-3 text-accent-neuro mr-1 shrink-0" />;
+    return <Sparkles className="mr-1 h-3 w-3 shrink-0 text-accent-neuro" />;
   };
 
   return (
     <section
       role="region"
       aria-label="Khung xem highlight đa phương thức"
-      className={`flex flex-col h-full bg-bg-secondary rounded-xl border border-border-dark shadow-acrylic overflow-hidden ${className}`}
+      className={`flex h-full flex-col overflow-hidden rounded-xl border border-border-dark bg-bg-secondary shadow-acrylic ${className}`}
     >
       {/* Header Toolbar */}
-      <header className="flex flex-wrap items-center justify-between p-4 border-b border-border-dark bg-bg-primary/50 gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border-dark bg-bg-primary/50 p-4">
         <div className="flex items-center space-x-2">
-          <Sparkles className="w-5 h-5 text-accent-neuro" />
-          <h2 className="text-base font-semibold text-white">Khoảnh Khắc Highlight Đa Phương Thức</h2>
-          <span className="px-2 py-0.5 text-xs font-mono rounded bg-bg-tertiary text-slate-300 border border-border-dark">
+          <Sparkles className="h-5 w-5 text-accent-neuro" />
+          <h2 className="text-base font-semibold text-white">
+            Khoảnh Khắc Highlight Đa Phương Thức
+          </h2>
+          <span className="rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 font-mono text-xs text-slate-300">
             {clusters.length} cụm
           </span>
-          {vodId && (
-            <span className="text-xs font-mono text-slate-400">({vodId})</span>
-          )}
+          {vodId && <span className="font-mono text-xs text-slate-400">({vodId})</span>}
         </div>
 
         {/* Controls */}
         <div className="flex items-center space-x-2">
           {/* Search Box */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Lọc emote / lý do..."
               aria-label="Lọc emote hoặc lý do highlight"
-              className="pl-8 pr-3 py-1 text-xs rounded-lg bg-bg-tertiary border border-border-dark text-white placeholder-slate-500 focus:outline-none focus:border-accent-neuro"
+              className="rounded-lg border border-border-dark bg-bg-tertiary py-1 pl-8 pr-3 text-xs text-white placeholder-slate-500 focus:border-accent-neuro focus:outline-none"
             />
           </div>
 
@@ -150,24 +150,24 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
             onClick={() => setFilterBookmarkedOnly((prev) => !prev)}
             aria-pressed={filterBookmarkedOnly}
             title="Chỉ hiển thị cụm đã đánh dấu"
-            className={`px-2.5 py-1 text-xs rounded-lg border transition-colors flex items-center space-x-1 ${
+            className={`flex items-center space-x-1 rounded-lg border px-2.5 py-1 text-xs transition-colors ${
               filterBookmarkedOnly
-                ? 'bg-accent-guest/20 border-accent-guest text-accent-guest'
-                : 'bg-bg-tertiary border-border-dark text-slate-400 hover:text-white'
+                ? 'border-accent-guest bg-accent-guest/20 text-accent-guest'
+                : 'border-border-dark bg-bg-tertiary text-slate-400 hover:text-white'
             }`}
           >
-            <Bookmark className="w-3.5 h-3.5" />
+            <Bookmark className="h-3.5 w-3.5" />
             <span>Đã ghim</span>
           </button>
 
           {/* Sort Selector */}
-          <div className="flex items-center space-x-1 bg-bg-tertiary border border-border-dark rounded-lg px-2 py-0.5 text-xs">
-            <ArrowUpDown className="w-3 h-3 text-slate-400" />
+          <div className="flex items-center space-x-1 rounded-lg border border-border-dark bg-bg-tertiary px-2 py-0.5 text-xs">
+            <ArrowUpDown className="h-3 w-3 text-slate-400" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortField)}
               aria-label="Sắp xếp cụm highlight"
-              className="bg-transparent text-slate-300 focus:outline-none cursor-pointer text-xs"
+              className="cursor-pointer bg-transparent text-xs text-slate-300 focus:outline-none"
             >
               <option value="score">Điểm cao nhất</option>
               <option value="time">Mốc thời gian</option>
@@ -182,25 +182,27 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
               onClick={onRefresh}
               disabled={isLoading}
               title="Phân tích lại highlight"
-              className="p-1.5 rounded-lg bg-bg-tertiary hover:bg-slate-700 text-slate-300 transition-colors disabled:opacity-50"
+              className="rounded-lg bg-bg-tertiary p-1.5 text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-accent-neuro' : ''}`} />
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-accent-neuro' : ''}`}
+              />
             </button>
           )}
         </div>
       </header>
 
       {/* Cluster List Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {isLoading ? (
-          <div className="space-y-3 animate-pulse" data-testid="highlight-loading-skeleton">
-            <div className="h-20 bg-bg-tertiary rounded-lg border border-border-dark" />
-            <div className="h-20 bg-bg-tertiary rounded-lg border border-border-dark" />
-            <div className="h-20 bg-bg-tertiary rounded-lg border border-border-dark" />
+          <div className="animate-pulse space-y-3" data-testid="highlight-loading-skeleton">
+            <div className="h-20 rounded-lg border border-border-dark bg-bg-tertiary" />
+            <div className="h-20 rounded-lg border border-border-dark bg-bg-tertiary" />
+            <div className="h-20 rounded-lg border border-border-dark bg-bg-tertiary" />
           </div>
         ) : filteredClusters.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center space-y-2">
-            <Sparkles className="w-8 h-8 text-slate-600" />
+          <div className="flex h-48 flex-col items-center justify-center space-y-2 text-center">
+            <Sparkles className="h-8 w-8 text-slate-600" />
             <p className="text-sm text-slate-400">Không tìm thấy cụm highlight phù hợp.</p>
             <p className="text-xs text-slate-500">
               {clusters.length === 0
@@ -226,49 +228,48 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
                       onSelectCluster?.(cluster);
                     }
                   }}
-                  className={`group relative p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                  className={`group relative cursor-pointer select-none rounded-xl border p-3.5 transition-all ${
                     isSelected
-                      ? 'bg-bg-tertiary/90 border-accent-neuro ring-1 ring-accent-neuro shadow-lg'
-                      : 'bg-bg-secondary/60 hover:bg-bg-tertiary/60 border-border-dark hover:border-slate-600'
+                      ? 'border-accent-neuro bg-bg-tertiary/90 shadow-lg ring-1 ring-accent-neuro'
+                      : 'border-border-dark bg-bg-secondary/60 hover:border-slate-600 hover:bg-bg-tertiary/60'
                   }`}
                   data-testid={`cluster-item-${cluster.clusterId}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     {/* Left: Rank, Timecodes, Peak */}
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <div className="flex items-center flex-wrap gap-2 text-xs">
-                        <span className="font-mono font-semibold text-slate-400">
-                          #{index + 1}
-                        </span>
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-mono font-semibold text-slate-400">#{index + 1}</span>
 
                         {/* Range Timecode */}
-                        <div className="flex items-center space-x-1 font-mono font-medium text-white bg-bg-primary px-2 py-0.5 rounded border border-border-dark">
-                          <Clock className="w-3.5 h-3.5 text-accent-chat" />
+                        <div className="flex items-center space-x-1 rounded border border-border-dark bg-bg-primary px-2 py-0.5 font-mono font-medium text-white">
+                          <Clock className="h-3.5 w-3.5 text-accent-chat" />
                           <span>
-                            {formatTimecode(cluster.startSec)} &rarr; {formatTimecode(cluster.endSec)}
+                            {formatTimecode(cluster.startSec)} &rarr;{' '}
+                            {formatTimecode(cluster.endSec)}
                           </span>
                         </div>
 
                         {/* Duration Pill */}
-                        <span className="text-[11px] font-mono text-slate-400">
+                        <span className="font-mono text-[11px] text-slate-400">
                           ({formatDuration(durationSec)})
                         </span>
 
                         {/* Peak Indicator */}
                         <div
-                          className="flex items-center space-x-1 text-[11px] font-mono text-accent-evil bg-accent-evil/10 px-2 py-0.5 rounded border border-accent-evil/30"
+                          className="flex items-center space-x-1 rounded border border-accent-evil/30 bg-accent-evil/10 px-2 py-0.5 font-mono text-[11px] text-accent-evil"
                           title="Đỉnh chat bù trễ -4.5s livestream"
                         >
-                          <Flame className="w-3 h-3 text-accent-evil" />
+                          <Flame className="h-3 w-3 text-accent-evil" />
                           <span>Đỉnh: {formatTimecode(cluster.peakSec)}</span>
                           <span className="text-[10px] text-slate-400">(-4.5s)</span>
                         </div>
                       </div>
 
                       {/* Reasons & Top Emotes */}
-                      <div className="flex items-center flex-wrap gap-1.5 pt-1">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
                         {/* Primary Reason Badge */}
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-md bg-bg-primary border border-border-dark text-slate-300">
+                        <span className="inline-flex items-center rounded-md border border-border-dark bg-bg-primary px-2 py-0.5 text-xs text-slate-300">
                           {getReasonIcon(cluster.primaryReason)}
                           <span>{cluster.primaryReason}</span>
                         </span>
@@ -277,7 +278,7 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
                         {cluster.topEmotes.map((emote) => (
                           <span
                             key={emote}
-                            className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-accent-chat/10 border border-accent-chat/30 text-accent-chat"
+                            className="rounded border border-accent-chat/30 bg-accent-chat/10 px-1.5 py-0.5 font-mono text-[11px] text-accent-chat"
                           >
                             {emote}
                           </span>
@@ -286,17 +287,19 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
                     </div>
 
                     {/* Right: Score Badge & Actions */}
-                    <div className="flex flex-col items-end space-y-2 shrink-0">
+                    <div className="flex shrink-0 flex-col items-end space-y-2">
                       <div className="flex items-center space-x-2">
                         {/* Score Badge */}
                         <div
-                          className={`flex items-center px-2.5 py-1 rounded-lg border font-mono font-bold text-xs tracking-wide ${getScoreBadgeClass(
+                          className={`flex items-center rounded-lg border px-2.5 py-1 font-mono text-xs font-bold tracking-wide ${getScoreBadgeClass(
                             cluster.score,
                           )}`}
                           title={`Điểm hợp nhất đa phương thức: ${cluster.score}/100`}
                         >
                           <span>{formatScore(cluster.score)}</span>
-                          <span className="text-[10px] font-normal text-slate-400 ml-0.5">/100</span>
+                          <span className="ml-0.5 text-[10px] font-normal text-slate-400">
+                            /100
+                          </span>
                         </div>
 
                         {/* Bookmark Button */}
@@ -308,22 +311,22 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
                           }}
                           aria-label={`Bookmark cluster ${cluster.clusterId}`}
                           title={cluster.isBookmarked ? 'Bỏ đánh dấu' : 'Đánh dấu clip này'}
-                          className={`p-1.5 rounded-lg border transition-colors ${
+                          className={`rounded-lg border p-1.5 transition-colors ${
                             cluster.isBookmarked
-                              ? 'bg-accent-guest/20 border-accent-guest/40 text-accent-guest'
-                              : 'bg-bg-primary border-border-dark text-slate-400 hover:text-white'
+                              ? 'border-accent-guest/40 bg-accent-guest/20 text-accent-guest'
+                              : 'border-border-dark bg-bg-primary text-slate-400 hover:text-white'
                           }`}
                         >
                           {cluster.isBookmarked ? (
-                            <BookmarkCheck className="w-3.5 h-3.5 fill-accent-guest text-accent-guest" />
+                            <BookmarkCheck className="h-3.5 w-3.5 fill-accent-guest text-accent-guest" />
                           ) : (
-                            <Bookmark className="w-3.5 h-3.5" />
+                            <Bookmark className="h-3.5 w-3.5" />
                           )}
                         </button>
                       </div>
 
                       {/* Quick Actions (Range Slicer Preparation) */}
-                      <div className="flex items-center space-x-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center space-x-1 opacity-80 transition-opacity group-hover:opacity-100">
                         <button
                           type="button"
                           onClick={(e) => {
@@ -331,9 +334,9 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
                             onSelectCluster?.(cluster);
                           }}
                           title="Cắt phân đoạn (TASK-M4-13 Range Slicer)"
-                          className="px-2 py-0.5 text-[11px] rounded bg-bg-primary hover:bg-slate-700 text-slate-300 border border-border-dark flex items-center space-x-1"
+                          className="flex items-center space-x-1 rounded border border-border-dark bg-bg-primary px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-700"
                         >
-                          <Scissors className="w-3 h-3 text-accent-vedal" />
+                          <Scissors className="h-3 w-3 text-accent-vedal" />
                           <span>Cắt Clip</span>
                         </button>
                       </div>

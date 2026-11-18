@@ -64,7 +64,7 @@ describe('CHALLENGER R2 IPC & STORE ADVERSARIAL SUITE', () => {
 
       // Verify sequence integrity
       for (let i = 0; i < 100; i++) {
-        const payload = (dispatchedItems[i]?.args as { message: string });
+        const payload = dispatchedItems[i]?.args as { message: string };
         expect(payload.message).toBe(`Synchronous burst log #${i + 1}`);
       }
 
@@ -324,7 +324,9 @@ describe('CHALLENGER R2 IPC & STORE ADVERSARIAL SUITE', () => {
         message: null as unknown as string,
       };
 
-      const normalized = toLogEntry(rawWithNullMsg as unknown as import('../services/logging/types.ts').LogEntryJson);
+      const normalized = toLogEntry(
+        rawWithNullMsg as unknown as import('../services/logging/types.ts').LogEntryJson,
+      );
       expect(typeof normalized.id).toBe('string');
       expect(normalized.timestamp).toBe('2026-11-10T12:00:00.000Z');
       expect(normalized.level).toBe('info');

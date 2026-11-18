@@ -127,7 +127,9 @@ describe('TASK-M4-02: Adversarial Stress Testing — ErrorBoundary & ErrorBanner
         </ErrorBoundary>,
       );
 
-      expect(screen.getByTestId('error-code-badge')).toHaveTextContent(ERROR_CODES.INGEST_BOT_BLOCKED);
+      expect(screen.getByTestId('error-code-badge')).toHaveTextContent(
+        ERROR_CODES.INGEST_BOT_BLOCKED,
+      );
       expect(screen.getByTestId('error-message')).toHaveTextContent(
         'YouTube bot verification challenge required',
       );
@@ -328,7 +330,9 @@ describe('TASK-M4-02: Adversarial Stress Testing — ErrorBoundary & ErrorBanner
     });
 
     it('should handle clipboard writeText rejection gracefully without unhandled rejection', async () => {
-      const writeTextMock = vi.fn().mockRejectedValue(new Error('Clipboard permission denied by OS policy'));
+      const writeTextMock = vi
+        .fn()
+        .mockRejectedValue(new Error('Clipboard permission denied by OS policy'));
       Object.assign(navigator, {
         clipboard: {
           writeText: writeTextMock,
@@ -604,11 +608,7 @@ describe('TASK-M4-02: Adversarial Stress Testing — ErrorBoundary & ErrorBanner
 
         return (
           <div>
-            <button
-              type="button"
-              data-testid="fix-state-btn"
-              onClick={() => setShouldThrow(false)}
-            >
+            <button type="button" data-testid="fix-state-btn" onClick={() => setShouldThrow(false)}>
               Fix State
             </button>
             <ErrorBoundary>
@@ -687,4 +687,3 @@ describe('TASK-M4-02: Adversarial Stress Testing — ErrorBoundary & ErrorBanner
     });
   });
 });
-

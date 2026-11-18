@@ -81,7 +81,7 @@ describe('Schema 5.3 Chat Contracts & Type Guards', () => {
         author: 'User',
         message: 'Hi',
         emotes_detected: 'not-an-array',
-      })
+      }),
     ).toBe(false);
   });
 
@@ -93,7 +93,7 @@ describe('Schema 5.3 Chat Contracts & Type Guards', () => {
         vod_id: '123',
         total_messages: 1,
         events: [{ invalid: true }],
-      })
+      }),
     ).toBe(false);
   });
 
@@ -209,7 +209,7 @@ describe('Adversarial Type Guards & Defense Invariants', () => {
         author: 'User',
         message: 'Hi',
         emotes_detected: [],
-      })
+      }),
     ).toBe(false);
 
     expect(
@@ -218,7 +218,7 @@ describe('Adversarial Type Guards & Defense Invariants', () => {
         author: 'User',
         message: 'Hi',
         emotes_detected: [],
-      })
+      }),
     ).toBe(false);
   });
 
@@ -230,7 +230,7 @@ describe('Adversarial Type Guards & Defense Invariants', () => {
         message: 'Hi',
         emotes_detected: [],
         is_swarm_emote: 'not-a-boolean',
-      })
+      }),
     ).toBe(false);
   });
 
@@ -309,7 +309,9 @@ describe('useChatStore State Transitions', () => {
       return null;
     });
 
-    const resultPath = await chatStore.getState().extractChat('vod_1', 'https://twitch.tv/videos/123');
+    const resultPath = await chatStore
+      .getState()
+      .extractChat('vod_1', 'https://twitch.tv/videos/123');
 
     expect(resultPath).toBe(mockPath);
     const state = chatStore.getState();
@@ -329,7 +331,7 @@ describe('useChatStore State Transitions', () => {
     });
 
     await expect(
-      chatStore.getState().extractChat('vod_404', 'https://twitch.tv/videos/999')
+      chatStore.getState().extractChat('vod_404', 'https://twitch.tv/videos/999'),
     ).rejects.toMatchObject({
       code: 'ERR_INGEST_CHAT_UNAVAILABLE',
       recoverable: true,

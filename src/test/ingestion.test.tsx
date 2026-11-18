@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
-import {
-  useIngestionStore,
-} from '../stores/useIngestionStore.ts';
+import { useIngestionStore } from '../stores/useIngestionStore.ts';
 import {
   type VodManifestJson,
   type VodMetadataJson,
@@ -394,7 +392,9 @@ describe('TASK-M4-06: Ingestion Subsystem & IngestionDashboard', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('live-stream-badge')).toBeInTheDocument();
-        expect(screen.getByText(/Livestream đang phát trực tiếp không được hỗ trợ/)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Livestream đang phát trực tiếp không được hỗ trợ/),
+        ).toBeInTheDocument();
       });
 
       const startBtn = screen.getByTestId('start-ingest-button');
@@ -584,4 +584,3 @@ describe('TASK-M4-06: Ingestion Subsystem & IngestionDashboard', () => {
     });
   });
 });
-

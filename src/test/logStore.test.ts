@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  useLogStore,
-  selectFilteredLogs,
-  DEFAULT_MAX_LOG_ENTRIES,
-} from '../stores/useLogStore.ts';
+import { renderHook, act } from '@testing-library/react';
+import { useLogStore, selectFilteredLogs, DEFAULT_MAX_LOG_ENTRIES } from '../stores/useLogStore.ts';
 import { type LogEntry, type LogEntryJson } from '../services/logging/types.ts';
 
 describe('Log Viewer Reactive Store & Ring Buffer (useLogStore)', () => {
@@ -209,6 +206,37 @@ describe('Log Viewer Reactive Store & Ring Buffer (useLogStore)', () => {
 
       useLogStore.getState().clearError();
       expect(useLogStore.getState().error).toBeNull();
+    });
+
+    it('supports derived selector useLogStore(selectFilteredLogs) in renderHook without infinite loop', () => {
+      const { result } = renderHook(() => useLogStore(selectFilteredLogs));
+      expect(result.current).toEqual([]);
+
+      act(() => {
+        useLogStore.getState().addLogEntry({
+          id: 'log-hook-1',
+          timestamp: '2026-11-10T10:00:00.000Z',
+          level: 'info',
+          target: 'neuroclip::stt',
+          message: 'Hook test info',
+        });
+        useLogStore.getState().addLogEntry({
+          id: 'log-hook-2',
+          timestamp: '2026-11-10T10:01:00.000Z',
+          level: 'error',
+          target: 'neuroclip::stt',
+          message: 'Hook test error',
+        });
+      });
+
+      expect(result.current.length).toBe(2);
+
+      act(() => {
+        useLogStore.getState().setFilter({ level: 'error' });
+      });
+
+      expect(result.current.length).toBe(1);
+      expect(result.current[0]?.id).toBe('log-hook-2');
     });
   });
 });

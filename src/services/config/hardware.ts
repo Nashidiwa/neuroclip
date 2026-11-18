@@ -132,8 +132,7 @@ export function isHardwareProfileJson(val: unknown): val is HardwareProfileJson 
   if (typeof val !== 'object' || val === null) return false;
   const obj = val as Record<string, unknown>;
   const hasReason =
-    obj['recommendation_reason'] === undefined ||
-    typeof obj['recommendation_reason'] === 'string';
+    obj['recommendation_reason'] === undefined || typeof obj['recommendation_reason'] === 'string';
 
   return (
     isCpuInfoJson(obj['cpu_info']) &&
@@ -161,8 +160,7 @@ export function isHardwareProfile(val: unknown): val is HardwareProfile {
   const gpuObj = gpu as Record<string, unknown>;
 
   const hasReason =
-    obj['recommendationReason'] === undefined ||
-    typeof obj['recommendationReason'] === 'string';
+    obj['recommendationReason'] === undefined || typeof obj['recommendationReason'] === 'string';
 
   return (
     typeof cpuObj['model'] === 'string' &&
@@ -184,9 +182,7 @@ export function isHardwareProfile(val: unknown): val is HardwareProfile {
 // Lossless Bidirectional Serialization Mappers
 // ---------------------------------------------------------------------------
 
-export function toHardwareProfile(
-  raw: HardwareProfileJson | HardwareProfile,
-): HardwareProfile {
+export function toHardwareProfile(raw: HardwareProfileJson | HardwareProfile): HardwareProfile {
   if ('cpuInfo' in raw) {
     return raw;
   }
@@ -236,8 +232,7 @@ export function toHardwareProfileJson(profile: HardwareProfile): HardwareProfile
     },
     recommended_mode: profile.recommendedMode,
     timestamp: profile.timestamp,
-    ...(typeof profile.recommendationReason === 'string' &&
-    profile.recommendationReason.length > 0
+    ...(typeof profile.recommendationReason === 'string' && profile.recommendationReason.length > 0
       ? { recommendation_reason: profile.recommendationReason }
       : {}),
   };

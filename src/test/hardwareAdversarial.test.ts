@@ -613,7 +613,12 @@ describe('TASK-M4-03: Adversarial Challenge Suite', () => {
       const mockProfile = {
         cpuInfo: { model: 'i9', cores: 16, threads: 32 },
         ramInfo: { totalMb: 65536, availableMb: 48000 },
-        gpuInfo: { vendor: 'NVIDIA' as const, model: 'RTX 4090', vramMb: 24576, cudaSupported: true },
+        gpuInfo: {
+          vendor: 'NVIDIA' as const,
+          model: 'RTX 4090',
+          vramMb: 24576,
+          cudaSupported: true,
+        },
         recommendedMode: 'offline_local' as const,
         timestamp: '2026-11-09T20:00:00Z',
       };

@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { parseIpcError } from './error.ts';
 import {
+  type GuardrailPolicy,
   type ModelInfo,
   type ModelInfoJson,
   type SttProgressPayload,
@@ -26,9 +27,19 @@ import {
 
 export * from '../../types/transcript.ts';
 
+export const STT_PROGRESS_EVENT = 'stt:progress' as const;
+export const STT_CHUNK_EVENT = 'stt:chunk' as const;
+
 export interface TranscribeClipOptions {
   readonly apiKey?: string | undefined;
   readonly isMusicMode?: boolean | undefined;
+}
+
+export interface FasterWhisperOptions {
+  readonly model?: string | undefined;
+  readonly quantization?: string | undefined;
+  readonly device?: string | undefined;
+  readonly guardrailPolicy?: GuardrailPolicy | undefined;
 }
 
 export interface SttChunkPayload {
@@ -38,8 +49,10 @@ export interface SttChunkPayload {
 }
 
 export interface SttChunkPayloadJson {
-  readonly clip_id: string;
-  readonly chunk_index: number;
+  readonly clip_id?: string | undefined;
+  readonly clipId?: string | undefined;
+  readonly chunk_index?: number | undefined;
+  readonly chunkIndex?: number | undefined;
   readonly segment: TranscriptSegmentJson;
 }
 
@@ -58,7 +71,7 @@ export interface SttChunkPayloadJson {
 export async function startWhisperTranscription(
   clipId: string,
   audioPath: string,
-  modelName?: string
+  modelName?: string,
 ): Promise<TranscriptSegmentsContainer> {
   try {
     const raw = await invoke<TranscriptSegmentsContainerJson>('start_whisper_transcription', {
@@ -86,7 +99,7 @@ export async function startWhisperTranscription(
 export async function transcribeHighlightClip(
   clipId: string,
   audioPath: string,
-  options?: TranscribeClipOptions
+  options?: TranscribeClipOptions,
 ): Promise<TranscriptSegmentsContainer> {
   try {
     const raw = await invoke<TranscriptSegmentsContainerJson>('transcribe_highlight_clip', {
@@ -102,14 +115,43 @@ export async function transcribeHighlightClip(
 }
 
 /**
+ * Trigger local Faster-Whisper INT8 transcription with hardware VRAM guardrail protection.
+ *
+ * @param clipId Unique identifier for the highlight clip.
+ * @param audioPath Absolute path to the audio file on disk.
+ * @param options Optional Faster-Whisper model, quantization, device, and guardrail policy.
+ * @returns TranscriptSegmentsContainer adhering to Schema 5.5.
+ */
+export async function startFasterWhisperTranscription(
+  clipId: string,
+  audioPath: string,
+  options?: FasterWhisperOptions,
+): Promise<TranscriptSegmentsContainer> {
+  try {
+    const raw = await invoke<TranscriptSegmentsContainerJson>(
+      'start_faster_whisper_transcription',
+      {
+        clipId,
+        audioPath,
+        model: options?.model ?? null,
+        quantization: options?.quantization ?? null,
+        device: options?.device ?? null,
+        guardrailPolicy: options?.guardrailPolicy ?? null,
+      },
+    );
+    return normalizeTranscriptSegmentsContainer(raw);
+  } catch (err: unknown) {
+    throw parseIpcError(err);
+  }
+}
+
+/**
  * Verify cryptographic SHA-256 integrity of a local Whisper model file.
  *
  * @param modelName Optional model identifier to check.
  * @returns Verified ModelInfo metadata.
  */
-export async function verifySttModel(
-  modelName?: string
-): Promise<ModelInfo> {
+export async function verifySttModel(modelName?: string): Promise<ModelInfo> {
   try {
     const raw = await invoke<ModelInfoJson>('verify_stt_model', {
       modelName: modelName ?? null,
@@ -129,7 +171,7 @@ export async function verifySttModel(
  */
 export async function exportSubtitlesAss(
   container: TranscriptSegmentsContainer,
-  outputPath: string
+  outputPath: string,
 ): Promise<string> {
   try {
     const wireContainer = toTranscriptSegmentsContainerJson(container);
@@ -151,7 +193,7 @@ export async function exportSubtitlesAss(
  */
 export async function exportSubtitlesSrt(
   container: TranscriptSegmentsContainer,
-  outputPath: string
+  outputPath: string,
 ): Promise<string> {
   try {
     const wireContainer = toTranscriptSegmentsContainerJson(container);
@@ -175,9 +217,9 @@ export async function exportSubtitlesSrt(
  * @returns Unlisten function to detach subscription.
  */
 export async function listenSttProgress(
-  callback: (payload: SttProgressPayload) => void
+  callback: (payload: SttProgressPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<SttProgressPayloadJson>('stt:progress', (event) => {
+  return listen<SttProgressPayloadJson>(STT_PROGRESS_EVENT, (event) => {
     callback(normalizeSttProgressPayload(event.payload));
   });
 }
@@ -189,13 +231,14 @@ export async function listenSttProgress(
  * @returns Unlisten function to detach subscription.
  */
 export async function listenSttChunk(
-  callback: (payload: SttChunkPayload) => void
+  callback: (payload: SttChunkPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<SttChunkPayloadJson>('stt:chunk', (event) => {
+  return listen<SttChunkPayloadJson>(STT_CHUNK_EVENT, (event) => {
+    const payload = event.payload;
     callback({
-      clipId: event.payload.clip_id,
-      chunkIndex: event.payload.chunk_index,
-      segment: normalizeTranscriptSegment(event.payload.segment),
+      clipId: payload.clip_id ?? payload.clipId ?? '',
+      chunkIndex: payload.chunk_index ?? payload.chunkIndex ?? 0,
+      segment: normalizeTranscriptSegment(payload.segment),
     });
   });
 }
