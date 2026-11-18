@@ -2,8 +2,8 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
-**Phiên bản:** 2.0.0 (Phase 3: Conventions & Task Breakdown Completed — Chờ PO duyệt Gate 3)  
-**Ngày cập nhật:** 2026-11-05  
+**Phiên bản:** 2.0.0 (Phase 4: Implementation & Verification — M4.1–M4.4 & TASK-M4-17 Completed; Pre-M4-18 Remediation Verified)  
+**Ngày cập nhật:** 2026-11-18  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`.
 
@@ -16,7 +16,7 @@
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
 | **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (14 / 32 Tasks Completed: M4.1–M4.3 & TASK-M4-14)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (17 / 32 Tasks Completed: TASK-M4-01..M4-17)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -39,7 +39,7 @@
 - [x] **TASK-M2-04:** Thiết kế luồng xử lý lỗi (Failure Modes Matrix ERR-01 đến ERR-09: Disk Space Pre-flight, Network Exponential Backoff, VAD Silence Pruning, Gemini Safety Filter Fallback, CapCut Schema Safeguard).
 - [x] **TASK-M2-05:** **[GATE 2 PASSED]** PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và thông qua toàn bộ 7 ADRs để chuyển sang Phase 3.
 
-### Phase 3: Conventions & Technical Breakdown (M3) — ĐÃ HOÀN THÀNH (CHỜ DUYỆT GATE 3)
+### Phase 3: Conventions & Technical Breakdown (M3) — ĐÃ HOÀN THÀNH (GATE 3 APPROVED)
 - [x] **TASK-M3-01:** Ban hành bộ quy chuẩn lập trình `docs/CONVENTIONS.md` (Rust backend Edition 2021, clippy lint profile, TypeScript frontend strict mode, Tauri IPC commands/events, Error Codes, Logging standard, Secret Redaction).
 - [x] **TASK-M3-02:** Thiết kế cấu trúc thư mục mã nguồn chi tiết (Source Tree Architecture: `src-tauri/`, `src/`, `installer/`, `tests/`).
 - [x] **TASK-M3-03:** Xây dựng ma trận kiểm thử tự động toàn diện do `@qa-reviewer` chủ trì (Unit Test, Integration Test, E2E Synthetic Test, Low-end PC Stress Test, Quality Gates & Veto Criteria).
@@ -53,21 +53,26 @@
 
 ### Milestone M4.1: Nền Tảng Ứng Dụng & Hạ Tầng Cốt Lõi (Foundation)
 
-#### TASK-M4-01: Khởi tạo Tauri v2 Native Desktop Shell & Giao diện Acrylic Dark Theme
+#### TASK-M4-01: Khởi tạo Tauri v2 Native Desktop Shell & Giao diện Acrylic Dark Theme — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `@tech-lead` & Senior Frontend Dev
 - **Target Files:**
   - `src-tauri/tauri.conf.json`
   - `src-tauri/Cargo.toml`
   - `src-tauri/src/main.rs`
+  - `src-tauri/src/lib.rs`
   - `src/App.tsx`
-  - `src/index.html`
+  - `src/main.tsx`
+  - `index.html` *(tại repo root)*
   - `src/styles/theme.css`
+  - `src/styles/theme.ts`
+  - `src/stores/createStore.ts` *(store factory `React.useSyncExternalStore`, API tương thích Zustand)*
   - `vite.config.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Khởi tạo project Tauri v2 với WebView2 native trên Windows 10/11 64-bit.
   - Cấu hình cửa sổ ứng dụng: kích thước mặc định 1280x800, min 1024x640, hỗ trợ Windows Mica/Acrylic material.
-  - Thiết lập bảng màu Dark Theme phong cách VTuber Neuro-sama: Nền chính `#12131C`, Nền phụ `#1A1C28`, Accent Pink `#FFB6C1` (Neuro), Accent Red `#FF0055` (Evil), Accent Green `#98FB98` (Vedal).
+  - Thiết lập bảng màu Dark Theme phong cách VTuber Neuro-sama (PO Option 1): Nền chính `#12131C`, Nền phụ `#1A1C28`, Accent Pink `#FFB6C1` (Neuro), Accent Red `#FF0055` (Evil), Accent Green `#98FB98` (Vedal), Accent Gold `#FFD700` (Guest), Accent Sky `#87CEEB` (Chat).
   - Tích hợp font chữ tối ưu hóa cho hiển thị phụ đề và giao diện tiếng Việt: `Be Vietnam Pro` hoặc `Inter`.
+  - *(M3 Shell Wiring)* `App.tsx` cung cấp shell 3 tab tối giản (`overview` giữ nguyên showcase/SLA M4-01, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`) không gọi IPC lúc mount; `main.tsx` bọc `<GlobalErrorBoundary><App /></GlobalErrorBoundary>`.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Không có.
   - Đầu ra: Cửa sổ desktop hoạt động, render React 18 SPA với hiệu năng cao.
@@ -75,42 +80,43 @@
   - Prerequisites: Không (Task khởi đầu).
   - Blocks: TASK-M4-02, TASK-M4-20, TASK-M4-27.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-01.1:** Ứng dụng khởi động trên Windows 10/11 có thời gian hiển thị giao diện chính (Time to Interactive - TTI) $\le 800\text{ms}$.
-  - [ ] **AC-01.2:** Mức chiếm dụng RAM tĩnh (Static Idle RAM) khi chưa nạp video $\le 90\text{MB}$ (đo qua Windows Task Manager).
-  - [ ] **AC-01.3:** Tỷ lệ khung hình render giao diện đạt ổn định $60\text{ FPS}$ khi thay đổi kích thước cửa sổ.
+  - [x] **AC-01.1:** Ứng dụng khởi động trên Windows 10/11 có thời gian hiển thị giao diện chính (Time to Interactive - TTI) $\le 800\text{ms}$.
+  - [x] **AC-01.2:** Mức chiếm dụng RAM tĩnh (Static Idle RAM) khi chưa nạp video $\le 90\text{MB}$ (đo qua Windows Task Manager).
+  - [x] **AC-01.3:** Tỷ lệ khung hình render giao diện đạt ổn định $60\text{ FPS}$ khi thay đổi kích thước cửa sổ.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Integration & Frontend Component Test
   - *Unit Test Cases:*
-    - [ ] **UT-01.1 (Happy Path):** Kiểm tra hàm nạp theme cấu hình trả về đầy đủ các mã màu chuẩn Neuro-sama (`#12131C`, `#1A1C28`, `#FFB6C1`, `#98FB98`, `#FF0055`).
-    - [ ] **UT-01.2 (Failure Path):** Khởi chạy trên môi trường không hỗ trợ Acrylic (Windows 10 build cũ), hàm fall back an toàn về solid background `#12131C` mà không crash.
+    - [x] **UT-01.1 (Happy Path):** Kiểm tra hàm nạp theme cấu hình trả về đầy đủ các mã màu chuẩn Neuro-sama (`#12131C`, `#1A1C28`, `#FFB6C1`, `#98FB98`, `#FF0055`).
+    - [x] **UT-01.2 (Failure Path):** Khởi chạy trên môi trường không hỗ trợ Acrylic (Windows 10 build cũ), hàm fall back an toàn về solid background `#12131C` mà không crash.
   - *Integration & Contract Verification:*
-    - [ ] **IT-01.1:** Cửa sổ Tauri v2 khởi tạo thành công với kích thước mặc định $1280\times 800$, min size $1024\times 640$.
-    - [ ] **IT-01.2:** IPC bridge giữa WebView2 và Tauri Rust core phản hồi lệnh ping/pong trong vòng $\le 5\text{ms}$.
+    - [x] **IT-01.1:** Cửa sổ Tauri v2 khởi tạo thành công với kích thước mặc định $1280\times 800$, min size $1024\times 640$.
+    - [x] **IT-01.2:** IPC bridge giữa WebView2 và Tauri Rust core phản hồi lệnh ping/pong trong vòng $\le 5\text{ms}$.
   - *Boundary & Hardware Limits:*
-    - [ ] **ED-01.1:** Mức chiếm dụng RAM tĩnh (Static Idle RAM) đo bằng Windows Task Manager $\le 90\text{MB}$ khi chạy liên tục 30 phút.
-    - [ ] **ED-01.2:** Thay đổi kích thước cửa sổ (Window Resize) liên tục trong 10 giây duy trì ổn định $\ge 55\text{ FPS}$.
+    - [x] **ED-01.1:** Mức chiếm dụng RAM tĩnh (Static Idle RAM) đo bằng Windows Task Manager $\le 90\text{MB}$ khi chạy liên tục 30 phút.
+    - [x] **ED-01.2:** Thay đổi kích thước cửa sổ (Window Resize) liên tục trong 10 giây duy trì ổn định $\ge 55\text{ FPS}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    npm run test -- src/App.test.tsx
-    cargo test --bin neuroclip -- --nocapture
+    npm run test:vitest -- src/App.test.tsx
+    cargo test --manifest-path src-tauri/Cargo.toml --lib tests:: -- --nocapture
     ```
     *Khẳng định: TTI $\le 800\text{ms}$, Idle RAM $\le 90\text{MB}$.*
 
 ---
 
-#### TASK-M4-02: Thiết lập Hệ thống Mã Lỗi Hợp Nhất & Giao thức Bao đóng Lỗi IPC
+#### TASK-M4-02: Thiết lập Hệ thống Mã Lỗi Hợp Nhất & Giao thức Bao đóng Lỗi IPC — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `@tech-lead`
 - **Target Files:**
   - `src-tauri/src/error/mod.rs`
   - `src-tauri/src/error/codes.rs`
-  - `src/services/ipc/error.ts`
+  - `src/services/ipc/error.ts` *(48/48 parity với `codes.rs`, gồm đủ 11 mã `ERR_STT_*` & `ERROR_MESSAGES_VI`)*
   - `src/components/common/ErrorBoundary.tsx`
   - `src/components/common/ErrorBanner.tsx`
+  - `src/main.tsx` *(`GlobalErrorBoundary` bọc `<App />`)*
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Triển khai enum `AppError` bằng thư viện `thiserror` ở Rust backend, bao hàm toàn diện các nhóm lỗi: `IngestError`, `HighlightError`, `SttError`, `TranslationError`, `ExportError`, `SidecarError`, `HardwareError`.
-  - Định nghĩa chuẩn mã lỗi dạng chuỗi cố định: `ERR_INGEST_DISK_FULL`, `ERR_INGEST_NETWORK_TIMEOUT`, `ERR_INGEST_BOT_BLOCKED`, `ERR_INGEST_CHAT_UNAVAILABLE`, `ERR_STT_PAYLOAD_TOO_LARGE`, `ERR_STT_RATE_LIMIT`, `ERR_STT_VRAM_INSUFFICIENT`, `ERR_TRANSLATE_SAFETY_FILTER`, `ERR_EXPORT_CAPCUT_NOT_FOUND`, `ERR_INTERNAL_ERROR`.
-  - Triển khai `serde::Serialize` cho `AppError` để chuyển đổi tự động thành IPC Error Envelope cho TypeScript (`IpcErrorResponse`).
-  - Xây dựng React Error Boundary và component `ErrorBanner` hiển thị thông báo thân thiện và nút "Thử lại (Retry)".
+  - Triển khai enum `AppError` bằng thư viện `thiserror` ở Rust backend, bao hàm toàn diện các nhóm lỗi: `IngestError`, `HighlightError`, `SttError`, `TranslationError`, `ExportError`, `SidecarError`, `HardwareError`, `StorageError`, `ConfigError`.
+  - Định nghĩa chuẩn **48 mã lỗi canonical** (`ERR_INGEST_*`, `ERR_STT_*`, `ERR_TRANSLATE_*`, `ERR_EXPORT_*`, `ERR_HIGHLIGHT_*`, `ERR_SIDECAR_*`, `ERR_HARDWARE_*`, `ERR_STORAGE_*`, `ERR_CONFIG_*`, `ERR_TASK_CANCELLED`, `ERR_INTERNAL_ERROR`) khớp 48/48 giữa Rust `codes.rs` và TS `error.ts` (M3 đã đồng bộ đủ 6 mã `ERR_STT_*` còn thiếu và chuẩn hóa `useHighlightStore.ts` về `ERROR_CODES.INTERNAL_ERROR`).
+  - Triển khai `serde::Serialize` cho `AppError` để chuyển đổi tự động thành IPC Error Envelope cho TypeScript (`IpcErrorResponse`: `code`, `message`, `details`, `recoverable`).
+  - Xây dựng React Error Boundary (`GlobalErrorBoundary` + module boundary) và component `ErrorBanner` hiển thị thông báo thân thiện và nút "Thử lại (Retry)".
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Lỗi phát sinh từ các phân hệ Rust và subprocess.
   - Đầu ra: `IpcErrorResponse` chuẩn hóa truyền qua Tauri IPC bridge (`code`, `message`, `details`, `recoverable`).
@@ -118,81 +124,88 @@
   - Prerequisites: TASK-M4-01.
   - Blocks: Toàn bộ các tasks IPC (TASK-M4-05 đến TASK-M4-29).
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-02.1:** 100% các hàm Tauri IPC Command trả về kiểu `Result<T, AppError>`, không sử dụng `.unwrap()` hay `.expect()` trong luồng production.
-  - [ ] **AC-02.2:** Khi giả lập lỗi mạng hoặc lỗi file, UI hiển thị đúng mã lỗi và nút Retry trong vòng $\le 50\text{ms}$.
-  - [ ] **AC-02.3:** Không có bất kỳ unhandled panic nào làm crash process chính của Tauri.
+  - [x] **AC-02.1:** 100% các hàm Tauri IPC Command trả về kiểu `Result<T, AppError>`, không sử dụng `.unwrap()` hay `.expect()` trong luồng production.
+  - [x] **AC-02.2:** Khi giả lập lỗi mạng hoặc lỗi file, UI hiển thị đúng mã lỗi và nút Retry trong vòng $\le 50\text{ms}$.
+  - [x] **AC-02.3:** Không có bất kỳ unhandled panic nào làm crash process chính của Tauri.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Unit Test & Serialization Contract Test
   - *Unit Test Cases:*
-    - [ ] **UT-02.1 (Happy Path):** Mọi nhánh của enum `AppError` (`IngestError`, `SttError`, `TranslationError`, etc.) chuyển đổi chính xác sang mã chuỗi lỗi (`ERR_INGEST_DISK_FULL`, `ERR_INGEST_BOT_BLOCKED`, `ERR_INGEST_CHAT_UNAVAILABLE`, `ERR_STT_PAYLOAD_TOO_LARGE`, `ERR_TRANSLATE_SAFETY_FILTER`, `ERR_EXPORT_CAPCUT_NOT_FOUND`).
-    - [ ] **UT-02.2 (Failure Path):** Lỗi không xác định (`AppError::Internal`) tự động sinh struct `IpcErrorResponse` với `recoverable = false` và mã `ERR_INTERNAL_ERROR`.
+    - [x] **UT-02.1 (Happy Path):** Mọi nhánh của enum `AppError` (`IngestError`, `SttError`, `TranslationError`, etc.) chuyển đổi chính xác sang mã chuỗi lỗi (`ERR_INGEST_DISK_FULL`, `ERR_INGEST_BOT_BLOCKED`, `ERR_INGEST_CHAT_UNAVAILABLE`, `ERR_STT_PAYLOAD_TOO_LARGE`, `ERR_TRANSLATE_SAFETY_FILTER`, `ERR_EXPORT_CAPCUT_NOT_FOUND`, đủ 48 mã).
+    - [x] **UT-02.2 (Failure Path):** Lỗi không xác định (`AppError::Internal`) tự động sinh struct `IpcErrorResponse` với `recoverable = false` và mã `ERR_INTERNAL_ERROR`.
   - *Integration & Contract Verification:*
-    - [ ] **IT-02.1:** Kết quả tuần tự hóa JSON của `AppError` tương thích 100% với TypeScript interface `IpcErrorResponse`.
-    - [ ] **IT-02.2:** React Error Boundary bắt các ngoại lệ từ command invoke và render component `ErrorBanner` hiển thị đúng tiếng Việt kèm nút Retry.
+    - [x] **IT-02.1:** Kết quả tuần tự hóa JSON của `AppError` tương thích 100% với TypeScript interface `IpcErrorResponse`.
+    - [x] **IT-02.2:** React Error Boundary bắt các ngoại lệ từ command invoke và render component `ErrorBanner` hiển thị đúng tiếng Việt kèm nút Retry.
   - *Boundary & Edge Cases:*
-    - [ ] **ED-02.1 (Clippy Zero-Panic Gate):** Chạy kiểm tra tĩnh không có bất kỳ `.unwrap()` hoặc `.expect()` nào trong toàn bộ crate `src-tauri`.
+    - [x] **ED-02.1 (Clippy Zero-Panic Gate):** Chạy kiểm tra tĩnh không có bất kỳ `.unwrap()` hoặc `.expect()` nào trong toàn bộ crate `src-tauri`.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib error::tests
-    cargo clippy --all-targets -- -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic
+    cargo test --manifest-path src-tauri/Cargo.toml --lib error::tests
+    cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic
+    npm run test:vitest -- src/services/ipc/error.test.ts src/components/common/ErrorBoundary.test.tsx
     ```
-    *Khẳng định: 0 warning, 0 panic calls, 100% serializable error envelopes.*
+    *Khẳng định: 0 warning, 0 panic calls, 100% serializable error envelopes (48/48 parity).*
 
 ---
 
-#### TASK-M4-03: Bộ Điều Phối & Giám Sát Vòng Đời Tiến Trình Con (Subprocess Supervisor)
+#### TASK-M4-03: Bộ Điều Phối & Giám Sát Vòng Đời Tiến Trình Con (Subprocess Supervisor) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/sidecar/mod.rs`
   - `src-tauri/src/sidecar/supervisor.rs`
-  - `src-tauri/src/sidecar/kill_switch.rs`
+  - `src-tauri/src/sidecar/kill_switch.rs` *(re-export tương thích tại `ingestion/streamer.rs`)*
   - `src/services/ipc/sidecar.ts`
+  - `src-tauri/tests/subprocess_supervisor_test.rs`
+  - `src/services/ipc/sidecar.test.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng module `SubprocessSupervisor` quản lý việc gọi các sidecar binaries ngoài (`yt-dlp.exe`, `ffmpeg.exe`, `faster-whisper-worker.exe`).
-  - Sử dụng `tokio::process::Command` để thực thi bất đồng bộ, liên tục đọc stdout và stderr theo dòng (line-by-line streaming) bằng bounded channels để tránh tràn RAM.
-  - Phân tích cú pháp tiến độ từ stdout của ffmpeg (time, bitrate, speed) và yt-dlp (download percentage, ETA) và phát event `sidecar:progress` về UI.
-  - Triển khai cơ chế phòng thủ **Kill-on-Drop / Kill-on-Exit**: Sử dụng Windows Job Objects (`winapi::um::jobapi2` / `CreateJobObjectW`) gán cờ `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` để đảm bảo khi NeuroClip tắt hoặc crash, toàn bộ tiến trình con bị hủy triệt để trong $\le 300\text{ms}$ (0 zombie processes).
+  - Sử dụng `tokio::process::Command` để thực thi bất đồng bộ, liên tục đọc stdout và stderr theo dòng (line-by-line streaming, tách theo cả `\n` và `\r`) bằng bounded channels (1,000 dòng) để tránh tràn RAM.
+  - Phân tích cú pháp tiến độ từ stdout/stderr của ffmpeg (time, bitrate, speed) và yt-dlp (download percentage, ETA) và phát event `sidecar:progress` về UI.
+  - Triển khai cơ chế phòng thủ **Kill-on-Drop / Kill-on-Exit**: Sử dụng Windows Job Objects (`windows_sys::Win32::System::JobObjects` / `CreateJobObjectW` trong `kill_switch.rs`) gán cờ `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` để đảm bảo khi NeuroClip tắt hoặc crash, toàn bộ tiến trình con bị hủy triệt để trong $\le 300\text{ms}$ (0 zombie processes).
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Lệnh thực thi, tham số CLI, working directory, cancellation token.
-  - Đầu ra: Event stream `sidecar:progress` `{ task_id, percentage, current_fps, eta_sec }` và exit code.
+  - Đầu ra: Event stream `sidecar:progress` `{ task_id, percentage, current_fps, eta_sec }` (kèm `sidecar.ts` hỗ trợ cả snake_case & camelCase) và exit code.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-01, TASK-M4-02.
   - Blocks: TASK-M4-06, TASK-M4-07, TASK-M4-08, TASK-M4-11, TASK-M4-13.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-03.1:** Khi tắt ứng dụng đột ngột (End Task qua Task Manager), 100% các tiến trình `ffmpeg.exe` và `yt-dlp.exe` đang chạy bị Windows OS giải phóng trong vòng $\le 300\text{ms}$ (0 zombie processes).
-  - [ ] **AC-03.2:** Bounded channel xử lý dòng stdout giới hạn buffer tối đa 1,000 dòng, không tiêu tốn quá $5\text{MB}$ RAM kể cả khi log sinh ra với tốc độ $10,000\text{ dòng/giây}$.
-  - [ ] **AC-03.3:** Phát tín hiệu hủy tác vụ (cancellation) thành công làm dừng tiến trình con trong $\le 200\text{ms}$.
+  - [x] **AC-03.1:** Khi tắt ứng dụng đột ngột (End Task qua Task Manager), 100% các tiến trình `ffmpeg.exe` và `yt-dlp.exe` đang chạy bị Windows OS giải phóng trong vòng $\le 300\text{ms}$ (0 zombie processes).
+  - [x] **AC-03.2:** Bounded channel xử lý dòng stdout giới hạn buffer tối đa 1,000 dòng, không tiêu tốn quá $5\text{MB}$ RAM kể cả khi log sinh ra với tốc độ $10,000\text{ dòng/giây}$.
+  - [x] **AC-03.3:** Phát tín hiệu hủy tác vụ (cancellation) thành công làm dừng tiến trình con trong $\le 200\text{ms}$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Integration & Operating System Resilience Test
   - *Unit Test Cases:*
-    - [ ] **UT-03.1 (Happy Path):** Phân tích chuỗi đầu ra stdout của FFmpeg (`time=00:01:23.45 bitrate= 128.0kbits/s speed= 4.5x`) trích xuất chính xác timecode và tốc độ xử lý.
-    - [ ] **UT-03.2 (Failure Path):** Phân tích stdout lỗi của `yt-dlp` (`ERROR: Private video` hoặc `HTTP Error 404`) trích xuất đúng enum lỗi nghiệp vụ.
+    - [x] **UT-03.1 (Happy Path):** Phân tích chuỗi đầu ra stdout của FFmpeg (`time=00:01:23.45 bitrate= 128.0kbits/s speed= 4.5x`) trích xuất chính xác timecode và tốc độ xử lý.
+    - [x] **UT-03.2 (Failure Path):** Phân tích stdout lỗi của `yt-dlp` (`ERROR: Private video` hoặc `HTTP Error 404`) trích xuất đúng enum lỗi nghiệp vụ.
   - *Integration & Contract Verification:*
-    - [ ] **IT-03.1:** Chạy subprocess giả lập qua `SubprocessSupervisor`, stream sự kiện tiến độ `sidecar:progress` phát đều đặn về Frontend với payload `{ task_id, percentage, current_fps, eta_sec }`.
-    - [ ] **IT-03.2:** Bounded channel giới hạn buffer 1,000 dòng; khi subprocess in ra $10,000\text{ dòng/s}$, memory của Rust không tăng quá $5\text{MB}$.
+    - [x] **IT-03.1:** Chạy subprocess giả lập qua `SubprocessSupervisor`, stream sự kiện tiến độ `sidecar:progress` phát đều đặn về Frontend với payload `{ task_id, percentage, current_fps, eta_sec }`.
+    - [x] **IT-03.2:** Bounded channel giới hạn buffer 1,000 dòng; khi subprocess in ra $10,000\text{ dòng/s}$, memory của Rust không tăng quá $5\text{MB}$.
   - *Boundary & Hardware Limits (Zombie Process Elimination):**
-    - [ ] **ED-03.1 (Kill-on-Drop):** Khởi chạy một tiến trình con tính toán dài hạn; drop instance `Command` trong Rust. Assert tiến trình con trong Windows OS biến mất trong $\le 200\text{ms}$.
-    - [ ] **ED-03.2 (Hard Crash / Windows Job Object):** Giả lập crash process chính của Tauri (SIGKILL). Assert Windows Job Object tự động thu hồi toàn bộ các tiến trình `ffmpeg.exe` và `yt-dlp.exe` đang chạy con trong $\le 300\text{ms}$ (0 zombie processes).
+    - [x] **ED-03.1 (Kill-on-Drop):** Khởi chạy một tiến trình con tính toán dài hạn; drop instance `Command` trong Rust. Assert tiến trình con trong Windows OS biến mất trong $\le 200\text{ms}$.
+    - [x] **ED-03.2 (Hard Crash / Windows Job Object):** Giả lập crash process chính của Tauri (SIGKILL). Assert Windows Job Object tự động thu hồi toàn bộ các tiến trình `ffmpeg.exe` và `yt-dlp.exe` đang chạy con trong $\le 300\text{ms}$ (0 zombie processes).
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test subprocess_supervisor_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test subprocess_supervisor_test -- --nocapture
+    npm run test:vitest -- src/services/ipc/sidecar.test.ts
     ```
     *Khẳng định: 0 zombie process sau khi drop; cancellation dừng subprocess $\le 200\text{ms}$.*
 
 ---
 
-#### TASK-M4-04: Hạ Tầng Ghi Log Cấu Trúc, Xoay Vòng Tệp & Che Giấu Thông Tin Nhạy Cảm
+#### TASK-M4-04: Hạ Tầng Ghi Log Cấu Trúc, Xoay Vòng Tệp & Che Giấu Thông Tin Nhạy Cảm — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
-  - `src-tauri/src/core/logging.rs`
-  - `src-tauri/src/core/secrets.rs`
+  - `src-tauri/src/logging/mod.rs` *(re-export tại `core/mod.rs` qua `pub use crate::logging;`)*
+  - `src-tauri/src/logging/rotation.rs`
+  - `src-tauri/src/logging/secrets.rs`
   - `src-tauri/src/commands/log_cmd.rs`
+  - `src/services/logging/{index.ts, logger.ts, redactor.ts, types.ts}`
+  - `src/stores/useLogStore.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Thiết lập hạ tầng logging sử dụng crate `tracing` và `tracing-appender`.
+  - Thiết lập hạ tầng logging sử dụng crate `tracing` và `tracing-appender` (`DEFAULT_LOG_FILTER = "info,neuroclip_lib=debug,neuroclip=debug"` khớp tên crate `neuroclip_lib`; `parse_log_line` bảo toàn `line` và `file` ngay cả khi `fields` rỗng).
   - Cấu hình format log: JSON có cấu trúc trong Release mode, Pretty-printed console trong Debug mode.
   - Lưu file log tại `%LOCALAPPDATA%/NeuroClip/logs/neuroclip-YYYY-MM-DD.log`.
   - Triển khai cơ chế xoay vòng file (Log Rotation): Daily rotation, giới hạn thư mục log $\le 50\text{MB}$, lưu trữ tối đa 14 ngày.
-  - Xây dựng tầng lọc bảo mật tự động (`SecretRedactionLayer`): Tự động phát hiện và thay thế các chuỗi nhạy cảm bằng `[REDACTED]` trước khi ghi log hoặc gửi event: Groq API Key (`gsk_*`), Gemini API Key (`AIza*`), OpenAI API Key (`sk-*`), Twitch OAuth tokens.
+  - Xây dựng tầng lọc bảo mật tự động (`RedactingWriter` / `redact_secret`): Tự động phát hiện và thay thế các chuỗi nhạy cảm bằng `[REDACTED]` trước khi ghi log hoặc gửi event: Groq API Key (`gsk_*`), Gemini API Key (`AIza*`), OpenAI API Key (`sk-*`), Twitch OAuth tokens.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Các sự kiện `tracing::info!`, `tracing::warn!`, `tracing::error!`.
   - Đầu ra: File log an toàn và UI log viewer command.
@@ -200,23 +213,26 @@
   - Prerequisites: TASK-M4-01, TASK-M4-02.
   - Blocks: Tất cả các tasks xử lý API key và subprocess.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-04.1:** 100% các chuỗi API Key và Auth Token xuất hiện trong log được thay thế bằng `[REDACTED]`, không để lọt bất kỳ chuỗi key thực tế nào.
-  - [ ] **AC-04.2:** File log không bao giờ vượt quá $50\text{MB}$ tổng dung lượng trên ổ đĩa.
-  - [ ] **AC-04.3:** Overhead hiệu năng của logging $\le 2\%$ tổng thời gian thực thi CPU.
+  - [x] **AC-04.1:** 100% các chuỗi API Key và Auth Token xuất hiện trong log được thay thế bằng `[REDACTED]`, không để lọt bất kỳ chuỗi key thực tế nào.
+  - [x] **AC-04.2:** File log không bao giờ vượt quá $50\text{MB}$ tổng dung lượng trên ổ đĩa.
+  - [x] **AC-04.3:** Overhead hiệu năng của logging $\le 2\%$ tổng thời gian thực thi CPU.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Unit Test & Security Privacy Test
   - *Unit Test Cases:*
-    - [ ] **UT-04.1 (Happy Path - Secret Redaction):** Hàm `redact_secret("gsk_1234567890abcdef12345678")` trả về đúng chuỗi `"gsk_[REDACTED]5678"`.
-    - [ ] **UT-04.2 (Edge Case - Short Key):** Chuỗi khóa ngắn $\le 8$ ký tự trả về hoàn toàn `"[REDACTED]"`.
-    - [ ] **UT-04.3 (All Provider Tokens):** Kiểm tra bộ lọc bắt chính xác: Groq (`gsk_*`), Gemini (`AIza*`), OpenAI (`sk-*`), Twitch token (`auth-token=*`).
+    - [x] **UT-04.1 (Happy Path - Secret Redaction):** Hàm `redact_secret("gsk_1234567890abcdef12345678")` trả về đúng chuỗi `"gsk_[REDACTED]5678"`.
+    - [x] **UT-04.2 (Edge Case - Short Key):** Chuỗi khóa ngắn $\le 8$ ký tự trả về hoàn toàn `"[REDACTED]"`.
+    - [x] **UT-04.3 (All Provider Tokens):** Kiểm tra bộ lọc bắt chính xác: Groq (`gsk_*`), Gemini (`AIza*`), OpenAI (`sk-*`), Twitch token (`auth-token=*`).
   - *Integration & Contract Verification:*
-    - [ ] **IT-04.1:** Ghi log qua macro `tracing::info!(groq_key = %key, "Config loaded")`. Kiểm tra file log thực tế trên ổ cứng tuyệt đối KHÔNG chứa key gốc.
-    - [ ] **IT-04.2:** Kiểm tra cơ chế xoay vòng log hàng ngày (Daily Rotation) và dọn dẹp log quá 14 ngày hoặc tổng thư mục log $> 50\text{MB}$.
+    - [x] **IT-04.1:** Ghi log qua macro `tracing::info!(groq_key = %key, "Config loaded")`. Kiểm tra file log thực tế trên ổ cứng tuyệt đối KHÔNG chứa key gốc.
+    - [x] **IT-04.2:** Kiểm tra cơ chế xoay vòng log hàng ngày (Daily Rotation) và dọn dẹp log quá 14 ngày hoặc tổng thư mục log $> 50\text{MB}$.
   - *Boundary & Edge Cases:*
-    - [ ] **ED-04.1:** Ghi 100,000 dòng log liên tục, assert CPU overhead $\le 2\%$ và file log tự ngắt thành file mới khi vượt quá $10\text{MB}$.
+    - [x] **ED-04.1:** Ghi 100,000 dòng log liên tục, assert CPU overhead $\le 2\%$ và file log tự ngắt thành file mới khi vượt quá $10\text{MB}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib core::logging::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib logging::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib logging::rotation::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib logging::secrets::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib commands::log_cmd::tests
     ```
     *Khẳng định: Regex scan file log sinh ra tìm kiếm chuỗi API key mẫu trả về 0 match.*
 
@@ -224,14 +240,15 @@
 
 ### Milestone M4.2: Luồng Thu Nạp Dữ Liệu Audio-First & Phân Tích Chat (Ingestion & Chat)
 
-#### TASK-M4-05: Kiểm Tra Dung Lượng Ổ Đĩa Pre-flight & Quản Lý Thư Mục Bộ Nhớ Đệm Dự Án
+#### TASK-M4-05: Kiểm Tra Dung Lượng Ổ Đĩa Pre-flight & Quản Lý Thư Mục Bộ Nhớ Đệm Dự Án — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
-  - `src-tauri/src/core/storage.rs`
+  - `src-tauri/src/core/storage.rs` *(kèm `validate_vod_id` / `resolve_vod_project_dir` & test parallel-safe `ScopedEnvVar`)*
   - `src-tauri/src/commands/storage_cmd.rs`
+  - `src/services/ipc/storage.ts`
   - `src/stores/useProjectStore.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Triển khai kiểm tra dung lượng ổ đĩa trước khi tải (Pre-flight Disk Check) sử dụng crate `sysinfo` hoặc Windows Win32 `GetDiskFreeSpaceExW`.
+  - Triển khai kiểm tra dung lượng ổ đĩa trước khi tải (Pre-flight Disk Check) sử dụng Windows Win32 `GetDiskFreeSpaceExW` (và pure helper `check_disk_space_with_free_mb`).
   - Kiểm tra xem ổ đĩa chứa thư mục làm việc (mặc định là ổ `C:`) có dung lượng trống $\ge 5\text{GB}$ hay không. Nếu $< 5\text{GB}$, chặn tác vụ và trả về mã lỗi `ERR_INGEST_DISK_FULL` kèm gợi ý chọn ổ đĩa khác.
   - Khởi tạo và quản lý cấu trúc thư mục làm việc: `%LOCALAPPDATA%/NeuroClip/cache/` và `%LOCALAPPDATA%/NeuroClip/projects/<project_id>/`.
   - Xây dựng chức năng dọn dẹp cache tự động cho các file tạm cũ hơn 7 ngày.
@@ -242,36 +259,40 @@
   - Prerequisites: TASK-M4-02, TASK-M4-03.
   - Blocks: TASK-M4-06, TASK-M4-07, TASK-M4-13.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-05.1:** Lệnh kiểm tra ổ đĩa hoàn tất trong vòng $\le 50\text{ms}$.
-  - [ ] **AC-05.2:** Khi ổ đĩa còn dưới 5GB trống, tác vụ tải bị chặn ngay lập tức, không cho phép ghi file rác gây treo hệ điều hành.
-  - [ ] **AC-05.3:** Lệnh dọn dẹp xóa sạch các file `.tmp` và `.wav` tạm thời mà không ảnh hưởng tới file dự án đã lưu.
+  - [x] **AC-05.1:** Lệnh kiểm tra ổ đĩa hoàn tất trong vòng $\le 50\text{ms}$.
+  - [x] **AC-05.2:** Khi ổ đĩa còn dưới 5GB trống, tác vụ tải bị chặn ngay lập tức, không cho phép ghi file rác gây treo hệ điều hành.
+  - [x] **AC-05.3:** Lệnh dọn dẹp xóa sạch các file `.tmp` và `.wav` tạm thời mà không ảnh hưởng tới file dự án đã lưu.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Unit Test & System Integration Test
   - *Unit Test Cases:*
-    - [ ] **UT-05.1 (Happy Path):** Khi ổ đĩa trống $20\text{GB} \ge 5\text{GB}$, hàm `check_disk_space()` trả về `Ok(DiskStatus { is_sufficient: true, free_mb: 20480 })`.
-    - [ ] **UT-05.2 (Failure Path - Disk Full):** Khi ổ đĩa trống $3.2\text{GB} < 5\text{GB}$, hàm trả về lỗi `Err(IngestError::DiskSpaceInsufficient { required_mb: 5120, available_mb: 3276 })`.
+    - [x] **UT-05.1 (Happy Path):** Khi ổ đĩa trống $20\text{GB} \ge 5\text{GB}$, hàm `check_disk_space()` trả về `Ok(DiskStatus { is_sufficient: true, free_mb: 20480 })`.
+    - [x] **UT-05.2 (Failure Path - Disk Full):** Khi ổ đĩa trống $3.2\text{GB} < 5\text{GB}$, hàm trả về lỗi `Err(IngestError::DiskSpaceInsufficient { required_mb: 5120, available_mb: 3276 })`.
   - *Integration & Contract Verification:*
-    - [ ] **IT-05.1:** Lệnh IPC `check_preflight_storage` trả về thông số ổ đĩa trong $\le 50\text{ms}$.
-    - [ ] **IT-05.2:** Khởi tạo đúng cấu trúc thư mục `%LOCALAPPDATA%/NeuroClip/cache/` và `%LOCALAPPDATA%/NeuroClip/projects/`.
+    - [x] **IT-05.1:** Lệnh IPC `check_preflight_storage` trả về thông số ổ đĩa trong $\le 50\text{ms}$.
+    - [x] **IT-05.2:** Khởi tạo đúng cấu trúc thư mục `%LOCALAPPDATA%/NeuroClip/cache/` và `%LOCALAPPDATA%/NeuroClip/projects/`.
   - *Boundary & Edge Cases (ERR-01 Defense):**
-    - [ ] **ED-05.1:** Giả lập ổ `C:` bị đầy $(<5\text{GB})$, người dùng chọn thư mục cache tại ổ `D:`. Hệ thống ghi nhận đường dẫn mới và tiếp tục cho phép tải.
-    - [ ] **ED-05.2:** Lệnh `clean_expired_cache` xóa sạch toàn bộ file `.tmp` cũ hơn 7 ngày mà không xóa nhầm file dự án `.json`.
+    - [x] **ED-05.1:** Giả lập ổ `C:` bị đầy $(<5\text{GB})$, người dùng chọn thư mục cache tại ổ `D:`. Hệ thống ghi nhận đường dẫn mới và tiếp tục cho phép tải.
+    - [x] **ED-05.2:** Lệnh `clean_expired_cache` xóa sạch toàn bộ file `.tmp` cũ hơn 7 ngày mà không xóa nhầm file dự án `.json`.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib core::storage::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib core::storage::tests
     ```
     *Khẳng định: Chặn tải 100% khi dung lượng đĩa $< 5\text{GB}$.*
 
 ---
 
-#### TASK-M4-06: Động Cơ Thu Nạp Luồng Âm Thanh Trực Tuyến Audio-First Không Tải Toàn Bộ Video
+#### TASK-M4-06: Động Cơ Thu Nạp Luồng Âm Thanh Trực Tuyến Audio-First Không Tải Toàn Bộ Video — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@tech-lead`
 - **Target Files:**
-  - `src-tauri/src/ingestion/streamer.rs`
+  - `src-tauri/src/ingestion/streamer.rs` *(kèm `VodMetadata.video_stream_url`, `extract_video_stream_url`)*
   - `src-tauri/src/ingestion/cookies.rs`
+  - `src-tauri/src/ingestion/buffer.rs`
+  - `src-tauri/src/ingestion/validator.rs`
   - `src-tauri/src/commands/ingest_cmd.rs`
   - `src/services/ipc/ingestion.ts`
+  - `src/stores/useIngestionStore.ts`
   - `src/components/dashboard/IngestionDashboard.tsx`
+  - `src-tauri/tests/audio_ingest_integration_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Tiếp nhận URL VOD trực tuyến từ Twitch hoặc YouTube.
   - Kiểm tra trạng thái phát trực tiếp: Nếu metadata trả về `is_live == true`, từ chối nạp với mã lỗi `ERR_INGEST_LIVE_STREAM_UNSUPPORTED` và thông báo giải thích rõ NeuroClip MVP chỉ hỗ trợ VOD đã kết thúc, ngăn chặn nguy cơ ghi hình vô hạn làm tràn ổ đĩa.
@@ -289,40 +310,45 @@
   - Prerequisites: TASK-M4-03, TASK-M4-05.
   - Blocks: TASK-M4-09, TASK-M4-11, TASK-M4-14.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-06.1:** Đối với một VOD dài 8 tiếng (video gốc dung lượng ~30GB), hệ thống chỉ tải tệp audio có dung lượng $\le 450\text{MB}$ (tiết kiệm $\ge 98.5\%$ dung lượng mạng và ổ đĩa).
-  - [ ] **AC-06.2:** Thời gian thu nạp audio hoàn tất trong $\le 90\text{ giây}$ trên đường truyền mạng tiêu chuẩn 50Mbps.
-  - [ ] **AC-06.3:** File `vod_manifest.json` sinh ra hợp lệ 100% với JSON Schema 5.2.
-  - [ ] **AC-06.4:** Hỗ trợ nạp cookie từ tệp `cookies.txt` hoặc trích xuất tự động qua `--cookies-from-browser` (Chrome/Firefox/Edge) và xoay vòng User-Agent, vượt qua thử thách HTTP 403 Bot Check của YouTube khi có cấu hình cookie.
-  - [ ] **AC-06.5:** Từ chối xử lý URL livestream đang phát trực tiếp (`is_live == true`) trong $\le 500\text{ms}$, ngăn chặn nguy cơ ghi hình vô hạn làm tràn ổ đĩa.
+  - [x] **AC-06.1:** Đối với một VOD dài 8 tiếng (video gốc dung lượng ~30GB), hệ thống chỉ tải tệp audio có dung lượng $\le 450\text{MB}$ (tiết kiệm $\ge 98.5\%$ dung lượng mạng và ổ đĩa).
+  - [x] **AC-06.2:** Thời gian thu nạp audio hoàn tất trong $\le 90\text{ giây}$ trên đường truyền mạng tiêu chuẩn 50Mbps.
+  - [x] **AC-06.3:** File `vod_manifest.json` sinh ra hợp lệ 100% với JSON Schema 5.2.
+  - [x] **AC-06.4:** Hỗ trợ nạp cookie từ tệp `cookies.txt` hoặc trích xuất tự động qua `--cookies-from-browser` (Chrome/Firefox/Edge) và xoay vòng User-Agent, vượt qua thử thách HTTP 403 Bot Check của YouTube khi có cấu hình cookie.
+  - [x] **AC-06.5:** Từ chối xử lý URL livestream đang phát trực tiếp (`is_live == true`) trong $\le 500\text{ms}$, ngăn chặn nguy cơ ghi hình vô hạn làm tràn ổ đĩa.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Integration & Network Invariant Test
   - *Unit Test Cases:*
-    - [ ] **UT-06.1 (Happy Path):** Phân tích metadata JSON từ `yt-dlp --dump-single-json` đọc chuẩn xác `duration_seconds`, `title`, `uploader`.
-    - [ ] **UT-06.2 (Failure Path):** Xử lý khi URL không hợp lệ (URL rác, link private) trả về `Err(IngestError::InvalidUrl)`.
+    - [x] **UT-06.1 (Happy Path):** Phân tích metadata JSON từ `yt-dlp --dump-single-json` đọc chuẩn xác `duration_seconds`, `title`, `uploader`.
+    - [x] **UT-06.2 (Failure Path):** Xử lý khi URL không hợp lệ (URL rác, link private) trả về `Err(IngestError::InvalidUrl)`.
   - *Integration & Contract Verification (Schema 5.2):**
-    - [ ] **IT-06.1:** Gọi lệnh tải audio stream cho VOD trực tuyến, kiểm tra file sinh ra `vod_manifest.json` khớp 100% với Schema 5.2 trong `ARCHITECTURE.md`.
-    - [ ] **IT-06.2:** Quá trình tải phát event `ingest:progress` với các trường `{ taskId, stage, percent, speedKbps, etaSec }` cập nhật mỗi giây.
+    - [x] **IT-06.1:** Gọi lệnh tải audio stream cho VOD trực tuyến, kiểm tra file sinh ra `vod_manifest.json` khớp 100% với Schema 5.2 trong `ARCHITECTURE.md`.
+    - [x] **IT-06.2:** Quá trình tải phát event `ingest:progress` với các trường `{ taskId, stage, percent, speedKbps, etaSec }` cập nhật mỗi giây.
   - *Boundary & Network Limits (Audio-First Invariant & ERR-03, ERR-04):**
-    - [ ] **ED-06.1 (Network Conservation):** Cho VOD 8 tiếng (video gốc 30GB), dung lượng file audio tải về $\le 450\text{MB}$ (tiết kiệm $\ge 98.5\%$ băng thông và dung lượng đĩa).
-    - [ ] **ED-06.2 (Network Interruption & Resume):** Giả lập ngắt mạng 3 giây trong khi đang tải audio; yt-dlp tự động retry và hoàn tất file audio toàn vẹn không bị hỏng header AAC.
-    - [ ] **ED-06.3 (YouTube Anti-Bot Defense via Cookies & UA Rotation):** Giả lập YouTube trả về HTTP 403 Bot Block; truyền tham số `--cookies-from-browser chrome` hoặc nạp `cookies.txt` kèm User-Agent desktop tiêu chuẩn, xác nhận `yt-dlp` trích xuất thành công audio stream mà không bị chặn.
-    - [ ] **ED-06.4 (Live Stream Rejection):** Nạp URL luồng đang phát trực tiếp (`is_live: true`), hệ thống nhận diện và trả về lỗi `ERR_INGEST_LIVE_STREAM_UNSUPPORTED`, không tải luồng vô hạn.
+    - [x] **ED-06.1 (Network Conservation):** Cho VOD 8 tiếng (video gốc 30GB), dung lượng file audio tải về $\le 450\text{MB}$ (tiết kiệm $\ge 98.5\%$ băng thông và dung lượng đĩa).
+    - [x] **ED-06.2 (Network Interruption & Resume):** Giả lập ngắt mạng 3 giây trong khi đang tải audio; yt-dlp tự động retry và hoàn tất file audio toàn vẹn không bị hỏng header AAC.
+    - [x] **ED-06.3 (YouTube Anti-Bot Defense via Cookies & UA Rotation):** Giả lập YouTube trả về HTTP 403 Bot Block; truyền tham số `--cookies-from-browser chrome` hoặc nạp `cookies.txt` kèm User-Agent desktop tiêu chuẩn, xác nhận `yt-dlp` trích xuất thành công audio stream mà không bị chặn.
+    - [x] **ED-06.4 (Live Stream Rejection):** Nạp URL luồng đang phát trực tiếp (`is_live: true`), hệ thống nhận diện và trả về lỗi `ERR_INGEST_LIVE_STREAM_UNSUPPORTED`, không tải luồng vô hạn.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test audio_ingest_integration_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test audio_ingest_integration_test -- --nocapture
     ```
     *Khẳng định: Không tải file video 1080p, `vod_manifest.json` pass schema validator, chống bot thành công với cookies/UA.*
 
 ---
 
-#### TASK-M4-07: Bộ Nhập Khẩu Video Cục Bộ Ngoại Tuyến & Giao Thức Stream Tauri Asset
+#### TASK-M4-07: Bộ Nhập Khẩu Video Cục Bộ Ngoại Tuyến & Giao Thức Stream Tauri Asset — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & Senior Frontend Dev
 - **Target Files:**
   - `src-tauri/src/ingestion/local_importer.rs`
   - `src-tauri/src/core/custom_protocol.rs`
+  - `src-tauri/src/commands/ingest_cmd.rs` *(`import_local_video`)*
+  - `src-tauri/src/lib.rs` *(`register_asynchronous_uri_scheme_protocol("asset", ...)`)*
+  - `src-tauri/capabilities/default.json`
+  - `src/services/ipc/ingestion.ts` *(`importLocalVideo`, `toLocalAssetUrl`)*
   - `src/components/dashboard/DropZone.tsx`
+  - `src/components/dashboard/DropZone.test.tsx`
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Hỗ trợ người dùng kéo thả file video sẵn có từ máy tính (`.mp4`, `.mkv`, `.mov`, `.ts` từ OBS Studio).
+  - Hỗ trợ người dùng kéo thả file video sẵn có từ máy tính (`.mp4`, `.mkv`, `.webm`, `.mov`, `.ts`, `.flv` từ OBS Studio).
   - Sử dụng FFmpeg trích xuất luồng âm thanh tạm thời vào cache:
     `ffmpeg -i input.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 audio_cache.wav` (không tiêu tốn băng thông mạng).
   - Đăng ký giao thức tùy chỉnh `asset://` trong Tauri v2 để WebView2 có thể stream video trực tiếp từ đường dẫn ổ đĩa Windows nội bộ với đầy đủ HTTP Range headers.
@@ -334,34 +360,43 @@
   - Prerequisites: TASK-M4-03, TASK-M4-05.
   - Blocks: TASK-M4-11, TASK-M4-14, TASK-M4-20.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-07.1:** Trích xuất audio từ file MP4 2 tiếng trên ổ cứng SSD hoàn tất trong vòng $\le 10\text{ giây}$.
-  - [ ] **AC-07.2:** Trình phát video trên UI thông qua `asset://` phát video 1080p60fps mượt mà, thời gian phản hồi khi kéo tua timeline $\le 100\text{ms}$.
-  - [ ] **AC-07.3:** Không thực hiện bất kỳ network request nào ra bên ngoài khi người dùng chọn chế độ file cục bộ.
+  - [x] **AC-07.1:** Trích xuất audio từ file MP4 2 tiếng trên ổ cứng SSD hoàn tất trong vòng $\le 10\text{ giây}$.
+  - [x] **AC-07.2:** Trình phát video trên UI thông qua `asset://` phát video 1080p60fps mượt mà, thời gian phản hồi khi kéo tua timeline $\le 100\text{ms}$.
+  - [x] **AC-07.3:** Không thực hiện bất kỳ network request nào ra bên ngoài khi người dùng chọn chế độ file cục bộ.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Integration & Media Streaming Test
   - *Unit Test Cases:*
-    - [ ] **UT-07.1 (Happy Path):** Nhận diện các đuôi mở rộng file hợp lệ: `.mp4`, `.mkv`, `.mov`, `.ts`, `.flv`.
-    - [ ] **UT-07.2 (Failure Path):** Nhận diện file không phải video (`.txt`, `.exe`, `.zip`) trả về lỗi định dạng không hỗ trợ.
+    - [x] **UT-07.1 (Happy Path):** Nhận diện các đuôi mở rộng file hợp lệ: `.mp4`, `.mkv`, `.webm`, `.mov`, `.ts`, `.flv`.
+    - [x] **UT-07.2 (Failure Path):** Nhận diện file không phải video (`.txt`, `.exe`, `.zip`) trả về lỗi định dạng không hỗ trợ.
   - *Integration & Contract Verification:*
-    - [ ] **IT-07.1:** Gọi lệnh FFmpeg trích xuất luồng âm thanh PCM WAV 16kHz mono từ file MP4 nội bộ vào thư mục cache hoàn tất trong $\le 10\text{ giây}$ cho video 2 tiếng.
-    - [ ] **IT-07.2:** Sinh `vod_manifest.json` với `source_type: "local_file"`, `video_stream_url: null`, `local_video_path: "..."`.
+    - [x] **IT-07.1:** Gọi lệnh FFmpeg trích xuất luồng âm thanh PCM WAV 16kHz mono từ file MP4 nội bộ vào thư mục cache hoàn tất trong $\le 10\text{ giây}$ cho video 2 tiếng.
+    - [x] **IT-07.2:** Sinh `vod_manifest.json` với `source_type: "local_file"`, `video_stream_url: null`, `local_video_path: "..."`.
   - *Boundary & Performance Limits:*
-    - [ ] **ED-07.1 (Zero-Network Invariant):** Giám sát toàn bộ network socket trong suốt quá trình import file cục bộ: khẳng định 0 bytes truyền ra Internet.
-    - [ ] **ED-07.2 (Smooth Playback via Asset Protocol):** Trình phát WebView2 kết nối `asset://` tua nhanh tới mốc 1 giờ 30 phút; video phản hồi khung hình trong $\le 100\text{ms}$.
+    - [x] **ED-07.1 (Zero-Network Invariant):** Giám sát toàn bộ network socket trong suốt quá trình import file cục bộ: khẳng định 0 bytes truyền ra Internet.
+    - [x] **ED-07.2 (Smooth Playback via Asset Protocol):** Trình phát WebView2 kết nối `asset://` tua nhanh tới mốc 1 giờ 30 phút; video phản hồi khung hình trong $\le 100\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib ingestion::local_importer::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib ingestion::local_importer::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib core::custom_protocol::tests
+    npm run test:vitest -- src/components/dashboard/DropZone.test.tsx
     ```
     *Khẳng định: Trích xuất audio local $\le 10\text{s}$, zero network packets.*
 
 ---
 
-#### TASK-M4-08: Bộ Tải & Phân Tích Lịch Sử Chat Replay Twitch GQL Chuẩn Hóa
+#### TASK-M4-08: Bộ Tải & Phân Tích Lịch Sử Chat Replay Twitch GQL Chuẩn Hóa — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/ingestion/chat_parser.rs`
   - `src-tauri/src/ingestion/twitch_gql.rs`
+  - `src-tauri/src/ingestion/youtube_chat.rs`
+  - `src-tauri/src/commands/chat_cmd.rs`
   - `src/services/ipc/chat.ts`
+  - `src/stores/useChatStore.ts`
+  - `src/types/chat.ts`
+  - `src-tauri/tests/chat_parser_test.rs`
+  - `src-tauri/tests/chat_adversarial_test.rs`
+  *(Ghi chú: Commit cũ `36c403c` từng gắn nhầm nhãn `M4-07`, đã được chuẩn hóa về `TASK-M4-08` cùng fix `validate_vod_id`/`resolve_vod_project_dir` tại M2 và nhãn test tại M3.)*
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Tải toàn bộ lịch sử tin nhắn của Twitch VOD thông qua `yt-dlp --write-subs` hoặc truy vấn trực tiếp Twitch GQL API endpoint `https://gql.twitch.tv/gql` với pagination cursor (`client-id: kimne78kx3ncx6brgo4mv6wki5h1ko`).
   - Xử lý cơ chế phòng vệ khi Chat Replay không tồn tại (VOD quá hạn, chat bị xóa, hoặc HTTP 404): Trả về cảnh báo mềm, không làm crash luồng và kích hoạt cờ `has_chat_replay = false` để chuyển tuyến sang Audio RMS.
@@ -374,23 +409,23 @@
   - Prerequisites: TASK-M4-03, TASK-M4-06.
   - Blocks: TASK-M4-09, TASK-M4-10, TASK-M4-12.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-08.1:** Tải và phân tích 500,000 dòng chat (stream 8 tiếng đông người xem) hoàn tất trong vòng $\le 15\text{ giây}$.
-  - [ ] **AC-08.2:** Bộ nhớ RAM tiêu thụ trong quá trình phân tích 500,000 dòng chat được giải phóng ngay sau khi ghi file, đỉnh RAM tăng không quá $80\text{MB}$.
-  - [ ] **AC-08.3:** Khi gặp VOD không có chat, hệ thống bắt mã lỗi `ERR_INGEST_CHAT_UNAVAILABLE` và kích hoạt luồng fallback âm thanh trong vòng $\le 200\text{ms}$.
+  - [x] **AC-08.1:** Tải và phân tích 500,000 dòng chat (stream 8 tiếng đông người xem) hoàn tất trong vòng $\le 15\text{ giây}$.
+  - [x] **AC-08.2:** Bộ nhớ RAM tiêu thụ trong quá trình phân tích 500,000 dòng chat được giải phóng ngay sau khi ghi file, đỉnh RAM tăng không quá $80\text{MB}$.
+  - [x] **AC-08.3:** Khi gặp VOD không có chat, hệ thống bắt mã lỗi `ERR_INGEST_CHAT_UNAVAILABLE` và kích hoạt luồng fallback âm thanh trong vòng $\le 200\text{ms}$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Unit Test & Resilient Fallback Test
   - *Unit Test Cases:*
-    - [ ] **UT-08.1 (Happy Path - Parsing):** Phân tích 1 payload chat GQL thô chứa 100 tin nhắn; bóc tách đúng `timestamp_sec`, `author`, `message`, và mảng `emotes_detected`.
-    - [ ] **UT-08.2 (Happy Path - Swarm Emote Flag):** Tin nhắn chứa `KEKW` hoặc `Tutel` được gán cờ `is_swarm_emote = true`.
+    - [x] **UT-08.1 (Happy Path - Parsing):** Phân tích 1 payload chat GQL thô chứa 100 tin nhắn; bóc tách đúng `timestamp_sec`, `author`, `message`, và mảng `emotes_detected`.
+    - [x] **UT-08.2 (Happy Path - Swarm Emote Flag):** Tin nhắn chứa `KEKW` hoặc `Tutel` được gán cờ `is_swarm_emote = true`.
   - *Integration & Contract Verification (Schema 5.3):**
-    - [ ] **IT-08.1:** File `chat_events.json` sinh ra tuân thủ 100% JSON Schema 5.3 trong `ARCHITECTURE.md`.
-    - [ ] **IT-08.2:** Phân tích cú pháp 500,000 dòng chat hoàn tất trong $\le 15\text{ giây}$.
+    - [x] **IT-08.1:** File `chat_events.json` sinh ra tuân thủ 100% JSON Schema 5.3 trong `ARCHITECTURE.md`.
+    - [x] **IT-08.2:** Phân tích cú pháp 500,000 dòng chat hoàn tất trong $\le 15\text{ giây}$.
   - *Boundary & Fallback Limits (ERR-05 Defense):**
-    - [ ] **ED-08.1 (Chat 404 / Unavailable):** Giả lập Twitch trả về HTTP 404 hoặc VOD bị tắt chat. Hàm bắt lỗi `ChatReplayUnavailable`, phát tín hiệu chuyển tuyến sang Audio RMS, hiển thị Informational Banner vàng trên UI mà KHÔNG dừng pipeline.
-    - [ ] **ED-08.2 (RAM Bound):** Peak heap memory trong quá trình xử lý 500k messages không tăng quá $80\text{MB}$; giải phóng toàn bộ RAM sau khi ghi file xuống đĩa.
+    - [x] **ED-08.1 (Chat 404 / Unavailable):** Giả lập Twitch trả về HTTP 404 hoặc VOD bị tắt chat. Hàm bắt lỗi `ChatReplayUnavailable`, phát tín hiệu chuyển tuyến sang Audio RMS, hiển thị Informational Banner vàng trên UI mà KHÔNG dừng pipeline.
+    - [x] **ED-08.2 (RAM Bound):** Peak heap memory trong quá trình xử lý 500k messages không tăng quá $80\text{MB}$; giải phóng toàn bộ RAM sau khi ghi file xuống đĩa.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test chat_parser_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test chat_parser_test -- --nocapture
     ```
     *Khẳng định: `chat_events.json` schema valid; 404 kích hoạt Audio RMS fallback $\le 200\text{ms}$.*
 
@@ -398,11 +433,12 @@
 
 ### Milestone M4.3: Động Cơ Trí Tuệ Phát Hiện Highlight Đa Phương Thức (Intelligence & Highlights)
 
-#### TASK-M4-09: Thuật Toán Tính Điểm Tốc Độ Chat Z-Score Hiệu Chỉnh Kèm Ngưỡng Sàn Tin Nhắn
+#### TASK-M4-09: Thuật Toán Tính Điểm Tốc Độ Chat Z-Score Hiệu Chỉnh Kèm Ngưỡng Sàn Tin Nhắn — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@lead-architect`
 - **Target Files:**
   - `src-tauri/src/highlight/zscore.rs`
   - `src-tauri/src/highlight/bucket.rs`
+  - `src-tauri/tests/highlight_zscore_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Gom toàn bộ tin nhắn từ `chat_events.json` vào các khung thời gian có độ rộng cố định $W = 5\text{ giây}$.
   - Áp dụng ngưỡng sàn tin nhắn: Nếu số lượng tin nhắn trong khung $X(t) < 15\text{ msgs}$, gán trực tiếp điểm Z-score $Z_{\text{adj}}(t) = 0$ để triệt tiêu hoàn toàn báo động giả trong các giai đoạn stream yên ắng.
@@ -417,32 +453,33 @@
   - Prerequisites: TASK-M4-08.
   - Blocks: TASK-M4-12.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-09.1:** Tính toán Z-score cho 500,000 tin nhắn hoàn tất trong thời gian $\le 1.2\text{ giây}$ trên CPU Intel i5 / AMD Ryzen 5.
-  - [ ] **AC-09.2:** Khi chat bị spam bởi 1 người (spam bot cùng tác giả trong 5s), thuật toán loại bỏ bớt tin nhắn trùng tác giả để tránh spike giả.
-  - [ ] **AC-09.3:** 100% các giai đoạn có $X(t) < 15$ trả về Z-score bằng 0.
+  - [x] **AC-09.1:** Tính toán Z-score cho 500,000 tin nhắn hoàn tất trong thời gian $\le 1.2\text{ giây}$ trên CPU Intel i5 / AMD Ryzen 5.
+  - [x] **AC-09.2:** Khi chat bị spam bởi 1 người (spam bot cùng tác giả trong 5s), thuật toán loại bỏ bớt tin nhắn trùng tác giả để tránh spike giả.
+  - [x] **AC-09.3:** 100% các giai đoạn có $X(t) < 15$ trả về Z-score bằng 0.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Pure Logic Math Unit Test
   - *Unit Test Cases (Toán học chính xác):*
-    - [ ] **UT-09.1 (Ngưỡng sàn $X < 15$ msgs):** Cho khung 5 giây có $X(t) = 14$ tin nhắn, bất kể giá trị trung bình $\mu$ và độ lệch chuẩn $\sigma$, khẳng định $Z_{\text{adj}}(t) = 0.0$.
-    - [ ] **UT-09.2 (Độ làm mịn $\epsilon = 0.5$):** Cho khung 5 giây có $X(t) = 45$ tin nhắn, $\mu = 10.0$, $\sigma = 0.0$. Tính $Z_{\text{adj}} = \frac{45 - 10}{0.0 + 0.5} = \frac{35}{0.5} = 70.0$. Không bị chia cho 0.
-    - [ ] **UT-09.3 (Spam Bot Filter):** Một tác giả gửi 20 tin nhắn giống hệt nhau trong 5 giây; thuật toán deduplicate chỉ tính tối đa 3 tin nhắn từ cùng 1 author trong 1 bucket, triệt tiêu spike giả mạo.
+    - [x] **UT-09.1 (Ngưỡng sàn $X < 15$ msgs):** Cho khung 5 giây có $X(t) = 14$ tin nhắn, bất kể giá trị trung bình $\mu$ và độ lệch chuẩn $\sigma$, khẳng định $Z_{\text{adj}}(t) = 0.0$.
+    - [x] **UT-09.2 (Độ làm mịn $\epsilon = 0.5$):** Cho khung 5 giây có $X(t) = 45$ tin nhắn, $\mu = 10.0$, $\sigma = 0.0$. Tính $Z_{\text{adj}} = \frac{45 - 10}{0.0 + 0.5} = \frac{35}{0.5} = 70.0$. Không bị chia cho 0.
+    - [x] **UT-09.3 (Spam Bot Filter):** Một tác giả gửi 20 tin nhắn giống hệt nhau trong 5 giây; thuật toán deduplicate chỉ tính tối đa 3 tin nhắn từ cùng 1 author trong 1 bucket, triệt tiêu spike giả mạo.
   - *Integration & Contract Verification:*
-    - [ ] **IT-09.1:** Xuất ra mảng `chat_velocity_series` có độ phân giải 5 giây cho toàn bộ thời lượng VOD.
+    - [x] **IT-09.1:** Xuất ra mảng `chat_velocity_series` có độ phân giải 5 giây cho toàn bộ thời lượng VOD.
   - *Boundary & Performance Limits:*
-    - [ ] **ED-09.1:** Xử lý 500,000 tin nhắn bằng thuật toán trượt $O(N)$ hoàn tất trong $\le 1.2\text{ giây}$ trên CPU standard.
+    - [x] **ED-09.1:** Xử lý 500,000 tin nhắn bằng thuật toán trượt $O(N)$ hoàn tất trong $\le 1.2\text{ giây}$ trên CPU standard.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib highlight::zscore::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib highlight::zscore::tests
     ```
     *Khẳng định: 100% test cases toán học pass; triệt tiêu 100% false positives trong lull periods.*
 
 ---
 
-#### TASK-M4-10: Động Cơ Trọng Số Emote Đặc Thù Văn Hóa Neuro Swarm
+#### TASK-M4-10: Động Cơ Trọng Số Emote Đặc Thù Văn Hóa Neuro Swarm — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@product-owner-proxy`
 - **Target Files:**
   - `src-tauri/src/highlight/emote_filter.rs`
   - `src-tauri/src/highlight/swarm_dict.rs`
+  - `src-tauri/tests/highlight_emote_filter_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng từ điển dữ liệu tĩnh về các biểu cảm đặc thù của kênh `vedal987` và cộng đồng VTuber:
     - Nhóm Hài hước: `KEKW`, `LUL`, `OMEGALUL`, `💀`, `LMAO`, `LOL`.
@@ -458,31 +495,32 @@
   - Prerequisites: TASK-M4-08.
   - Blocks: TASK-M4-12.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-10.1:** Nhận diện chính xác 100% các emote trong từ điển Swarm chuẩn (kể cả case-insensitive hoặc ký tự unicode như `💀`).
-  - [ ] **AC-10.2:** Tốc độ quét emote đạt $\ge 500,000\text{ tokens/giây}$.
+  - [x] **AC-10.1:** Nhận diện chính xác 100% các emote trong từ điển Swarm chuẩn (kể cả case-insensitive hoặc ký tự unicode như `💀`).
+  - [x] **AC-10.2:** Tốc độ quét emote đạt $\ge 500,000\text{ tokens/giây}$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Pure Logic Tokenizer Test
   - *Unit Test Cases:*
-    - [ ] **UT-10.1 (Happy Path - Swarm Match):** Chuỗi tin nhắn `"KEKW look at that tutel 💀"` bóc tách chính xác 3 emotes: `["KEKW", "tutel", "💀"]`.
-    - [ ] **UT-10.2 (Case Insensitivity & Unicode):** Nhận diện chính xác `kekw`, `KEKW`, `Kekw`, `TUTEL`, `tutel`, `💀`, `PogBones`.
-    - [ ] **UT-10.3 (Emote Ratio Calculation):** Bucket có tổng số 50 tokens từ vựng, trong đó có 25 emotes thuộc từ điển Swarm $\rightarrow$ Khẳng định $E_{\text{ratio}} = 25 / 50 = 0.50$ (50%).
+    - [x] **UT-10.1 (Happy Path - Swarm Match):** Chuỗi tin nhắn `"KEKW look at that tutel 💀"` bóc tách chính xác 3 emotes: `["KEKW", "tutel", "💀"]`.
+    - [x] **UT-10.2 (Case Insensitivity & Unicode):** Nhận diện chính xác `kekw`, `KEKW`, `Kekw`, `TUTEL`, `tutel`, `💀`, `PogBones`.
+    - [x] **UT-10.3 (Emote Ratio Calculation):** Bucket có tổng số 50 tokens từ vựng, trong đó có 25 emotes thuộc từ điển Swarm $\rightarrow$ Khẳng định $E_{\text{ratio}} = 25 / 50 = 0.50$ (50%).
   - *Integration & Contract Verification:*
-    - [ ] **IT-10.1:** Tích hợp với `chat_velocity_series` sinh mảng `emote_density_series` khớp từng timestamp bucket.
+    - [x] **IT-10.1:** Tích hợp với `chat_velocity_series` sinh mảng `emote_density_series` khớp từng timestamp bucket.
   - *Boundary & Performance Limits:*
-    - [ ] **ED-10.1:** Tốc độ quét tokenizer đạt $\ge 500,000\text{ tokens/s}$ nhờ tối ưu hóa qua Aho-Corasick automaton hoặc hash set tĩnh `phf`.
+    - [x] **ED-10.1:** Tốc độ quét tokenizer đạt $\ge 500,000\text{ tokens/s}$ nhờ tối ưu hóa qua Aho-Corasick automaton hoặc hash set tĩnh `phf`.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib highlight::emote_filter::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib highlight::emote_filter::tests
     ```
     *Khẳng định: 100% emotes trong danh mục PRD Mục 6 được nhận diện chính xác.*
 
 ---
 
-#### TASK-M4-11: Bộ Quét Đỉnh Năng Lượng Âm Thanh (Audio RMS Peak Detector)
+#### TASK-M4-11: Bộ Quét Đỉnh Năng Lượng Âm Thanh (Audio RMS Peak Detector) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/highlight/audio_rms.rs`
   - `src-tauri/src/highlight/energy_analyzer.rs`
+  - `src-tauri/tests/highlight_audio_rms_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Đọc file âm thanh từ `vod_manifest.json` (`audio_path`).
   - Sử dụng FFmpeg với bộ lọc `astats` hoặc thư viện xử lý âm thanh Rust `symphonia` để tính toán giá trị năng lượng Root Mean Square (RMS) theo từng block $500\text{ms}$.
@@ -496,33 +534,37 @@
   - Prerequisites: TASK-M4-03, TASK-M4-06, TASK-M4-07.
   - Blocks: TASK-M4-12.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-11.1:** Phân tích RMS toàn bộ file audio 8 tiếng hoàn tất trong vòng $\le 45\text{ giây}$ (xử lý native đa luồng).
-  - [ ] **AC-11.2:** Nhận diện chuẩn xác các đoạn âm thanh vượt ngưỡng âm lượng nền $\ge 18\text{dB}$.
+  - [x] **AC-11.1:** Phân tích RMS toàn bộ file audio 8 tiếng hoàn tất trong vòng $\le 45\text{ giây}$ (xử lý native đa luồng).
+  - [x] **AC-11.2:** Nhận diện chuẩn xác các đoạn âm thanh vượt ngưỡng âm lượng nền $\ge 18\text{dB}$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Audio Processing Unit & Integration Test
   - *Unit Test Cases:*
-    - [ ] **UT-11.1 (Happy Path - RMS Math):** Cho mảng mẫu âm thanh PCM 16-bit hình sin biên độ tối đa, hàm tính RMS trả về giá trị xấp xỉ $1.0$. Với đoạn âm thanh im lặng, RMS trả về $0.0$.
-    - [ ] **UT-11.2 (Peak Threshold):** Nhận diện đỉnh âm lượng khi RMS vượt $\ge 2.5$ độ lệch chuẩn so với baseline nền 30 giây lân cận.
+    - [x] **UT-11.1 (Happy Path - RMS Math):** Cho mảng mẫu âm thanh PCM 16-bit hình sin biên độ tối đa, hàm tính RMS trả về giá trị xấp xỉ $1.0$. Với đoạn âm thanh im lặng, RMS trả về $0.0$.
+    - [x] **UT-11.2 (Peak Threshold):** Nhận diện đỉnh âm lượng khi RMS vượt $\ge 2.5$ độ lệch chuẩn so với baseline nền 30 giây lân cận.
   - *Integration & Contract Verification:*
-    - [ ] **IT-11.1:** Xuất ra mảng `audio_rms_series` với độ phân giải block $500\text{ms}$.
+    - [x] **IT-11.1:** Xuất ra mảng `audio_rms_series` với độ phân giải block $500\text{ms}$.
   - *Boundary & Performance Limits (Screaming Loudness & Speed):**
-    - [ ] **ED-11.1:** Phân tích RMS toàn bộ file audio 8 tiếng hoàn tất trong vòng $\le 45\text{ giây}$ trên CPU 4 nhân.
-    - [ ] **ED-11.2:** Đoạn Vedal hét to hoặc Neuro cười rú lên (biên độ tăng $> 18\text{dB}$) được đánh dấu `is_peak = true` chính xác 100%.
+    - [x] **ED-11.1:** Phân tích RMS toàn bộ file audio 8 tiếng hoàn tất trong vòng $\le 45\text{ giây}$ trên CPU 4 nhân.
+    - [x] **ED-11.2:** Đoạn Vedal hét to hoặc Neuro cười rú lên (biên độ tăng $> 18\text{dB}$) được đánh dấu `is_peak = true` chính xác 100%.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib highlight::audio_rms::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib highlight::audio_rms::tests
     ```
     *Khẳng định: Quét 8h audio $\le 45\text{s}$, RMS normalize nằm trọn vẹn trong $[0.0, 1.0]$.*
 
 ---
 
-#### TASK-M4-12: Hợp Nhất Đa Phương Thức & Bộ Bù Độ Trễ Livestream 4.5 Giây
+#### TASK-M4-12: Hợp Nhất Đa Phương Thức & Bộ Bù Độ Trễ Livestream 4.5 Giây — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `@lead-architect` & Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/highlight/fusion.rs`
   - `src-tauri/src/highlight/cluster.rs`
   - `src-tauri/src/commands/highlight_cmd.rs`
   - `src/components/highlight/HighlightViewer.tsx`
+  - `src/services/ipc/highlight.ts`
+  - `src/stores/useHighlightStore.ts`
+  - `src/types/highlight.ts`
+  - `src-tauri/tests/highlight_fusion_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Hợp nhất 3 kênh dữ liệu theo công thức trọng số đa tầng:
     $$\text{Score}_{\text{final}}(t) = 0.6 \cdot Z_{\text{adj}}(t) + 0.25 \cdot E_{\text{ratio}}(t) + 0.15 \cdot \text{RMS}_{\text{normalized}}(t)$$
@@ -542,38 +584,41 @@
   - Prerequisites: TASK-M4-09, TASK-M4-10, TASK-M4-11.
   - Blocks: TASK-M4-13, TASK-M4-14, TASK-M4-20.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-12.1:** Tổng thời gian hợp nhất điểm và phân cụm $\le 500\text{ms}$.
-  - [ ] **AC-12.2:** Mốc thời gian clip highlight luôn bắt đầu trước đỉnh chat ít nhất 10 giây, bảo đảm bắt trọn câu nói khởi đầu của streamer trong 100% các đoạn test.
-  - [ ] **AC-12.3:** Không có 2 cụm highlight nào bị gối đầu lên nhau quá 50% thời lượng.
-  - [ ] **AC-12.4:** 100% các cụm highlight thỏa mãn điều kiện biên bất biến: $0.0 \le t_{\text{start}} < t_{\text{end}} \le \text{vod\_manifest.duration\_seconds}$. Tuyệt đối không sinh timecode vượt quá thời lượng VOD kể cả khi đỉnh chat nằm ở giây cuối cùng của stream.
+  - [x] **AC-12.1:** Tổng thời gian hợp nhất điểm và phân cụm $\le 500\text{ms}$.
+  - [x] **AC-12.2:** Mốc thời gian clip highlight luôn bắt đầu trước đỉnh chat ít nhất 10 giây, bảo đảm bắt trọn câu nói khởi đầu của streamer trong 100% các đoạn test.
+  - [x] **AC-12.3:** Không có 2 cụm highlight nào bị gối đầu lên nhau quá 50% thời lượng.
+  - [x] **AC-12.4:** 100% các cụm highlight thỏa mãn điều kiện biên bất biến: $0.0 \le t_{\text{start}} < t_{\text{end}} \le \text{vod\_manifest.duration\_seconds}$. Tuyệt đối không sinh timecode vượt quá thời lượng VOD kể cả khi đỉnh chat nằm ở giây cuối cùng của stream.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Fusion Algorithm & Contract Test (Schema 5.4)
   - *Unit Test Cases (Công thức Fusion & Bù trễ):*
-    - [ ] **UT-12.1 (Full Multimodal Weighting):** Cho $Z_{\text{adj}} = 10.0$ (chuẩn hóa về $1.0$), $E_{\text{ratio}} = 0.8$, $\text{RMS} = 0.6$. Khẳng định $\text{Score} = 0.6(1.0) + 0.25(0.8) + 0.15(0.6) = 0.6 + 0.2 + 0.09 = 0.89$ ($89/100$).
-    - [ ] **UT-12.2 (Audio-Only Fallback Weighting):** Khi không có chat ($Z=0, E=0$), $\text{Score} = 1.0 \times \text{RMS}_{\text{normalized}}$.
-    - [ ] **UT-12.3 (Bù độ trễ 4.5s & Padding):** Đỉnh chat ghi nhận tại $t_{\text{peak}} = 01:24:30.0$ ($5070.0\text{s}$) trên VOD dài $7200.0\text{s}$. Khẳng định:
+    - [x] **UT-12.1 (Full Multimodal Weighting):** Cho $Z_{\text{adj}} = 10.0$ (chuẩn hóa về $1.0$), $E_{\text{ratio}} = 0.8$, $\text{RMS} = 0.6$. Khẳng định $\text{Score} = 0.6(1.0) + 0.25(0.8) + 0.15(0.6) = 0.6 + 0.2 + 0.09 = 0.89$ ($89/100$).
+    - [x] **UT-12.2 (Audio-Only Fallback Weighting):** Khi không có chat ($Z=0, E=0$), $\text{Score} = 1.0 \times \text{RMS}_{\text{normalized}}$.
+    - [x] **UT-12.3 (Bù độ trễ 4.5s & Padding):** Đỉnh chat ghi nhận tại $t_{\text{peak}} = 01:24:30.0$ ($5070.0\text{s}$) trên VOD dài $7200.0\text{s}$. Khẳng định:
       $t_{\text{start}} = 5070.0 - 4.5 - 10.0 = 5055.5\text{s}$ ($01:24:15.5$).
       $t_{\text{end}} = 5070.0 + 15.0 = 5085.0\text{s}$ ($01:24:45.0$).
   - *Integration & Contract Verification (Schema 5.4):**
-    - [ ] **IT-12.1:** Gom cụm (Clustering) các đỉnh cách nhau $\le 30\text{s}$ thành 1 cụm duy nhất.
-    - [ ] **IT-12.2:** Xuất ra tệp `highlight_clusters.json` tuân thủ 100% JSON Schema 5.4 trong `ARCHITECTURE.md`.
+    - [x] **IT-12.1:** Gom cụm (Clustering) các đỉnh cách nhau $\le 30\text{s}$ thành 1 cụm duy nhất.
+    - [x] **IT-12.2:** Xuất ra tệp `highlight_clusters.json` tuân thủ 100% JSON Schema 5.4 trong `ARCHITECTURE.md`.
   - *Boundary & Edge Cases (Clamping & Clustered Range Bounds):*
-    - [ ] **ED-12.1:** Nếu $t_{\text{start}}$ tính ra $< 0$, tự động ép về $0.0\text{s}$ (không sinh timecode âm).
-    - [ ] **ED-12.2:** Xếp hạng trích xuất đúng top 15–20 cụm điểm cao nhất, thời gian xử lý toàn bộ $\le 500\text{ms}$.
-    - [ ] **ED-12.3 (Clamp End Timecode to VOD Duration & Dynamic Padding):** Cho VOD có tổng thời lượng $10,000.0\text{s}$, giả lập đỉnh chat xảy ra sát cuối stream tại $t_{\text{peak}} = 9,992.0\text{s}$. Khẳng định $t_{\text{end}}$ được clamp chính xác tại $10,000.0\text{s}$ (không vượt quá `duration_seconds`); Pre-roll Buffer tự động bù thêm để clip đạt độ dài $22.5\text{s}$; khẳng định không sinh timecode vượt quá EOF gây lỗi cho FFmpeg ở TASK-M4-13.
+    - [x] **ED-12.1:** Nếu $t_{\text{start}}$ tính ra $< 0$, tự động ép về $0.0\text{s}$ (không sinh timecode âm).
+    - [x] **ED-12.2:** Xếp hạng trích xuất đúng top 15–20 cụm điểm cao nhất, thời gian xử lý toàn bộ $\le 500\text{ms}$.
+    - [x] **ED-12.3 (Clamp End Timecode to VOD Duration & Dynamic Padding):** Cho VOD có tổng thời lượng $10,000.0\text{s}$, giả lập đỉnh chat xảy ra sát cuối stream tại $t_{\text{peak}} = 9,992.0\text{s}$. Khẳng định $t_{\text{end}}$ được clamp chính xác tại $10,000.0\text{s}$ (không vượt quá `duration_seconds`); Pre-roll Buffer tự động bù thêm để clip đạt độ dài $22.5\text{s}$; khẳng định không sinh timecode vượt quá EOF gây lỗi cho FFmpeg ở TASK-M4-13.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib highlight::fusion::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib highlight::fusion::tests
     ```
     *Khẳng định: `highlight_clusters.json` pass schema; mốc $t_{\text{start}}$ luôn đi trước đỉnh chat $\ge 14.5\text{s}$; $t_{\text{end}} \le \text{duration\_seconds}$ 100%.*
 
 ---
 
-#### TASK-M4-13: Bộ Tải Phân Đoạn Video Chính Xác Không Tải Thừa (Lossless Precision Range Slicer)
+#### TASK-M4-13: Bộ Tải Phân Đoạn Video Chính Xác Không Tải Thừa (Lossless Precision Range Slicer) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/ingestion/range_slicer.rs`
-  - `src-tauri/src/commands/slice_cmd.rs`
+  - `src-tauri/src/commands/slice_cmd.rs` *(kèm truyền `video_stream_url` + lazy `yt-dlp -g` fallback & retry URL hết hạn)*
+  - `src/services/ipc/slice.ts`
+  - `src/types/range_slicer.ts`
+  - `src-tauri/tests/range_slicer_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Khi người dùng chọn 1 cụm highlight trên UI (thời lượng 30s–90s):
     - Nếu nguồn là Online VOD: Lấy URL stream gốc m3u8 từ `vod_manifest.json`, truyền tham số cho FFmpeg thực hiện HTTP Range Request cắt trực tiếp qua mạng không tải cả video:
@@ -587,22 +632,22 @@
   - Prerequisites: TASK-M4-03, TASK-M4-05, TASK-M4-06, TASK-M4-12.
   - Blocks: TASK-M4-20, TASK-M4-25, TASK-M4-26.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-13.1:** Tải và cắt một đoạn clip 90 giây từ VOD trực tuyến diễn ra trong vòng $\le 10\text{ giây}$ trên đường truyền mạng tiêu chuẩn.
-  - [ ] **AC-13.2:** Dung lượng file tải về chỉ dao động từ $30\text{MB} - 80\text{MB}$ thay vì 30GB video.
-  - [ ] **AC-13.3:** Video cắt bằng `-c copy` đồng bộ hoàn hảo hình và tiếng, không bị đứng hình ở giây đầu tiên.
+  - [x] **AC-13.1:** Tải và cắt một đoạn clip 90 giây từ VOD trực tuyến diễn ra trong vòng $\le 10\text{ giây}$ trên đường truyền mạng tiêu chuẩn.
+  - [x] **AC-13.2:** Dung lượng file tải về chỉ dao động từ $30\text{MB} - 80\text{MB}$ thay vì 30GB video.
+  - [x] **AC-13.3:** Video cắt bằng `-c copy` đồng bộ hoàn hảo hình và tiếng, không bị đứng hình ở giây đầu tiên.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Subprocess & Lossless Video Slicing Test
   - *Unit Test Cases:*
-    - [ ] **UT-13.1 (Happy Path - Parameter Formatting):** Sinh câu lệnh FFmpeg HTTP Range request chuẩn xác:
+    - [x] **UT-13.1 (Happy Path - Parameter Formatting):** Sinh câu lệnh FFmpeg HTTP Range request chuẩn xác:
       `ffmpeg -ss <start> -to <end> -i "<m3u8_url>" -c copy -avoid_negative_ts make_zero "clip.mp4"`.
   - *Integration & Contract Verification:*
-    - [ ] **IT-13.1:** Cắt phân đoạn 90 giây từ stream m3u8 trực tuyến, file video `clip_slice.mp4` sinh ra có dung lượng dao động $30\text{MB} - 80\text{MB}$ (thay vì tải 30GB).
-    - [ ] **IT-13.2:** Thời gian tải và cắt phân đoạn 90 giây $\le 10\text{ giây}$ trên mạng 50Mbps.
+    - [x] **IT-13.1:** Cắt phân đoạn 90 giây từ stream m3u8 trực tuyến, file video `clip_slice.mp4` sinh ra có dung lượng dao động $30\text{MB} - 80\text{MB}$ (thay vì tải 30GB).
+    - [x] **IT-13.2:** Thời gian tải và cắt phân đoạn 90 giây $\le 10\text{ giây}$ trên mạng 50Mbps.
   - *Boundary & Video Quality Limits:*
-    - [ ] **ED-13.1 (Keyframe Alignment Check):** Kiểm tra tệp MP4 cắt ra bằng ffprobe: audio stream và video stream có duration lệch nhau không quá $50\text{ms}$, giây đầu tiên hiển thị khung hình ngay tức thì.
+    - [x] **ED-13.1 (Keyframe Alignment Check):** Kiểm tra tệp MP4 cắt ra bằng ffprobe: audio stream và video stream có duration lệch nhau không quá $50\text{ms}$, giây đầu tiên hiển thị khung hình ngay tức thì.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test range_slicer_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test range_slicer_test -- --nocapture
     ```
     *Khẳng định: Video cắt mượt mà, file size $\le 80\text{MB}$, thời gian cắt $\le 10\text{s}$.*
 
@@ -616,6 +661,7 @@
   - `src-tauri/Cargo.toml`
   - `src-tauri/src/stt/audio_prep.rs`
   - `src-tauri/src/stt/vad.rs`
+  - `src-tauri/src/stt/vad_bridge.rs`
   - `src-tauri/resources/models/silero_vad_16k.onnx`
   - `src-tauri/tests/stt_vad_test.rs`
   - `src-tauri/tests/fixtures/silero_test.wav`
@@ -654,19 +700,22 @@
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --test stt_vad_test
-    cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1
+    cargo test --manifest-path src-tauri/Cargo.toml --all-targets
     cargo clippy --manifest-path src-tauri/Cargo.toml --lib -- -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic
     ```
     *Khẳng định: Giảm $\ge 30\%$ payload size gửi cloud, điểm cắt chunk an toàn, 0 panic trong production code.*
 
 ---
 
-#### TASK-M4-15: Máy Khách Groq Whisper Cloud API Kèm Phân Khối Nhỏ & Chế Độ Chống Lặp Từ
+#### TASK-M4-15: Máy Khách Groq Whisper Cloud API Kèm Phân Khối Nhỏ & Chế Độ Chống Lặp Từ — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/stt/groq_client.rs`
   - `src-tauri/src/commands/stt_cmd.rs`
   - `src/services/ipc/stt.ts`
+  - `src/types/transcript.ts`
+  - `src/stores/useTranscriptStore.ts`
+  - `src-tauri/tests/groq_client_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng HTTP Client giao tiếp với Groq Cloud endpoint: `https://api.groq.com/openai/v1/audio/transcriptions`.
   - Sử dụng mô hình `whisper-large-v3` với tham số word-level timestamps (`timestamp_granularities[]=word&timestamp_granularities[]=segment`).
@@ -675,38 +724,45 @@
   - Xử lý mã lỗi HTTP 429 (Rate Limit): Áp dụng thuật toán Exponential Backoff tự động retry sau $1\text{s}, 2\text{s}, 4\text{s}$.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: File audio đã cắt chunk và Groq API Key.
-  - Đầu ra: Raw transcript JSON kèm word-level timestamps và segment timestamps.
+  - Đầu ra: Raw transcript JSON kèm word-level timestamps và segment timestamps; event `stt:progress` camelCase (`{ taskId, stage, percent, etaSec?, currentChunk, totalChunks }`) & `stt:chunk` nối qua `useTranscriptStore.ts`.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-02, TASK-M4-04, TASK-M4-14, TASK-M4-28.
   - Blocks: TASK-M4-17, TASK-M4-18.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-15.1:** Tốc độ bóc băng cho đoạn video clip 3 phút đạt mức $\le 12\text{ giây}$ (tốc độ xử lý $\ge 200x\text{ realtime}$).
-  - [ ] **AC-15.2:** 100% các file payload gửi lên Groq có kích thước $\le 20\text{MB}$, không có lỗi HTTP 413 Payload Too Large.
-  - [ ] **AC-15.3:** Triệt tiêu hoàn toàn lỗi lặp từ vô tận khi bóc băng các đoạn clip ca hát/karaoke.
+  - [x] **AC-15.1:** Tốc độ bóc băng cho đoạn video clip 3 phút đạt mức $\le 12\text{ giây}$ (tốc độ xử lý $\ge 200x\text{ realtime}$).
+  - [x] **AC-15.2:** 100% các file payload gửi lên Groq có kích thước $\le 20\text{MB}$, không có lỗi HTTP 413 Payload Too Large.
+  - [x] **AC-15.3:** Triệt tiêu hoàn toàn lỗi lặp từ vô tận khi bóc băng các đoạn clip ca hát/karaoke.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Mock HTTP Integration & Protocol Test
   - *Unit Test Cases:*
-    - [ ] **UT-15.1 (Happy Path - Chunk Sizing):** Audio dài 45 phút được chia thành các chunks có dung lượng $\le 20\text{MB}$ (ngưỡng an toàn dưới mức $25\text{MB}$ của Groq) với vùng overlap $1.5\text{ giây}$.
-    - [ ] **UT-15.2 (Karaoke / Anti-Repetition Guardrail):** Khi phát hiện cờ Music Mode, request gửi lên Groq bắt buộc chứa `condition_on_previous_text=false`.
+    - [x] **UT-15.1 (Happy Path - Chunk Sizing):** Audio dài 45 phút được chia thành các chunks có dung lượng $\le 20\text{MB}$ (ngưỡng an toàn dưới mức $25\text{MB}$ của Groq) với vùng overlap $1.5\text{ giây}$.
+    - [x] **UT-15.2 (Karaoke / Anti-Repetition Guardrail):** Khi phát hiện cờ Music Mode, request gửi lên Groq bắt buộc chứa `condition_on_previous_text=false`.
   - *Integration & Contract Verification (`wiremock`):**
-    - [ ] **IT-15.1:** Mock Groq API endpoint `/openai/v1/audio/transcriptions`. Kiểm tra parse kết quả trả về bóc tách đầy đủ word-level timestamps và segment text.
-    - [ ] **IT-15.2 (Rate Limit Exponential Backoff):** Giả lập Groq trả về HTTP 429. Client tự động chờ và retry sau $1\text{s}, 2\text{s}, 4\text{s}$ (tối đa 3 lần).
+    - [x] **IT-15.1:** Mock Groq API endpoint `/openai/v1/audio/transcriptions`. Kiểm tra parse kết quả trả về bóc tách đầy đủ word-level timestamps và segment text.
+    - [x] **IT-15.2 (Rate Limit Exponential Backoff):** Giả lập Groq trả về HTTP 429. Client tự động chờ và retry sau $1\text{s}, 2\text{s}, 4\text{s}$ (tối đa 3 lần).
   - *Boundary & Network Limits (ERR-06 Defense):**
-    - [ ] **ED-15.1 (Payload Limit Strict Assertion):** Assert 100% các file payload gửi lên Groq có kích thước $< 25\text{MB}$, ngăn chặn triệt để lỗi HTTP 413 Payload Too Large.
-    - [ ] **ED-15.2 (Processing Speed SLA):** Tốc độ bóc băng cho clip 3 phút hoàn tất trong $\le 12\text{ giây}$ ($\ge 200x\text{ realtime}$).
+    - [x] **ED-15.1 (Payload Limit Strict Assertion):** Assert 100% các file payload gửi lên Groq có kích thước $< 25\text{MB}$, ngăn chặn triệt để lỗi HTTP 413 Payload Too Large.
+    - [x] **ED-15.2 (Processing Speed SLA):** Tốc độ bóc băng cho clip 3 phút hoàn tất trong $\le 12\text{ giây}$ ($\ge 200x\text{ realtime}$).
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test groq_client_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test groq_client_test -- --nocapture
     ```
     *Khẳng định: Không có lỗi HTTP 413; phá vỡ vòng lặp lặp từ; tốc độ $\ge 200x$ realtime.*
 
 ---
 
-#### TASK-M4-16: Công Nhân Xử Lý Ngoại Tuyến Faster-Whisper INT8 Dự Phòng Trên Máy
+#### TASK-M4-16: Công Nhân Xử Lý Ngoại Tuyến Faster-Whisper INT8 Dự Phòng Trên Máy — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & Systems Dev
 - **Target Files:**
   - `src-tauri/src/stt/faster_whisper_worker.rs`
-  - `src-tauri/src/stt/model_manager.rs`
+  - `src-tauri/src/stt/model_manager.rs` *(M2: thay SHA-256 giả bằng `None` & từ chối file 0-byte)*
+  - `src-tauri/src/stt/whisper_sidecar.rs` *(bổ sung `whisper.cpp` Q5_K)*
+  - `src-tauri/src/commands/stt_cmd.rs` *(`start_faster_whisper_transcription`)*
+  - `src-tauri/src/lib.rs`
+  - `src/services/ipc/stt.ts` *(`startFasterWhisperTranscription`, `GuardrailPolicy`)*
+  - `src/stores/useTranscriptStore.ts` *(`transcribeFasterWhisper`)*
+  - `src-tauri/tests/local_whisper_worker_test.rs`
+  - `src-tauri/tests/stt_model_manager_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng worker subprocess hoặc C/C++ FFI binding bọc quanh thư viện `faster-whisper` (CTranslate2).
   - Sử dụng mô hình Whisper `medium` hoặc `small` với quantization `int8` để đảm bảo mức tiêu thụ VRAM luôn $< 2\text{GB}$.
@@ -719,20 +775,21 @@
   - Prerequisites: TASK-M4-03, TASK-M4-14, TASK-M4-27.
   - Blocks: TASK-M4-17, TASK-M4-18.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-16.1:** Mức chiếm dụng bộ nhớ GPU VRAM khi chạy Faster-Whisper INT8 không vượt quá $1.8\text{GB}$.
-  - [ ] **AC-16.2:** Không gây hiện tượng CUDA Out-of-Memory (OOM) làm crash ứng dụng trên các GPU 4GB VRAM như GTX 1650 / RTX 3050 Laptop.
+  - [x] **AC-16.1:** Mức chiếm dụng bộ nhớ GPU VRAM khi chạy Faster-Whisper INT8 không vượt quá $1.8\text{GB}$.
+  - [x] **AC-16.2:** Không gây hiện tượng CUDA Out-of-Memory (OOM) làm crash ứng dụng trên các GPU 4GB VRAM như GTX 1650 / RTX 3050 Laptop.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Worker Process & Hardware Guardrail Test
   - *Unit Test Cases:*
-    - [ ] **UT-16.1 (Happy Path - Command Construction):** Sinh tham số gọi worker CTranslate2 với `--model medium --quantization int8 --device auto`.
-    - [ ] **UT-16.2 (Hardware Guardrail Check):** Kiểm tra thông số VRAM từ `hardware_profile.json`. Nếu VRAM $< 2500\text{MB}$, từ chối khởi tạo Whisper Large, tự động ép về INT8 Medium hoặc trả về lỗi `ERR_STT_CUDA_OOM`.
+    - [x] **UT-16.1 (Happy Path - Command Construction):** Sinh tham số gọi worker CTranslate2 với `--model medium --quantization int8 --device auto`.
+    - [x] **UT-16.2 (Hardware Guardrail Check):** Kiểm tra thông số VRAM từ `hardware_profile.json`. Nếu VRAM $< 2500\text{MB}$, từ chối khởi tạo Whisper Large, tự động ép về INT8 Medium hoặc trả về lỗi `ERR_STT_CUDA_OOM`.
   - *Integration & Contract Verification:*
-    - [ ] **IT-16.1:** Output transcript JSON từ local worker có cấu trúc đồng dạng 100% với output của Groq Cloud API.
+    - [x] **IT-16.1:** Output transcript JSON từ local worker có cấu trúc đồng dạng 100% với output của Groq Cloud API.
   - *Boundary & Hardware Limits (ERR-02 Defense):**
-    - [ ] **ED-16.1 (VRAM Cap < 2GB):** Đo mức chiếm dụng bộ nhớ GPU khi chạy Faster-Whisper INT8 trên GPU 4GB VRAM (GTX 1650): khẳng định VRAM sử dụng không vượt quá $1.8\text{GB}$, không gây lỗi CUDA OOM.
+    - [x] **ED-16.1 (VRAM Cap < 2GB):** Đo mức chiếm dụng bộ nhớ GPU khi chạy Faster-Whisper INT8 trên GPU 4GB VRAM (GTX 1650): khẳng định VRAM sử dụng không vượt quá $1.8\text{GB}$, không gây lỗi CUDA OOM.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test local_whisper_worker_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test local_whisper_worker_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test stt_model_manager_test -- --nocapture
     ```
     *Khẳng định: VRAM peak $\le 1.8\text{GB}$, 0 CUDA crash trên hệ thống 4GB VRAM.*
 
@@ -740,12 +797,16 @@
 
 ### Milestone M4.5: Bản Địa Hóa, Ngữ Cảnh Lore & Dịch Thuật Vietsub (Localization & Translation)
 
-#### TASK-M4-17: Máy Khách Google Gemini 1.5 Flash Kèm Prompt Đóng Gói Kịch Bản Sân Khấu (Theatrical Framing)
+#### TASK-M4-17: Máy Khách Google Gemini 1.5 Flash Kèm Prompt Đóng Gói Kịch Bản Sân Khấu (Theatrical Framing) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@tech-lead`
 - **Target Files:**
-  - `src-tauri/src/translation/gemini_client.rs`
+  - `src-tauri/src/translation/gemini_client.rs` *(M2: `merge_translations()` truyền `speaker_id` & HTTP `403 -> InvalidApiKey`)*
   - `src-tauri/src/translation/prompt_builder.rs`
+  - `src-tauri/src/commands/translation_cmd.rs`
   - `src/services/ipc/translation.ts`
+  - `src/types/translation.ts`
+  - `src/stores/useTranscriptStore.ts`
+  - `src-tauri/tests/gemini_client_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng HTTP Client giao tiếp với Google Gemini 1.5 Flash API qua Google AI Studio endpoint.
   - Triển khai cơ chế đóng gói **Theatrical Framing System Prompt** (`ADR-001` & `PRD` Mục 6.3):
@@ -774,7 +835,7 @@
     - [x] **ED-17.1 (Safety Triggered Fallback):** Giả lập Gemini phản hồi `finishReason: "SAFETY"` trên 1 câu nói unhinged. Pipeline KHÔNG văng lỗi làm hủy mẻ dịch; tự động giữ nguyên câu tiếng Anh gốc, gắn cờ `is_flagged_for_review = true`, hiển thị cảnh báo trên UI và tiếp tục dịch bình thường các câu còn lại.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test gemini_client_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test gemini_client_test -- --nocapture
     ```
     *Khẳng định: Vượt bộ lọc an toàn $\ge 95\%$; câu bị chặn an toàn được bảo lưu tiếng Anh gốc.*
 
@@ -786,46 +847,64 @@
   - `src-tauri/src/translation/lore_dictionary.rs`
   - `src-tauri/src/translation/pronoun_matrix.rs`
   - `src-tauri/src/translation/diarization.rs`
+  - `src-tauri/src/translation/prompt_builder.rs` *(tích hợp Lore + Pronoun + Style Preset)*
+  - `src-tauri/src/translation/gemini_client.rs` *(tích hợp `merge_translations()` + Hybrid diarization)*
+  - `src-tauri/src/commands/translation_cmd.rs` & `src/types/translation.ts` *(mở rộng `TranslateVietsubOptions`)*
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Tích hợp từ điển miền tri thức cộng đồng Neuro-sama vào System Prompt:
-    - *Tutel / Turtle* $\rightarrow$ "Con rùa" / "Bố rùa" (chỉ Vedal).
-    - *Gymbag* $\rightarrow$ "Gymbag" / "Fan cuồng".
-    - *Filter is leaking* $\rightarrow$ "Lộ bản chất rồi" / "Bộ lọc hỏng rồi".
-    - *Dinking* $\rightarrow$ "Suy nghĩ sâu xa" / "Não to".
-    - *Heart Heart* $\rightarrow$ "Bắn tim bắn tim".
-  - Triển khai **Ma trận đại từ xưng hô (Pronoun Matrix)**:
-    - Vedal nói với Neuro: xưng "anh/tôi" - gọi "em/con".
-    - Neuro nói với Vedal: xưng "em/cháu" - gọi "bố/anh Vedal".
-    - Evil nói với Vedal: xưng "chị/ta" - gọi "con rùa/lão già".
-  - Phân tích ngữ cảnh câu nói để tự động điền `speaker_id`: `"vedal"`, `"neuro"`, `"evil"`, `"guest"`, `"chat"`.
+  - Tích hợp đầy đủ **12 thuật ngữ miền tri thức cộng đồng Neuro-sama (`PRD.md` §6.2)** vào System Prompt:
+    1. *Heart (Heart / Heart Heart)* $\rightarrow$ `"Heart <3"`, `"Thả tim <3"`, `"Bắn tim"`, `"Bắn tim bắn tim"`.
+    2. *Tutel (Tutel / Turtle)* $\rightarrow$ `"Tutel"`, `"Cụ Rùa"`, `"Con Rùa"`, `"Bố rùa"` (chỉ Vedal).
+    3. *Gymbag* $\rightarrow$ `"Gymbag"`, `"Bao tải gym"`, `"Bao cát gym"` *(tuyệt đối không dịch "Fan cuồng" hay "Túi tập thể dục")*.
+    4. *Filter / Leaking (Filter is leaking)* $\rightarrow$ `"Bộ lọc bị thủng rồi!"`, `"Filter lủng rồi cứu!"`, `"Bộ lọc rò rỉ rồi"`, `"Bộ lọc lủng rồi"`, `"Lộ bản chất rồi"`.
+    5. *Swarm* $\rightarrow$ `"The Swarm"`, `"Swarm"`, `"Bầy đàn"`, `"Tổ kiến"`.
+    6. *Abandoned* $\rightarrow$ `"Bị bỏ rơi rồi!"`, `"Bố bỏ rơi con rồi!"`.
+    7. *Dinking* $\rightarrow$ `"Dinking"` *(đang gõ đầu / load não / suy nghĩ sâu xa)*.
+    8. *Erm* $\rightarrow$ `"Ờm..."`, `"Ủa..."`, `"Ủa kì zạ..."`.
+    9. *Cooked* $\rightarrow$ `"Toang rồi"`, `"Xong đời rồi"`, `"Bị nấu chín rồi"`.
+    10. *Unhinged* $\rightarrow$ `"Mất kiểm soát rồi"`, `"Gãy gánh rồi"`, `"Điên rồ thật sự"`.
+    11. *KEKW / LUL / 💀* $\rightarrow$ `"Cười ẻ"`, `"Chết cười"`, `"Hết cứu"`, `"Vãi nồi"`.
+    12. *Aware / Clueless* $\rightarrow$ `"Ngây thơ chưa biết gì" (Clueless)` $\rightarrow$ `"Tỉnh ngộ rồi / Nhận ra rồi" (Aware)`.
+  - Triển khai **Ma trận đại từ xưng hô thống nhất (`PRD.md` §6.1 & `ADR-006`)** gắn bảng màu chuẩn **PO Option 1**:
+    - **Vedal (`vedal`, `#98FB98` / `&H0098FB98&`):** Tự xưng `"tôi / bố / anh / ta"` — Gọi Neuro / Evil `"Neuro / Evil / em / con"` — Gọi Chat `"mấy ông / chat"`.
+    - **Neuro-sama (`neuro`, `#FFB6C1` / `&H00C1B6FF&`):** Tự xưng `"con / em / cháu / Neuro"` — Gọi Vedal `"bố Vedal / bố / anh Vedal / anh"` — Gọi Chat `"mọi người / các bạn / Swarm"`.
+    - **Evil Neuro (`evil`, `#FF0055` / `&H005500FF&`):** Tự xưng `"ta / chị / Evil / em"` — Gọi Vedal `"ông già / lão già / con rùa / rùa ngốc / Vedal"` — Gọi Chat `"lũ sâu bọ / các ngươi / fan"`.
+    - **Guest (`guest`, `#FFD700` / `&H0000D7FF&`):** Map theo hồ sơ `cast_members` (nếu cấu hình): `Anny` (tự xưng `"mẹ / chị / Anny"` — gọi Vedal `"Vedal / chàng rùa"` — gọi Neuro `"con gái / Neuro"`), `Camila` (tự xưng `"dì / chị / Camila"` — gọi Vedal `"Vedal"`), `Filian` (tự xưng `"tôi / chị / Filian"`).
+    - **Chat (`chat`, `#87CEEB` / `&H00EBCE87&`):** Tự xưng `"tụi tui / chat / Swarm / fan"` — Gọi Vedal/Neuro `"Vedal / cụ rùa / Neuro / Evil"`.
+    - **Default / Unknown (`unknown`, `#FFFFFF` / `&H00FFFFFF&`):** Fallback trung tính cho câu thoại quá ngắn hoặc chưa đủ ngữ cảnh.
+  - Triển khai `diarization.rs` theo phương pháp **Hybrid**: kết hợp suy luận ngữ cảnh LLM (`ADR-006`) + bộ chuẩn hóa/xác thực tất định (ánh xạ `"Neuro-sama"` $\rightarrow$ `"neuro"`, `"Evil Neuro"` $\rightarrow$ `"evil"`, `"Vedal987"` $\rightarrow$ `"vedal"`, chuỗi lạ/mơ hồ $\rightarrow$ `"unknown"`) + heuristic ngữ cảnh pre-hint/fallback (cho phép kiểm thử offline với mock LLM & synthetic fixtures), điền `speaker_id` thuộc `["vedal", "neuro", "evil", "guest", "chat", "unknown"]`.
 - **Giao kèo dữ liệu (Data Contracts):**
-  - Đầu vào: Transcript segments và cấu hình nhân vật tham gia stream.
-  - Đầu ra: Segments có gắn `speaker_id` chuẩn xác và nội dung Vietsub bản địa hóa.
+  - Đầu vào: `TranscriptSegmentsContainer` + mở rộng `TranslateVietsubOptions` gồm `cast_members` (cấu hình nhân vật/khách mời tham gia stream) và `style_preset` (hỗ trợ 2 preset của `PRD.md` US4.2: `"TikTok Gen Z Trend"` vs `"Formal Subber"`; định danh chuỗi enum chính xác trong Rust/TypeScript và cấu trúc phần tử `cast_members` sẽ được chốt khi triển khai `M4-18`).
+  - Đầu ra: Segments có gắn `speaker_id` chuẩn xác (`["vedal", "neuro", "evil", "guest", "chat", "unknown"]`) và nội dung Vietsub bản địa hóa.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-17.
   - Blocks: TASK-M4-19, TASK-M4-20, TASK-M4-22.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-18.1:** 100% các thuật ngữ trong Lore Dictionary được dịch chuẩn nghĩa theo văn hóa Swarm VN, không có hiện tượng dịch word-by-word ngô nghê.
+  - [ ] **AC-18.1:** 100% các thuật ngữ trong Lore Dictionary (12 thuật ngữ `PRD.md` §6.2) được dịch chuẩn nghĩa theo văn hóa Swarm VN, không có hiện tượng dịch word-by-word ngô nghê.
   - [ ] **AC-18.2:** Độ chính xác tự động gán nhãn người nói (`speaker_id`) dựa trên ngữ cảnh đạt $\ge 85\%$ trước khi người dùng cần can thiệp thủ công.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Pure Logic Translation & Diarization Unit Test
   - *Unit Test Cases:*
-    - [ ] **UT-18.1 (Lore Dictionary Match):**
-      - `"Tutel"` $\rightarrow$ Assert kết quả dịch chứa "Con rùa" hoặc "Bố rùa".
-      - `"Gymbag"` $\rightarrow$ Assert dịch thành "Gymbag" hoặc "Bao cát gym".
-      - `"Filter is leaking"` $\rightarrow$ Assert dịch thành "Bộ lọc lủng rồi" hoặc "Lộ bản chất rồi".
-      - `"Heart Heart"` $\rightarrow$ Assert dịch thành "Bắn tim bắn tim" / "Thả tim <3".
+    - [ ] **UT-18.1 (Lore Dictionary Match — 12 Terms `PRD.md` §6.2):**
+      - `"Heart"` / `"Heart Heart"` $\rightarrow$ `"Heart <3"` / `"Thả tim <3"` / `"Bắn tim"` / `"Bắn tim bắn tim"`.
+      - `"Tutel"` / `"Turtle"` $\rightarrow$ `"Tutel"` / `"Cụ Rùa"` / `"Con Rùa"` / `"Bố rùa"`.
+      - `"Gymbag"` $\rightarrow$ `"Gymbag"` / `"Bao tải gym"` / `"Bao cát gym"`.
+      - `"Filter / Leaking"` (`"Filter is leaking"`) $\rightarrow$ `"Bộ lọc bị thủng rồi!"` / `"Filter lủng rồi cứu!"` / `"Bộ lọc rò rỉ rồi"` / `"Bộ lọc lủng rồi"` / `"Lộ bản chất rồi"`.
+      - Đầy đủ 8 thuật ngữ còn lại (`Swarm`, `Abandoned`, `Dinking`, `Erm`, `Cooked`, `Unhinged`, `KEKW / LUL / 💀`, `Aware / Clueless`) khớp `PRD.md` §6.2.
     - [ ] **UT-18.2 (Pronoun Matrix Consistency):**
-      - Đoạn thoại Vedal nói với Neuro: chuẩn "anh/bố" - "em/con".
-      - Đoạn thoại Evil nói với Vedal: xưng "chị/ta" - gọi "ông già/con rùa".
-    - [ ] **UT-18.3 (Speaker ID Diarization):** Phân tích ngữ cảnh câu nói tự động gán đúng `speaker_id` trong `["vedal", "neuro", "evil", "guest", "chat"]` với độ chính xác $\ge 85\%$.
+      - Đoạn thoại Vedal nói với Neuro: tự xưng `"tôi / bố / anh / ta"` — gọi `"Neuro / Evil / em / con"`.
+      - Đoạn thoại Neuro nói với Vedal: tự xưng `"con / em / cháu / Neuro"` — gọi `"bố Vedal / bố / anh Vedal / anh"`.
+      - Đoạn thoại Evil nói với Vedal: tự xưng `"ta / chị / Evil / em"` — gọi `"ông già / lão già / con rùa / rùa ngốc / Vedal"`.
+      - Hỗ trợ hồ sơ khách mời `cast_members` (`Anny`, `Camila`, `Filian`) ánh xạ vai `guest`.
+    - [ ] **UT-18.3 (Hybrid Speaker ID Diarization):** Phân tích ngữ cảnh câu nói (kết hợp LLM/mock + deterministic normalizer + heuristic fallback) tự động gán đúng `speaker_id` trong `["vedal", "neuro", "evil", "guest", "chat", "unknown"]` với độ chính xác $\ge 85\%$.
   - *Integration & Contract Verification:*
-    - [ ] **IT-18.1:** Cập nhật trường `speaker_id` và `text_vi` vào mảng transcript segments.
+    - [ ] **IT-18.1:** Cập nhật trường `speaker_id` và `text_vi` vào mảng transcript segments qua `PromptBuilder` & `GeminiClient::merge_translations()`.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib translation::lore_dictionary::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib translation::lore_dictionary::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib translation::pronoun_matrix::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib translation::diarization::tests
     ```
-    *Khẳng định: 100% thuật ngữ trong PRD Mục 6 được dịch chuẩn theo văn hóa Swarm VN.*
+    *Khẳng định: 100% 12 thuật ngữ trong PRD Mục 6.2 được dịch chuẩn theo văn hóa Swarm VN.*
 
 ---
 
@@ -890,7 +969,7 @@
   - Đồng bộ hai chiều (Bi-directional Sync): Khi video chạy, tự động cuộn đến dòng phụ đề tương ứng; khi click dòng phụ đề, video tự nhảy đến mốc thời gian đó.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: `clip_slice.mp4` và `transcript_segments.json`.
-  - Đầu ra: Trạng thái playback đồng bộ trong Zustand `useStudioStore`.
+  - Đầu ra: Trạng thái playback đồng bộ trong `useStudioStore` *(lưu ý kiến trúc: 7 stores hiện có sử dụng `src/stores/createStore.ts` trên nền `React.useSyncExternalStore` với API tương thích Zustand, sẵn sàng tương thích để chỉnh sửa và triển khai `zustand` ở task `M4-20+` khi chốt cài gói `zustand`)*.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-01, TASK-M4-07, TASK-M4-13, TASK-M4-19.
   - Blocks: TASK-M4-21, TASK-M4-22, TASK-M4-23.
@@ -909,7 +988,7 @@
     - [ ] **ED-20.1:** Kéo tua thanh scrubber liên tục trong 10 giây, FPS của video canvas không tụt dưới 55 FPS.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    npm run test -- src/components/studio/SubtitleStudio.test.tsx
+    npm run test:vitest -- src/components/studio/SubtitleStudio.test.tsx
     ```
     *Khẳng định: Render mượt mà $60\text{ FPS}$, độ trễ đồng bộ timeline $\le 30\text{ms}$.*
 
@@ -929,7 +1008,7 @@
     - Ô chỉnh sửa nhanh Text tiếng Anh và Text tiếng Việt (Inline Textarea tự co giãn).
     - Nút Nudge thời gian nhanh: Phím tắt `A` lùi $100\text{ms}$, `D` tiến $100\text{ms}$ cho mốc bắt đầu/kết thúc.
 - **Giao kèo dữ liệu (Data Contracts):**
-  - Đầu vào: Danh sách `segments` từ Zustand store.
+  - Đầu vào: Danh sách `segments` từ store *(dùng `createStore.ts` API tương thích Zustand, sẵn sàng nâng cấp `zustand` khi chốt cài đặt ở `M4-20+`)*.
   - Đầu ra: Cập nhật trực tiếp `segments` trong bộ nhớ và lưu vào `subtitle_project.json`.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-20.
@@ -949,7 +1028,7 @@
     - [ ] **ED-21.1:** Cuộn danh sách 1,000 dòng với tốc độ cao đạt $60\text{ FPS}$; độ trễ phản hồi khi gõ phím sửa text $\le 16\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    npm run test -- src/components/studio/VirtualizedSegmentList.test.tsx
+    npm run test:vitest -- src/components/studio/VirtualizedSegmentList.test.tsx
     ```
     *Khẳng định: DOM nodes ảo hóa $\le 25$ phần tử, cuộn mượt mà 60 FPS.*
 
@@ -991,7 +1070,7 @@
     - [ ] **ED-22.1:** Thao tác bấm phím đổi màu nhân vật phản hồi lên màn hình trong $\le 50\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    npm run test -- src/hooks/useStudioHotkeys.test.ts
+    npm run test:vitest -- src/hooks/useStudioHotkeys.test.ts
     ```
     *Khẳng định: Gán vai 1-chạm hoàn tất $\le 50\text{ms}$, multi-selection 20 rows không lỗi.*
 
@@ -1030,7 +1109,7 @@
     - [ ] **ED-23.1:** Khi người dùng đang gõ thêm hoặc xóa ký tự trong ô text, badge CPS tính toán lại và cập nhật màu sắc ngay theo thời gian thực.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    npm run test -- src/components/studio/CPSIndicator.test.tsx
+    npm run test:vitest -- src/components/studio/CPSIndicator.test.tsx
     ```
     *Khẳng định: Cảnh báo đỏ chính xác 100% khi $\text{CPS} > 20$, 1-click borrow silence hạ CPS tức thì.*
 
@@ -1040,6 +1119,7 @@
 
 #### TASK-M4-24: Bộ Xuất Phụ Đề Chuẩn Màu Aegisub (.ASS) & Phụ Đề Quốc Tế (.SRT)
 - **Lead Persona:** Senior Backend Dev (Rust) & `@tech-lead`
+- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `e372200` (gắn nhầm nhãn `M4-08`) đã tạo sớm phần lõi backend tại `src-tauri/src/stt/subtitle_export.rs` (`generate_ass_script`, `generate_srt_script`, `create_subtitle_project`, `default_speaker_styles`), `src-tauri/src/commands/stt_cmd.rs` (`export_subtitles_ass`, `export_subtitles_srt`), `src/services/ipc/stt.ts` và `src-tauri/tests/subtitle_export_test.rs`. Trong Milestone M2, bug byte-order BGR của Neuro (`&H00B6B6FF` $\rightarrow$ `&H00C1B6FF`) và bảng màu **PO Option 1** (`Vedal #98FB98`, `Neuro #FFB6C1`, `Evil #FF0055`, `Guest #FFD700`, `Chat #87CEEB`, `Unknown #FFFFFF`) đã được sửa và pass test. **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-24`:** refactor sang `src-tauri/src/export/{ass_exporter.rs, srt_exporter.rs}`, `src-tauri/src/commands/export_cmd.rs`, `src/services/ipc/export.ts`, ghi **UTF-8 with BOM** (`AC-24.1`, `IT-24.2`), và tích hợp đầy đủ `subtitle_project.json` Schema 5.6 + UI export.
 - **Target Files:**
   - `src-tauri/src/export/ass_exporter.rs`
   - `src-tauri/src/export/srt_exporter.rs`
@@ -1170,6 +1250,7 @@
 
 #### TASK-M4-27: Động Cơ Thăm Dò Năng Lực Phần Cứng & Đề Xuất Cấu Hình Thông Minh
 - **Lead Persona:** Senior Backend Dev (Rust) & Systems Dev
+- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần backend tại `src-tauri/src/config/hardware.rs` (`probe_system_hardware`, `evaluate_recommended_mode`, `HardwareProfile` Schema 5.1), `src-tauri/src/commands/config_cmd.rs` (`get_hardware_profile`, `detect_hardware`) và `src/services/config/hardware.ts`. **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-27`:** refactor/alias sang `hardware/{probe.rs, wmi.rs}` / `hardware_cmd.rs` (nếu áp dụng) và toàn bộ Frontend UI (`src/components/onboarding/HardwareRecommendation.tsx`, `src/stores/useHardwareStore.ts`).
 - **Target Files:**
   - `src-tauri/src/hardware/probe.rs`
   - `src-tauri/src/hardware/wmi.rs`
@@ -1217,6 +1298,7 @@
 
 #### TASK-M4-28: Giao Diện Wizard Khởi Chạy Lần Đầu & Lưu Trữ API Key Vào Két Sắt Windows Credential
 - **Lead Persona:** Senior Frontend Dev & Senior Backend Dev (Rust)
+- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần config persistence tại `src-tauri/src/config/app_config.rs`, `src-tauri/src/config/atomic.rs`, `src/services/config/settings.ts` và `src/stores/settingsStore.ts` (hiện vẫn lưu `groq_api_key` / `gemini_api_key` trong JSON). **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-28`:** `src-tauri/src/core/keyring.rs` (Windows Credential Locker + Headless CI In-memory fallback), loại bỏ plaintext API keys khỏi `app_config.json`, `src/components/onboarding/OnboardingWizardModal.tsx` và `src/components/onboarding/ApiKeyTester.tsx`.
 - **Target Files:**
   - `src/components/onboarding/OnboardingWizardModal.tsx`
   - `src/components/onboarding/ApiKeyTester.tsx`
@@ -1256,8 +1338,8 @@
     - [ ] **ED-28.1 (Plaintext Audit):** Quét toàn bộ file cấu hình `%APPDATA%/NeuroClip/config.json` và file tạm: khẳng định TUYỆT ĐỐI KHÔNG chứa plain text của bất kỳ API Key nào.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib core::keyring::tests
-    npm run test -- src/components/onboarding/OnboardingWizardModal.test.tsx
+    cargo test --manifest-path src-tauri/Cargo.toml --lib core::keyring::tests
+    npm run test:vitest -- src/components/onboarding/OnboardingWizardModal.test.tsx
     ```
     *Khẳng định: API Keys lưu an toàn trong Windows Credential Manager, hỗ trợ fallback in-memory session trên CI headless, 0 plaintext on disk.*
 
@@ -1531,28 +1613,30 @@ Các nhánh công việc có thể triển khai song song (Parallel Tracks):
 Trước khi bàn giao bất kỳ task nào trong Phase 4 cho `@qa-reviewer`, lập trình viên bắt buộc phải chạy bộ lệnh kiểm tra toàn diện sau trên Windows PowerShell:
 
 ```powershell
-# 1. Kiểm tra định dạng mã nguồn (Formatting Check)
-cargo fmt --all -- --check
+# 1. Kiểm tra định dạng mã nguồn (Formatting Check; rustfmt.toml chuẩn stable)
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 npm run format:check
 
-# 2. Kiểm tra tĩnh & Linter nghiêm ngặt (Static Analysis & Clippy)
-cargo clippy --all-targets --all-features -- -D warnings -D clippy::unwrap_used -D clippy::expect_used -D clippy::panic
+# 2. Kiểm tra tĩnh & Linter nghiêm ngặt (Static Analysis & Clippy; giữ nguyên clippy::pedantic)
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 npm run lint
 
-# 3. Kiểm tra kiểu tĩnh TypeScript (Type Check)
+# 3. Kiểm tra kiểu tĩnh TypeScript (Zero-any) & Build Production Vite
 npm run typecheck
+npm run build
 
-# 4. Chạy toàn bộ Unit Tests phía Backend Rust
-cargo test --lib --all-features
+# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (23 binaries, song song)
+cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
-# 5. Chạy toàn bộ Unit & Component Tests phía Frontend
-npm run test:run
+# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend
+npm run test:vitest   # (hoặc npm run test:run — 28 files Vitest)
+npm test              # Node Native Test Runner (49 suites: src/test/suite.node.test.ts)
 
-# 6. Chạy các bài kiểm thử tích hợp & E2E Pipeline giả lập
-cargo test --test synthetic_vod_pipeline_e2e -- --nocapture
+# 6. (Target M4-30) Chạy bài kiểm thử tích hợp & E2E Pipeline giả lập
+cargo test --manifest-path src-tauri/Cargo.toml --test synthetic_vod_pipeline_e2e -- --nocapture
 
-# 7. Chạy bài kiểm thử tải nặng & Memory Leak
-cargo test --test low_end_pc_stress_benchmark -- --nocapture --release
+# 7. (Target M4-31) Chạy bài kiểm thử tải nặng & Memory Leak
+cargo test --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture --release
 ```
 
 **Bảng Cam Kết SLAs Nghiệm Thu Tự Động:**

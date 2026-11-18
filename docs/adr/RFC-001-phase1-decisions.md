@@ -4,7 +4,7 @@
 **Dự án:** NeuroClip — Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam  
 **Chủ trì soạn thảo:** `@lead-architect` phối hợp cùng `@product-owner-proxy` & `@qa-reviewer`  
 **Ngày đệ trình:** 2026-11-04  
-**Trạng thái:** [CHỜ PO PHÊ DUYỆT] (Pending Product Owner Decision)  
+**Trạng thái:** [ĐÃ ĐƯỢC PO PHÊ DUYỆT — 2026-11-05] (Approved by Product Owner; Converted to `ADR-001`..`ADR-007`)  
 **Căn cứ pháp lý:** Hiến pháp `AGENTS.md` — Mục 2 (Zero-Guesswork Policy) & Mục 3 (Quy trình Báo cáo & Đặt câu hỏi cho PO)
 
 ---
@@ -174,3 +174,13 @@ Dưới đây là 7 câu hỏi quyết định được chuẩn hóa đúng 100%
 
 ---
 *Tài liệu RFC-001 đã hoàn tất biên soạn. Đề nghị Product Owner phản hồi theo cú pháp `[Vấn đề X: Option Y]` để đội ngũ `@lead-architect` và `@tech-lead` tiến hành chốt tài liệu Kiến trúc `docs/ARCHITECTURE.md` và bước sang Phase 2.*
+
+## KẾT QUẢ PHÊ DUYỆT CHÍNH THỨC CỦA PRODUCT OWNER (2026-11-05)
+
+- **Vấn đề 1:** Option `[3]` (Hybrid Linh hoạt — ưu tiên Cloud BYOK Groq & Gemini + Local Fallback) $\rightarrow$ Chốt thành `ADR-001`
+- **Vấn đề 2:** Option `[1]` (Tauri v2 + Rust Core + React/TypeScript) $\rightarrow$ Chốt thành `ADR-002`
+- **Vấn đề 3:** Option `[2]` (Audio-First Stream Analysis + Precision Range Slicing cho Online Link) $\rightarrow$ Chốt thành `ADR-003`
+- **Vấn đề 4:** Option `[3]` (Hybrid Multi-Stage Highlight Scoring) $\rightarrow$ Chốt thành `ADR-004`
+- **Vấn đề 5:** Option `[2]` (Lean Subtitle Editor & Multi-NLE Export) $\rightarrow$ Chốt thành `ADR-005`
+- **Vấn đề 6:** Option `[2]` (LLM Context Reasoning + Phím tắt 1-chạm) $\rightarrow$ Chốt thành `ADR-006`
+- **Vấn đề 7:** Option `[2]` (Managed Self-Updating Sidecars) $\rightarrow$ Chốt thành `ADR-007`

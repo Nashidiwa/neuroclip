@@ -4,7 +4,7 @@
 **Mã tài liệu:** `docs/ARCHITECTURE.md`  
 **Phiên bản:** 1.0.0 (Phase 2: Architecture Design & Data Contracts)  
 **Chủ trì:** `@lead-architect`  
-**Căn cứ pháp lý:** Phê duyệt của Product Owner ngày 2026-11-05 trên 7 quyết định kỹ thuật RFC-001 (`ADR-001` đến `ADR-007`) và `docs/PRD.md` (v1.2.0)  
+**Căn cứ pháp lý:** Phê duyệt của Product Owner ngày 2026-11-05 trên 7 quyết định kỹ thuật RFC-001 (`ADR-001` đến `ADR-007`), phê duyệt ngày 2026-11-16 cho Pure Rust `tract-onnx` Silero VAD (`RFC-002` $\rightarrow$ `ADR-008`), và `docs/PRD.md` (v1.2.0)  
 **Nguyên tắc chỉ đạo:** Single Source of Truth (SSOT), Zero-Guesswork Policy, Memory Safety, Defensive Fault-Tolerance  
 
 ---
@@ -63,7 +63,7 @@ graph TD
         UI_Highlight["Highlight Inspector & Latency Waveform"]
         UI_Studio["Lean Subtitle Studio (Hotkeys 1-5, CPS Indicator)"]
         UI_Export["NLE Exporter (CapCut Draft JSON, Premiere XML, ASS/SRT)"]
-        UI_Store["Zustand State Store / IPC Bridge Client"]
+        UI_Store["createStore (useSyncExternalStore, Zustand-compatible) / IPC Bridge"]
     end
 
     subgraph TAURI ["TẦNG APP SHELL & RUST CORE (Tauri v2)"]
@@ -112,39 +112,38 @@ graph TD
 ## 3. CHI TIẾT CÁC PHÂN HỆ VÀ TẦNG HỆ THỐNG
 
 ### 3.1 Tầng Giao diện Người dùng (Presentation Layer - React/TypeScript)
-- **Công nghệ nền tảng:** React 18, TypeScript, Tailwind CSS, Lucide Icons, Vite.
-- **Trình quản lý Trạng thái (State Management):** Zustand (lưu trữ trạng thái dự án hiện tại, danh sách phân đoạn phụ đề, cấu hình phần cứng và tiến trình tác vụ).
-- **Các thành phần giao diện chính:**
-  1. `OnboardingWizardModal`: Hiển thị ở lần khởi chạy đầu tiên; hiển thị thông số phần cứng được phát hiện, đưa ra gợi ý chế độ (Cloud, Hybrid, Local) và bảng nhập/kiểm tra API key.
-  2. `IngestionDashboard`: Hỗ trợ dán URL (Twitch/YouTube) kèm nút chọn Audio-First hoặc kéo thả file video cục bộ từ máy tính.
-  3. `HighlightViewer`: Danh sách thẻ highlight xếp theo điểm số, hiển thị lý do nổi bật (ví dụ: *Spam KEKW đỉnh điểm*, *Vedal hét to*) kèm preview phát video 1-chạm.
-  4. `SubtitleStudio`: Màn hình soạn thảo phụ đề tinh gọn:
-     - Khung xem video HTML5 Canvas / Video Element mượt mà.
-     - Danh sách hàng phụ đề đồng bộ mốc thời gian (In/Out, Text gốc, Text Vietsub, Người nói).
-     - Bàn phím số 1-chạm đổi màu nhân vật (`1`: Vedal, `2`: Neuro, `3`: Evil, `4`: Collab, `5`: Chat).
-     - Đèn cảnh báo CPS (Characters Per Second) trực quan.
+- **Công nghệ nền tảng:** React 18.3, TypeScript 5.6 (Strict Mode, zero-any), Tailwind CSS 3.4, Lucide Icons, Vite 4.3.
+- **Trình quản lý Trạng thái (State Management):** Toàn bộ 7 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`) được xây dựng trên **`src/stores/createStore.ts`** (`React.useSyncExternalStore`) với **API tương thích Zustand** (`createStore`, `create`, `getState`, `getInitialState`, `setState`, `subscribe`, memoized selector + `equalityFn`), **sẵn sàng tương thích để chỉnh sửa và nâng cấp/triển khai `zustand` ở các task sau này (`TASK-M4-20+`) khi được chốt cài gói `zustand`**.
+- **Hiện trạng Shell & Lộ trình thành phần giao diện:**
+  - `main.tsx` bọc `<App />` trong `<GlobalErrorBoundary>`; `App.tsx` hiện tại render Acrylic Dark Theme cùng shell 3 tab tối giản (`overview`, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`) không gọi IPC lúc mount.
+  - Các màn hình Phase 4 kế tiếp (`M4-20..M4-28`):
+    1. `OnboardingWizardModal` (`M4-28`) & `HardwareRecommendation` (`M4-27`): Hiển thị ở lần khởi chạy đầu tiên; đề xuất chế độ (Cloud, Hybrid, Local) và bảng nhập/kiểm tra API key.
+    2. `IngestionDashboard` & `DropZone` *(đã triển khai tại `M4-06`/`M4-07`)*: Hỗ trợ dán URL (Twitch/YouTube) kèm Audio-First hoặc kéo thả file video cục bộ.
+    3. `HighlightViewer` *(đã triển khai tại `M4-12`)*: Danh sách thẻ highlight xếp theo điểm số, lý do nổi bật và bookmark.
+    4. `SubtitleStudio` (`M4-20..M4-23`): Trình soạn thảo phụ đề tinh gọn với HTML5 Video/`asset://` canvas, danh sách ảo hóa, bàn phím số 1-chạm đổi màu theo chuẩn **PO Option 1** (`1`: Vedal `#98FB98`, `2`: Neuro `#FFB6C1`, `3`: Evil `#FF0055`, `4`: Guest `#FFD700`, `5`: Chat `#87CEEB`), và đèn cảnh báo CPS.
 
 ### 3.2 Tầng Lõi Điều phối Hệ thống (Tauri v2 Rust Core)
 Được viết bằng Rust để đảm bảo **an toàn bộ nhớ tuyệt đối** và **tốc độ thực thi tối đa**:
-1. **`HardwareProbeEngine`:** Sử dụng thư viện `sysinfo` và Windows WMI (`wmic` / DirectX DXGI API) để đọc xung nhịp CPU, dung lượng RAM khả dụng, tên card đồ họa (NVIDIA, AMD, Intel) và dung lượng VRAM thực tế trong vòng dưới 200ms.
-2. **`SubprocessSupervisor`:** Quản lý vòng đời của các tiến trình con ngoài. Sử dụng `tokio::process::Command` để gọi `ffmpeg` và `yt-dlp` bất đồng bộ, liên tục đọc stdout/stderr để báo cáo phần trăm tiến độ về UI qua Tauri Event Channel. Đảm bảo kích hoạt `kill-on-drop` để dọn sạch tiến trình con khi người dùng đóng app.
-3. **`HighlightScoringEngine`:** Triển khai thuật toán Z-Score hiệu chỉnh kèm Message Floor, lọc Emote Swarm và tính toán năng lượng âm thanh RMS trong bộ nhớ Rust, xử lý 500,000 dòng chat chỉ trong 1.2 giây.
-4. **`AudioSlicingCoordinator`:** Điều phối việc phân tách audio thành các block nhỏ `< 25MB` và kết nối tới Groq Cloud API qua `reqwest`.
+1. **`HardwareProbeEngine` (`config/hardware.rs`):** Đọc thông số CPU, RAM khả dụng, tên card đồ họa và dung lượng VRAM thực tế qua Windows Registry (`qwMemorySize`) / `sysinfo` trong vòng dưới 200ms *(phần backend sớm của `M4-27`; UI onboarding thuộc `M4-27/M4-28`)*.
+2. **`SubprocessSupervisor` (`sidecar/{mod.rs, supervisor.rs, kill_switch.rs}`):** Quản lý vòng đời các tiến trình con (`ffmpeg`, `yt-dlp`, `whisper.cpp`, `faster-whisper-worker`) qua `tokio::process::Command` với `.kill_on_drop(true)`, Windows Job Objects (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`), bounded 1,000-line channels, và event `sidecar:progress`.
+3. **`LocalImporter` & `CustomProtocol` (`ingestion/local_importer.rs`, `core/custom_protocol.rs`):** Nạp file video nội bộ (`.mp4`, `.mkv`, `.webm`, `.mov`, `.ts`, `.flv`), trích xuất 16kHz PCM WAV không chạm mạng, và đăng ký giao thức bất đồng bộ `asset://` qua `register_asynchronous_uri_scheme_protocol` hỗ trợ HTTP `206 Partial Content` Range streaming.
+4. **`HighlightScoringEngine` (`highlight/*`):** Triển khai thuật toán Z-Score hiệu chỉnh kèm Message Floor (`X >= 15`), lọc Emote Swarm FNV-1a, Audio RMS 500ms, phân cụm NMS và bù độ trễ stream `-4.5s - 10s`.
+5. **`AudioSlicingCoordinator` (`ingestion/range_slicer.rs`, `stt/vad_bridge.rs`):** Điều phối HTTP Range slicing (`-ss / -to -c copy`) và cắt audio thành các block `< 20MB` tại khoảng nghỉ tự nhiên để gửi tới Groq Cloud API qua `reqwest`.
 
 ### 3.3 Tầng Công cụ Phụ trợ Giám sát (Managed Sidecars Subsystem)
-- Được đóng gói trong thư mục cài đặt `%APPDATA%/NeuroClip/bin/`:
-  - `ffmpeg.exe` (Static build GPL): Chịu trách nhiệm trích xuất audio stream, tính toán RMS biên độ âm thanh, và cắt phân đoạn HTTP range request.
-  - `yt-dlp.exe`: Trích xuất URL stream m3u8 và tải chat replay JSON.
-- **Sidecar Auto-Updater:** Định kỳ kiểm tra GitHub Releases của `yt-dlp`. Khi phát hiện YouTube/Twitch thay đổi thuật toán, hệ thống tự động tải file thực thi mới, kiểm tra hash SHA256 và ghi đè an toàn.
+- Dữ liệu dự án, cache và logs lưu tại `%LOCALAPPDATA%/NeuroClip/`; cấu hình `app_config.json` lưu tại `%APPDATA%/NeuroClip/`. Các binary phụ trợ (`ffmpeg.exe`, `yt-dlp.exe`, tùy chọn `whisper.cpp` / `faster-whisper-worker`) được định vị qua PATH hoặc `%LOCALAPPDATA%/NeuroClip/bin/` / `%APPDATA%/NeuroClip/bin/`:
+  - `ffmpeg.exe` (Static build): Trích xuất audio stream, áp dụng `loudnorm` limiter, tính toán RMS và cắt phân đoạn HTTP range request.
+  - `yt-dlp.exe`: Trích xuất URL stream m3u8 và tải chat replay JSON (kèm cookie/UA anti-bot).
+- **Sidecar Auto-Updater *(Target `TASK-M4-29`)*:** Định kỳ kiểm tra GitHub Releases của `yt-dlp`, xác thực SHA256 và atomic swap khi YouTube/Twitch thay đổi thuật toán.
 
 ### 3.4 Tầng Động cơ Trí tuệ Nhân tạo (Hybrid AI Engine Subsystem)
-- **STT Pipeline (Groq Whisper Large-v3 / Local Faster-Whisper):**
-  - Âm thanh được tiền xử lý qua FFmpeg với bộ lọc `loudnorm` để tránh vỡ tiếng khi streamer hét lớn.
-  - Tích hợp cờ `condition_on_previous_text=False` khi phát hiện bài hát để tránh hiện tượng lặp lại lời vô tận (Karaoke Hallucination).
-- **Translation & Diarization Pipeline (Gemini 1.5 Flash):**
-  - Sử dụng cơ chế phân khối thoại (Chunking 25–35 dòng) kèm cửa sổ trượt (Sliding Context Window).
-  - Tích hợp **Theatrical Framing System Prompt** (`ADR-001`) để bypass bộ lọc an toàn của LLM đối với các câu nói "unhinged" mang tính châm biếm hài hước của Neuro-sama.
-  - Tự động gán nhãn người nói dựa trên ngữ cảnh đối thoại.
+- **Pure Rust Neural VAD (`ADR-008`, `TASK-M4-14`):** Tích hợp `tract-onnx v0.21` chạy đồ thị tĩnh **Silero VAD v5 16kHz** (`src-tauri/resources/models/silero_vad_16k.onnx`, 1.28MB) bên trong `tokio::task::spawn_blocking`, kèm tầng dự phòng **Pure Rust DSP** (`compute_frame_speech_prob_fallback` trong `stt/vad.rs`) khi lỗi nạp/I/O. Loại bỏ $\ge 90\%$ khoảng lặng/nhạc nền $> 1.5\text{s}$ và xác định điểm cắt chunk `< 20MB` qua `vad_bridge.rs`.
+- **STT Pipeline (`TASK-M4-15`, `TASK-M4-16`):**
+  - **Cloud BYOK (`stt/groq_client.rs`):** Groq Whisper Large-v3, tiền xử lý FFmpeg `loudnorm=I=-16:TP=-1.5:LRA=11` (`stt/audio_prep.rs`), Karaoke Mode (`condition_on_previous_text=false`), chunk `< 20MB`, phát `stt:progress` camelCase & `stt:chunk`.
+  - **Local Offline (`stt/faster_whisper_worker.rs`, `stt/whisper_sidecar.rs`, `stt/model_manager.rs`):** Hỗ trợ `start_faster_whisper_transcription` kèm `GuardrailPolicy` (`"auto_downgrade" | "strict_reject"`, ngưỡng VRAM `< 2500MB`) và xác thực SHA-256 streaming (từ chối file rỗng).
+- **Translation & Diarization Pipeline (`TASK-M4-17` hiện hành & `TASK-M4-18` mục tiêu):**
+  - **Đã triển khai (`M4-17`, `translation/gemini_client.rs`, `prompt_builder.rs`):** Google Gemini 1.5 Flash BYOK, phân khối 25–35 dòng kèm Sliding Context Window, **Theatrical Framing System Prompt**, `safetySettings: BLOCK_NONE`, và Defensive Safety Fallback (`ERR-07`).
+  - **Kế hoạch `M4-18` (PO Approved Hybrid):** Tích hợp `lore_dictionary.rs` (12 thuật ngữ Lore), `pronoun_matrix.rs` (ma trận xưng hô chuẩn) và `diarization.rs` theo hướng **Hybrid** (LLM context reasoning + deterministic normalizer/validator + heuristic pre-hint/fallback).
 
 ### 3.5 Tầng Xuất bản & Tích hợp NLE (Export & Integration Subsystem)
 - **CapCut PC Draft Generator:** Sinh cấu trúc thư mục chuẩn của CapCut Windows:
@@ -206,13 +205,13 @@ sequenceDiagram
         YtDlp->>Twitch: Get VOD manifest & Chat replay
         Twitch-->>YtDlp: Trả về AAC audio stream URL & chat_replay.json
         YtDlp-->>Rust: vod_manifest.json + chat_events.json (~400MB Audio, ~15MB Chat)
-    else Người dùng kéo thả file video cục bộ (.mp4/.mkv)
+    else Người dùng kéo thả file video cục bộ (.mp4/.mkv/.webm/.mov/.ts/.flv)
         Clipper->>UI: Kéo thả file OBS nội bộ vào Dropzone
-        UI->>Rust: invoke("import_local_video", file_path)
+        UI->>Rust: invoke("import_local_video", file_path, custom_cache_dir?, task_id?)
         Rust->>FFmpeg: Trích xuất audio track tạm thời (PCM WAV 16kHz)
-        FFmpeg-->>Rust: audio_cache.wav (Không tải mạng)
+        FFmpeg-->>Rust: audio_cache.wav (Không tải mạng, stream qua asset:// Range 206)
     end
-    Rust-->>UI: Báo cáo Ingestion hoàn tất 100%
+    Rust-->>UI: Báo cáo Ingestion hoàn tất 100% (ingest:progress / sidecar:progress)
 ```
 
 ---
@@ -254,18 +253,19 @@ sequenceDiagram
     participant Groq as Groq Whisper Cloud API
     participant Gemini as Google Gemini 1.5 Flash
 
-    UI->>Rust: invoke("transcribe_highlight_clip", clip_id)
+    UI->>Rust: invoke("transcribe_highlight_clip", clip_id) hoặc invoke("start_faster_whisper_transcription", ...)
     Rust->>FFmpeg: Trích xuất đoạn audio của clip + áp dụng bộ lọc loudnorm
     FFmpeg-->>Rust: clip_audio_normalized.wav
+    Rust->>Rust: Lọc khoảng lặng qua Pure Rust tract-onnx Silero VAD (ADR-008)
     alt Chế độ Cloud BYOK
         Rust->>Groq: POST /v1/audio/transcriptions (whisper-large-v3, condition_on_previous_text=False)
-        Groq-->>Rust: Transcript JSON (Word-level timestamps & Text)
+        Groq-->>Rust: Transcript JSON (Word-level timestamps & Text, phát stt:progress / stt:chunk)
     else Chế độ Offline Local
-        Rust->>Rust: Gọi Faster-Whisper INT8 qua Rust binding / Worker
-        Rust-->>Rust: Transcript thô
+        Rust->>Rust: Gọi Faster-Whisper INT8 qua Rust Worker (GuardrailPolicy) hoặc whisper.cpp Q5_K
+        Rust-->>Rust: Transcript thô (phát stt:progress / stt:chunk)
     end
-    Rust->>Gemini: Gửi khối transcript kèm Prompt Theatrical Framing & Lore Context
-    Note over Rust,Gemini: Phân tích ngữ cảnh câu nói để tự động gán nhãn Vedal / Neuro / Evil
+    Rust->>Gemini: (M4-17/M4-18) Gửi khối transcript kèm Prompt Theatrical Framing & Lore Context
+    Note over Rust,Gemini: (M4-18 Hybrid Diarization) Phân tích ngữ cảnh + deterministic normalizer để gán nhãn Vedal / Neuro / Evil / Guest / Chat / Unknown
     Gemini-->>Rust: Gán speaker_id chuẩn xác cho từng dòng thoại
     Rust-->>UI: transcript_segments.json
 ```
@@ -325,6 +325,20 @@ sequenceDiagram
 ## 5. HỆ THỐNG GIAO KÈO DỮ LIỆU & SCHEMAS (DATA CONTRACTS)
 
 Tất cả các giao tiếp giữa Rust Backend và TypeScript Frontend, cũng như các tệp lưu trữ trên đĩa, đều phải tuân thủ nghiêm ngặt các JSON Schemas có kiểu tĩnh dưới đây:
+
+### 5.0 Hợp đồng IPC Đã Chốt (`M1–M3`) & Mở rộng Mục tiêu (`M4-18`)
+
+- **Các Tauri IPC Commands & Events trọng tâm đã triển khai (`M4-01..M4-17`):**
+  - `import_local_video(filePath, customCacheDir?, taskId?) -> VodManifest` (`commands/ingest_cmd.rs`, `services/ipc/ingestion.ts`) cùng giao thức `asset://` Range streaming (`206 Partial Content`, `core/custom_protocol.rs`).
+  - `start_faster_whisper_transcription(clipId, audioPath, model?, quantization?, device?, guardrailPolicy?) -> TranscriptSegmentsContainer` (`commands/stt_cmd.rs`, `services/ipc/stt.ts`), với `GuardrailPolicy = "auto_downgrade" | "strict_reject"`.
+  - `transcribe_highlight_clip(clipId, audioPath, apiKey?, isMusicMode) -> TranscriptSegmentsContainer` (`commands/stt_cmd.rs`, `stt/groq_client.rs`).
+  - `translate_vietsub(clipId, container, apiKey?, model?) -> TranscriptSegmentsContainer` (`commands/translation_cmd.rs`, `M4-17`) và `TranslateVietsubOptions` hiện hành trong `src/types/translation.ts`: `{ apiKey?, model?, chunkSize?, contextWindowSize? }`.
+  - **Kênh sự kiện đã nối (`CONVENTIONS.md` §4.2):** `sidecar:progress` (`{ task_id, percentage, current_fps, eta_sec }`), `ingest:progress`, `chat:progress`, `chat:fallback`, `slice:progress`, `stt:progress` (camelCase `{ taskId, stage, percent, etaSec?, currentChunk, totalChunks }`), `stt:chunk` (snake_case `{ clip_id, chunk_index, segment }`), `translation:progress` (camelCase `{ clipId, translatedCount, totalCount }`).
+- **Mở rộng Mục tiêu đã được PO phê duyệt cho `TASK-M4-18` (Vấn đề 3 Option 1 — chưa triển khai trước `M4-18`):**
+  - Bổ sung vào `TranslateVietsubOptions` / `translate_vietsub` tại `TASK-M4-18`:
+    - `cast_members`: cấu hình danh sách thành viên/khách mời tham gia stream (ví dụ `Anny`, `Camila`, `Filian`) phục vụ suy luận vai và ánh xạ đại từ xưng hô.
+    - `style_preset`: tùy chọn phong cách dịch tương ứng hai preset của `PRD.md` US4.2 (**`"TikTok Gen Z Trend"`** vs **`"Formal Subber"`**).
+  - *Lưu ý Zero-Guesswork:* Định danh chuỗi enum chính xác trong Rust/TypeScript và cấu trúc phần tử chi tiết của `cast_members` sẽ được chốt chính thức khi triển khai `TASK-M4-18`.
 
 ### 5.1 `hardware_profile.json`
 Mô tả thông số phần cứng được phát hiện và đề xuất cấu hình của Onboarding Wizard:
@@ -465,7 +479,7 @@ Danh sách các cụm khoảnh khắc highlight được phát hiện và xếp 
 ```
 
 ### 5.5 `transcript_segments.json`
-Định dạng lời thoại bóc băng kèm mốc thời gian và vai nói:
+Định dạng lời thoại bóc băng kèm mốc thời gian và vai nói (`src-tauri/src/stt/transcript_parser.rs` & `src/types/transcript.ts`):
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -478,7 +492,7 @@ Danh sách các cụm khoảnh khắc highlight được phát hiện và xếp 
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["segment_id", "start_sec", "end_sec", "speaker_id", "text_en"],
+        "required": ["segment_id", "start_sec", "end_sec", "speaker_id", "text_en", "confidence", "cps_score"],
         "properties": {
           "segment_id": { "type": "string" },
           "start_sec": { "type": "number" },
@@ -491,16 +505,30 @@ Danh sách các cụm khoảnh khắc highlight được phát hiện và xếp 
           "text_vi": { "type": ["string", "null"] },
           "confidence": { "type": "number" },
           "cps_score": { "type": "number" },
-          "is_flagged_for_review": { "type": "boolean", "default": false }
+          "is_flagged_for_review": { "type": "boolean", "default": false },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["word", "start_sec", "end_sec", "probability"],
+              "properties": {
+                "word": { "type": "string" },
+                "start_sec": { "type": "number" },
+                "end_sec": { "type": "number" },
+                "probability": { "type": "number" }
+              }
+            }
+          }
         }
       }
     }
   }
 }
 ```
+*(Ghi chú: Trong `WordTiming`, trường `probability` hỗ trợ alias `confidence` khi deserialize; trường `words` được bỏ qua khi rỗng qua `skip_serializing_if = "Vec::is_empty"`.)*
 
 ### 5.6 `subtitle_project.json`
-Dự án phụ đề tổng thể được lưu trên máy của người dùng:
+Dự án phụ đề tổng thể được lưu trên máy của người dùng (`src-tauri/src/stt/subtitle_export.rs`):
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -511,7 +539,7 @@ Dự án phụ đề tổng thể được lưu trên máy của người dùng:
     "project_id": { "type": "string" },
     "project_name": { "type": "string" },
     "vod_id": { "type": "string" },
-    "video_file_path": { "type": "string" },
+    "video_file_path": { "type": ["string", "null"] },
     "target_layout": {
       "type": "string",
       "enum": ["original_16_9", "preset_center_crop_9_16", "preset_two_stack_9_16"]
@@ -538,6 +566,14 @@ Dự án phụ đề tổng thể được lưu trên máy của người dùng:
 }
 ```
 
+**Bảng màu `speaker_styles` chuẩn (PO Option 1 — đồng bộ `subtitle_export.rs`, `theme.ts`, `tailwind.config.js`, `PRD.md` §6.1 & `ADR-006`):**
+- `neuro`: `#FFB6C1` (ASS `&H00C1B6FF&`)
+- `vedal`: `#98FB98` (ASS `&H0098FB98&`)
+- `evil`: `#FF0055` (ASS `&H005500FF&`)
+- `guest`: `#FFD700` (ASS `&H0000D7FF&`)
+- `chat`: `#87CEEB` (ASS `&H00EBCE87&`)
+- `unknown` (`Default`): `#FFFFFF` (ASS `&H00FFFFFF&`)
+
 ---
 
 ## 6. MA TRẬN RỦI RO, ĐIỂM SỰ CỐ & CHIẾN LƯỢC DỰ PHÒNG (FAILURE MODES & DEFENSIVE STRATEGY)
@@ -545,14 +581,14 @@ Dự án phụ đề tổng thể được lưu trên máy của người dùng:
 | Mã Lỗi | Tên Sự Cố Tiềm Ẩn | Nguy Cơ Hệ Thống | Chiến Lược Dự Phòng Phòng Vệ (Defensive Recovery Strategy) | Phân Tầng Chịu Trách Nhiệm |
 |:---:|:---|:---|:---|:---:|
 | **ERR-01** | **Tràn Ổ Đĩa Hệ Thống (`C:`)** | Dung lượng ổ C < 5GB gây crash Windows hoặc lỗi ghi file tạm. | **Disk Space Pre-flight Check:** Chặn tác vụ tải trước khi thực thi; cảnh báo người dùng và yêu cầu chọn thư mục tạm tại ổ đĩa khác. | Rust `StorageManager` |
-| **ERR-02** | **Tràn Bộ Nhớ VRAM (CUDA OOM)** | Người dùng chọn chạy Faster-Whisper Local trên GPU 4GB VRAM. | **Hardware Guardrail & Fallback:** Nhận diện VRAM khả dụng. Nếu VRAM < 3GB, khóa tùy chọn Whisper Large, tự động chuyển về INT8 Medium hoặc fallback sang Cloud Groq. | Rust `HardwareProbeEngine` |
+| **ERR-02** | **Tràn Bộ Nhớ VRAM (CUDA OOM)** | Người dùng chọn chạy Faster-Whisper Local trên GPU 4GB VRAM. | **Hardware Guardrail & Fallback:** Nhận diện VRAM khả dụng. Nếu VRAM < 2500MB (`MIN_LARGE_VRAM_MB`), khóa tùy chọn Whisper Large, tự động chuyển về INT8 Medium (`auto_downgrade`) hoặc trả lỗi `ERR_STT_CUDA_OOM` (`strict_reject`) gợi ý Cloud Groq. | Rust `HardwareProbeEngine` & `faster_whisper_worker` |
 | **ERR-03** | **Đứt Mạng Giữa Chừng Khi Tải Audio Stream** | Tải luồng AAC bị ngắt quãng do mạng chập chờn. | **Exponential Backoff & Resume:** `yt-dlp` và FFmpeg được truyền cờ `--retries 5` và `-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5`. | Rust `SubprocessSupervisor` |
-| **ERR-04** | **YouTube / Twitch Bot Block (HTTP 403 / 429)** | Nền tảng chặn request trích xuất stream URL. | **Managed Sidecar Auto-Update:** Ứng dụng tự động kiểm tra và nâng cấp `yt-dlp` từ GitHub Release; hỗ trợ tùy chọn nạp Cookie trình duyệt cho người dùng. | Rust `SidecarUpdater` |
+| **ERR-04** | **YouTube / Twitch Bot Block (HTTP 403 / 429)** | Nền tảng chặn request trích xuất stream URL. | **Managed Sidecar Auto-Update + Anti-Bot:** Hỗ trợ nạp Cookie trình duyệt / `cookies.txt` và xoay vòng User-Agent (`ingestion/cookies.rs`, đã triển khai `M4-06`); tự động nâng cấp `yt-dlp` từ GitHub Release qua `SidecarUpdater` *(Target `M4-29`)*. | Rust `cookies.rs` & `SidecarUpdater` *(M4-29)* |
 | **ERR-05** | **VOD Không Có Chat Replay / Chat Bị Tắt** | Không tính toán được Chat Velocity Z-score. | **Smart Routing Fallback:** Tự động chuyển tuyến 100% sang phân tích đỉnh năng lượng âm thanh (Audio Energy RMS Peaks) không gián đoạn luồng làm việc. | Rust `HighlightScoringEngine` |
-| **ERR-06** | **Groq Cloud API Vượt Giới Hạn Payload (>25MB)** | File audio dài gửi lên Groq bị từ chối (HTTP 413). | **Audio Chunking Slicing:** Tự động cắt audio thành các block 20MB tại các điểm im lặng (silence points) theo Silero VAD trước khi gửi lên Groq. | Rust `AudioSlicingCoordinator` |
+| **ERR-06** | **Groq Cloud API Vượt Giới Hạn Payload (>25MB)** | File audio dài gửi lên Groq bị từ chối (HTTP 413). | **Audio Chunking Slicing:** Tự động cắt audio thành các block `< 20MB` tại các điểm im lặng (silence points) theo Silero VAD trước khi gửi lên Groq. | Rust `AudioSlicingCoordinator` |
 | **ERR-07** | **LLM Safety Filter Chặn Bản Dịch Do Thoại Nhạy Cảm** | Gemini chặn dịch các câu nói châm biếm ("unhinged") của Neuro. | **Theatrical Inoculation & Segment Fallback:** Đóng gói System Prompt bối cảnh "kịch bản hài kịch hư cấu" + `BLOCK_NONE`. Nếu vẫn lỗi, giữ nguyên câu gốc tiếng Anh kèm cờ cảnh báo người dùng kiểm tra lại. | Rust / TS AI Client |
 | **ERR-08** | **Vỡ Tiếng Khi Streamer La Hét (Audio Clipping)** | Tiếng Vedal la hét làm mô hình STT nhận diện sai thành từ vô nghĩa. | **FFmpeg Loudnorm Limiter:** Tiền xử lý audio qua bộ lọc chuẩn hóa biên độ `loudnorm` để làm dịu các đỉnh biên độ âm thanh trước khi đưa vào STT. | Rust `AudioSlicingCoordinator` |
-| **ERR-09** | **CapCut PC Cập Nhật Đổi Schema JSON Nội Bộ** | File `draft_content.json` không mở được trên bản CapCut mới nhất. | **Dual Export Safeguard:** Luôn tự động xuất kèm file `.ass` (chuẩn màu) và `.srt` vào cùng thư mục dự án để người dùng import thủ công vào CapCut/Aegisub. | Rust `NLEExportGenerator` |
+| **ERR-09** | **CapCut PC Cập Nhật Đổi Schema JSON Nội Bộ** | File `draft_content.json` không mở được trên bản CapCut mới nhất. | **Dual Export Safeguard:** Luôn tự động xuất kèm file `.ass` (chuẩn màu) và `.srt` vào cùng thư mục dự án để người dùng import thủ công vào CapCut/Aegisub. | Rust `NLEExportGenerator` *(M4-24..25)* |
 
 ---
 
@@ -560,7 +596,7 @@ Dự án phụ đề tổng thể được lưu trên máy của người dùng:
 
 | Chỉ Tiêu Kỹ Thuật | Ngưỡng Cho Phép (SLA) | Mục Tiêu Tối Ưu (Target) | Cơ Chế Đạt Được |
 |:---|:---:|:---:|:---|
-| **Mức chiếm dụng RAM tĩnh** | $\le 120\text{ MB}$ | **$50 - 80\text{ MB}$** | Tauri v2 WebView2 + Rust core (không nhúng Chromium). |
+| **Mức chiếm dụng RAM tĩnh** | $\le 120\text{ MB}$ *(AC-01.2: $\le 90\text{ MB}$; CONVENTIONS: $\le 100\text{ MB}$)* | **$50 - 80\text{ MB}$** | Tauri v2 WebView2 + Rust core (không nhúng Chromium; `ADR-002`, `ADR-008`). |
 | **Thời gian khởi động ứng dụng** | $\le 2.0\text{ giây}$ | **$\le 0.8\text{ giây}$** | Tải binary native, lazy load các modules. |
 | **Thời gian hoàn tất Onboarding Hardware Probe** | $\le 1.0\text{ giây}$ | **$\le 200\text{ ms}$** | Windows WMI / DXGI query trực tiếp qua Rust. |
 | **Thời gian trích xuất Audio-First (8h VOD)** | $\le 3\text{ phút}$ | **$60 - 90\text{ giây}$** | Chỉ tải luồng AAC bitrate thấp (~400MB) bằng `yt-dlp`. |

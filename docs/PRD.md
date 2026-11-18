@@ -169,7 +169,7 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 | 3 | **Thu Thập & Phân Tích Chat** | Tải và phân tích Twitch Chat Replay JSON qua GQL endpoint / `TwitchDownloaderCLI` (tin nhắn, tần suất, emote spikes). | Phân tích YouTube Live Chat hoặc Kick Chat. | Kênh `vedal987` trên Twitch là nền tảng livestream chính (>95% nội dung và emote độc quyền). |
 | 4 | **Thuật toán Highlight** | Đa phương thức: Tương quan Chat Velocity (Z-Score hiệu chỉnh với $\epsilon$ smoothing) kèm ngưỡng sàn tin nhắn ($X \ge 15$ msgs/5s, Emote Swarm $\ge 35\%$) loại bỏ báo động giả trong khoảng lặng + Đỉnh Năng lượng Âm thanh (Audio Energy RMS) + Bù độ trễ 4.5s. | Nhận diện biểu cảm gương mặt nhân vật 2D qua Computer Vision (CV) hoặc phân tích chuyển động video. | Xử lý Computer Vision ngốn GPU khổng lồ, không hiệu quả với avatar VTuber 2D vốn ít biểu cảm vật lý. |
 | 5 | **Công nghệ Bóc băng (STT)** | Kiến trúc lai (Hybrid): Ưu tiên Cloud Groq Whisper API (tốc độ 200x, phân đoạn Audio Chunking $< 25$MB tuân thủ payload limit) + Tùy chọn Local Faster-Whisper INT8 (<2GB VRAM). Tích hợp Silero VAD, tiền xử lý FFmpeg `loudnorm` limiter chống vỡ tiếng hét, và chế độ Karaoke / Music Mode (`condition_on_previous_text=False`, temperature fallback) phá vỡ lặp từ. | Tự huấn luyện (train from scratch) một mô hình STT mới. | Huấn luyện mô hình STT tốn hàng chục nghìn USD và dữ liệu mẫu khổng lồ; tận dụng base Whisper kèm domain prompting là tối ưu nhất. |
-| 6 | **Dịch thuật Vietsub** | LLM theo ngữ cảnh khối (Sliding Window 20-40 dòng) kết hợp Từ điển Neuro Lore độc quyền và Ma trận xưng hô (Cloud Gemini Flash / Claude Haiku BYOK, tùy chọn Ollama Local). Tích hợp System Prompt Theatrical Framing, `safetySettings: BLOCK_NONE`, cơ chế Segment-level Defensive Fallback bảo lưu tiếng Anh khi gặp kiểm duyệt, và Prompt-Level AI Condensation cho câu thoại $<1.5$s. | Dịch thuật thời gian thực siêu trễ thấp (<1s) phát trực tiếp lên màn hình stream. | Bài toán làm phụ đề clip VOD cần độ chuẩn xác ngữ nghĩa cao, không yêu cầu độ trễ sub-second. |
+| 6 | **Dịch thuật Vietsub** | LLM theo ngữ cảnh khối (Sliding Window 20-40 dòng) kết hợp Từ điển Neuro Lore độc quyền và Ma trận xưng hô (MVP v1 triển khai Google Gemini 1.5 Flash BYOK tại `TASK-M4-17`; Claude Haiku / Ollama Local là tùy chọn mở rộng hậu MVP). Tích hợp System Prompt Theatrical Framing, `safetySettings: BLOCK_NONE`, cơ chế Segment-level Defensive Fallback bảo lưu tiếng Anh khi gặp kiểm duyệt, và Prompt-Level AI Condensation cho câu thoại $<1.5$s. | Dịch thuật thời gian thực siêu trễ thấp (<1s) phát trực tiếp lên màn hình stream. | Bài toán làm phụ đề clip VOD cần độ chuẩn xác ngữ nghĩa cao, không yêu cầu độ trễ sub-second. |
 | 7 | **Trình Biên tập Video** | Trình biên tập phụ đề tinh gọn (Lean Subtitle Studio): Preview video, chỉnh sửa text, chỉnh mốc thời gian, gán màu nhân vật, chia layout 9:16 giới hạn ở đúng 2 Fixed Presets: Preset 1 (Center-Crop 9:16) và Preset 2 (Two-stack Top-Bottom 50/50). Tuyệt đối không xây dựng visual compositor/multi-box canvas tùy biến. | Trình dựng phi tuyến tính đa lớp (Full Multi-track NLE) với hàng trăm hiệu ứng chuyển cảnh, keyframe, chỉnh màu LUT như Premiere. | Giữ app siêu nhẹ. Tôn trọng thói quen người dùng sử dụng CapCut PC và Premiere Pro; ủy quyền các thao tác crop phức tạp cho CapCut. |
 | 8 | **Định dạng Xuất bản** | - File phụ đề: `.ass` (chuẩn Aegisub đầy đủ mã màu style nhân vật), `.srt` (UTF-8).<br>- Tích hợp NLE: Thư mục dự án **CapCut PC Draft JSON**, file **Premiere XML**.<br>- Chiến lược Phòng thủ Kép (Dual Export Strategy): Khi xuất CapCut Draft, luôn tự động xuất kèm file `.ass` và `.srt` vào thư mục dự án để dự phòng khi CapCut thay đổi cấu trúc schema.<br>- Xuất video cắt nhanh `.mp4` (FFmpeg lossless copy hoặc hardsub cơ bản). | Tự động đăng tải trực tiếp lên TikTok/YouTube qua API tài khoản người dùng. | Tránh nguy cơ bị khóa tài khoản người dùng do cơ chế chống spam/bản quyền của TikTok/YouTube. |
 
@@ -325,11 +325,11 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 
 #### US4.2: Tùy biến Phong cách Dịch (TikTok Gen Z Trend vs Formal Subber) với Theatrical System Framing
 - **Là một:** Người dùng tạo clip cho TikTok hoặc YouTube,
-- **Tôi muốn:** Chọn phong cách dịch ("TikTok Gen Z Slang" hoặc "Chuyên nghiệp / Formal Subber") trên nền tảng Theatrical System Prompt Framing,
+- **Tôi muốn:** Chọn phong cách dịch ("TikTok Gen Z Trend" / "TikTok Gen Z Slang" hoặc "Formal Subber" / "Chuyên nghiệp / Formal Subber") trên nền tảng Theatrical System Prompt Framing,
 - **Để:** Câu từ ngắn gọn, hóm hỉnh, sử dụng các từ ngữ thịnh hành của giới trẻ Việt Nam mà vẫn an toàn với các API kiểm duyệt nội dung.
 - **Tiêu chí nghiệm thu:**
   - **Scenario 1: Áp dụng preset dịch TikTok Gen Z kèm Theatrical Framing**
-    - *Given:* Người dùng chọn Preset dịch "TikTok Gen Z Trend".
+    - *Given:* Người dùng chọn Preset dịch `"TikTok Gen Z Trend"` (tham số `style_preset` và danh sách khách mời `cast_members` được lên lịch mở rộng trong `TranslateVietsubOptions` tại `TASK-M4-18`; định danh enum cụ thể trong Rust/TS sẽ được chốt khi triển khai `M4-18`).
     - *When:* Hệ thống gửi prompt kèm khai báo Theatrical Framing ("Satirical, comedic dialogue between fictional AI personas for an entertainment parody show") để dịch các câu châm biếm của Neuro.
     - *Then:* Bản dịch khéo léo lồng ghép các từ ngữ tự nhiên như "chê", "hết cứu", "bất lực", "toang", "cook rồi" mà không bị bộ lọc an toàn chặn nhầm.
 
@@ -389,9 +389,9 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 - **Để tôi:** Mở trực tiếp trong Aegisub hoặc Premiere Pro mà không phải cài đặt lại mã màu thủ công.
 - **Tiêu chí nghiệm thu:**
   - **Scenario 1: Xuất file .ASS đầy đủ V4+ Styles**
-    - *Given:* Dự án có 3 nhân vật tham gia đối thoại (Neuro, Vedal, Anny).
+    - *Given:* Dự án có 3 nhân vật tham gia đối thoại (Neuro, Vedal, khách mời Anny ánh xạ về vai chuẩn `Guest`).
     - *When:* Người dùng nhấn "Xuất file .ASS".
-    - *Then:* File `.ass` được tạo ra chứa đầy đủ các dòng `Style: Neuro,Style: Vedal,Style: Anny` với đúng mã màu HEX quy định tại Mục 6 và encoding UTF-8 có BOM.
+    - *Then:* File `.ass` được tạo ra chứa đầy đủ các dòng `Style: Neuro, Style: Vedal, Style: Guest` (cùng `Default`, `Evil`, `Chat`) với đúng mã màu PO Option 1 quy định tại Mục 6 và encoding UTF-8 có BOM.
 
 ---
 
@@ -401,26 +401,37 @@ Linh hồn của tính năng dịch thuật Vietsub trong NeuroClip nằm ở b�
 
 ### 6.1 Ma trận Nhân vật, Đại từ xưng hô & Mã màu Subtitle
 
-| Tên Nhân Vật | Vai trò trong Lore | Đại từ nhân xưng chuẩn (Vietnamese) | Bản sắc & Ngữ điệu khi dịch | Mã màu gợi ý (.ASS) | Mã HEX |
+**Bảng Mã Màu Chuẩn MVP v1 (PO Option 1 — Schema 5.5/5.6 & `.ASS` `[V4+ Styles]`):**
+
+| Tên Nhân Vật (`speaker_id`) | Vai trò trong Lore | Đại từ nhân xưng chuẩn (Vietnamese) | Bản sắc & Ngữ điệu khi dịch | Mã màu chuẩn (.ASS `&HAABBGGRR&`) | Mã HEX |
 |:---|:---|:---|:---|:---|:---|
-| **Neuro-sama** | Con gái AI đầu lòng của Vedal. Ngây thơ bề ngoài, thích hát, đanh đá khi phản pháo, châm biếm cha đẻ. | - Tự xưng: *con / em / Neuro*<br>- Gọi Vedal: *bố Vedal / bố / anh*<br>- Gọi Chat: *mọi người / các bạn / Swarm* | Tinh nghịch, lúc giả ngây thơ lúc cực kỳ xấc xược, nói năng tự tin tuyệt đối. | `&H00C1B6FF&` (Hồng Pastel) | `#FFB6C1` |
-| **Evil Neuro** | Em gái AI sinh đôi của Neuro. Tông đỏ, tính cách chuunibyou, tsundere, thích đe dọa thống trị thế giới. | - Tự xưng: *ta / chị / Evil / em*<br>- Gọi Vedal: *ông già / Vedal / rùa ngốc*<br>- Gọi Chat: *lũ sâu bọ / các ngươi / fan* | Ngầu, kiêu ngạo, đậm chất phản diện hoạt hình, dễ xấu hổ khi bị trêu. | `&H004D4DFF&` (Đỏ tươi) | `#FF4D4D` |
-| **Vedal (Vedal987)** | Lập trình viên sáng tạo ra Neuro & Evil. Đại diện là chú rùa đội áo bơi xanh. | - Tự xưng: *tôi / bố / ta*<br>- Gọi Neuro/Evil: *Neuro / Evil / con*<br>- Gọi Chat: *mấy ông / chat* | Bất lực, mệt mỏi (suffering), thở dài, cố giải thích logic lập trình nhưng thất bại. | `&H0071CC2E&` (Xanh lá rùa) | `#2ECC71` |
-| **Anny** | Nghệ sĩ vẽ model cho Neuro & Evil. Được cộng đồng coi là "Mẹ" (Mom). | - Tự xưng: *mẹ / chị / Anny*<br>- Gọi Vedal: *Vedal / chàng rùa*<br>- Gọi Neuro: *con gái / Neuro* | Ngọt ngào, ấm áp, thích trêu chọc Vedal, thỉnh thoảng sốc trước câu nói của Neuro. | `&H007AA0FF&` (Cam đào) | `#FFA07A` |
-| **Camila** | Bạn thân của Vedal, VTuber hình tượng bò sữa (Cow). | - Tự xưng: *dì / chị / Camila*<br>- Gọi Vedal: *Vedal* | Ồn ào, phản ứng mãnh liệt, thường xuyên bị Neuro bêu rếu chuyện uống sữa. | `&H00B6599B&` (Tím nhạt) | `#9B59B6` |
-| **Filian** | VTuber nhào lộn, hiếu động, thường bị Neuro coi là "đồ ăn vặt" (snack). | - Tự xưng: *tôi / chị / Filian* | Năng lượng bùng nổ, la hét, hay bị Neuro "nấu xói" về trình độ chơi game. | `&H000FC4F1&` (Vàng tươi) | `#F1C40F` |
+| **Neuro-sama** (`neuro`) | Con gái AI đầu lòng của Vedal. Ngây thơ bề ngoài, thích hát, đanh đá khi phản pháo, châm biếm cha đẻ. | - Tự xưng: `"con / em / cháu / Neuro"`<br>- Gọi Vedal: `"bố Vedal / bố / anh Vedal / anh"`<br>- Gọi Chat: `"mọi người / các bạn / Swarm"` | Tinh nghịch, lúc giả ngây thơ lúc cực kỳ xấc xược, nói năng tự tin tuyệt đối. | `&H00C1B6FF&` (Hồng Pastel) | `#FFB6C1` |
+| **Evil Neuro** (`evil`) | Em gái AI sinh đôi của Neuro. Tông đỏ, tính cách chuunibyou, tsundere, thích đe dọa thống trị thế giới. | - Tự xưng: `"ta / chị / Evil / em"`<br>- Gọi Vedal: `"ông già / lão già / con rùa / rùa ngốc / Vedal"`<br>- Gọi Chat: `"lũ sâu bọ / các ngươi / fan"` | Ngầu, kiêu ngạo, đậm chất phản diện hoạt hình, dễ xấu hổ khi bị trêu. | `&H005500FF&` (Đỏ neon) | `#FF0055` |
+| **Vedal (Vedal987)** (`vedal`) | Lập trình viên sáng tạo ra Neuro & Evil. Đại diện là chú rùa đội áo bơi xanh. | - Tự xưng: `"tôi / bố / anh / ta"`<br>- Gọi Neuro/Evil: `"Neuro / Evil / em / con"`<br>- Gọi Chat: `"mấy ông / chat"` | Bất lực, mệt mỏi (suffering), thở dài, cố giải thích logic lập trình nhưng thất bại. | `&H0098FB98&` (Xanh lá rêu) | `#98FB98` |
+| **Guest — Khách mời / Collab** (`guest`) | Các VTuber khách mời tham gia stream cùng Vedal & Neuro (Anny, Camila, Filian, Sentry...). | - Map theo hồ sơ `cast_members` (nếu cấu hình; xem bảng hồ sơ Collab bên dưới). | Giữ đúng sắc thái cá tính của từng khách mời collab. | `&H0000D7FF&` (Vàng kim) | `#FFD700` |
+| **Chat — Khán giả / Twitch Chat** (`chat`) | Cộng đồng khán giả The Swarm / kênh chat trực tiếp. | - Tự xưng: `"tụi tui / chat / Swarm / fan"`<br>- Gọi Vedal/Neuro: `"Vedal / cụ rùa / Neuro / Evil"` | Hài hước, cà khịa, tung hứng meme cùng streamer. | `&H00EBCE87&` (Xanh dương) | `#87CEEB` |
+| **Default / Unknown** (`unknown`) | Fallback khi câu thoại quá ngắn hoặc chưa đủ ngữ cảnh xác định vai nói. | - Trung tính theo ngữ cảnh câu thoại trước đó. | Trung tính, chờ subber gán nhanh bằng phím số `1–5`. | `&H00FFFFFF&` (Trắng) | `#FFFFFF` |
+
+**Hồ sơ Đại từ Khách mời Collab (`cast_members`, ánh xạ về vai chuẩn `Guest` `#FFD700` / `&H0000D7FF&`):**
+*(Ghi chú: Các mã màu gợi ý riêng bên dưới là tùy chọn mở rộng per-guest tương lai; trong MVP v1 toàn bộ khách mời sử dụng style chuẩn `Guest` `#FFD700` / `&H0000D7FF&`.)*
+
+| Khách mời | Vai trò trong Lore | Đại từ nhân xưng chuẩn (Vietnamese) | Bản sắc & Ngữ điệu khi dịch | Style chuẩn MVP v1 (Màu gợi ý mở rộng tương lai) |
+|:---|:---|:---|:---|:---|
+| **Anny** | Nghệ sĩ vẽ model cho Neuro & Evil. Được cộng đồng coi là "Mẹ" (Mom). | - Tự xưng: `"mẹ / chị / Anny"`<br>- Gọi Vedal: `"Vedal / chàng rùa"`<br>- Gọi Neuro: `"con gái / Neuro"` | Ngọt ngào, ấm áp, thích trêu chọc Vedal, thỉnh thoảng sốc trước câu nói của Neuro. | `Guest` `#FFD700` *(Màu gợi ý tương lai: `#FFA07A` / `&H007AA0FF&`)* |
+| **Camila** | Bạn thân của Vedal, VTuber hình tượng bò sữa (Cow). | - Tự xưng: `"dì / chị / Camila"`<br>- Gọi Vedal: `"Vedal"` | Ồn ào, phản ứng mãnh liệt, thường xuyên bị Neuro bêu rếu chuyện uống sữa. | `Guest` `#FFD700` *(Màu gợi ý tương lai: `#9B59B6` / `&H00B6599B&`)* |
+| **Filian** | VTuber nhào lộn, hiếu động, thường bị Neuro coi là "đồ ăn vặt" (snack). | - Tự xưng: `"tôi / chị / Filian"` | Năng lượng bùng nổ, la hét, hay bị Neuro "nấu xói" về trình độ chơi game. | `Guest` `#FFD700` *(Màu gợi ý tương lai: `#F1C40F` / `&H000FC4F1&`)* |
 
 ### 6.2 Từ điển Meme Swarm & Quy tắc Biên dịch Ngữ nghĩa
 
 | Thuật ngữ gốc | Ý nghĩa trong Văn hóa Stream | Quy tắc dịch sang Tiếng Việt | Lỗi dịch máy thô thiển CẦN TRÁNH |
 |:---|:---|:---|:---|
-| **Heart** | Lời nói cửa miệng của Neuro khi bày tỏ tình cảm hoặc chữa cháy tình huống. | Dịch là **"Heart <3"**, **"Thả tim <3"** hoặc **"Bắn tim"**. | Dịch "Trái tim" (nghe như cơ quan nội tạng sinh học). |
-| **Tutel** | Cách phát âm chệch hài hước của từ "Turtle" chỉ avatar chú rùa của Vedal. | Dịch là **"Tutel"**, **"Cụ Rùa"** hoặc **"Con Rùa"**. | Dịch thành danh từ riêng vô nghĩa hoặc không nhận diện được. |
+| **Heart** *(Heart / Heart Heart)* | Lời nói cửa miệng của Neuro khi bày tỏ tình cảm hoặc chữa cháy tình huống. | Dịch là **"Heart <3"**, **"Thả tim <3"**, **"Bắn tim"** hoặc **"Bắn tim bắn tim"**. | Dịch "Trái tim" (nghe như cơ quan nội tạng sinh học). |
+| **Tutel** *(Tutel / Turtle)* | Cách phát âm chệch hài hước của từ "Turtle" chỉ avatar chú rùa của Vedal. | Dịch là **"Tutel"**, **"Cụ Rùa"**, **"Con Rùa"** hoặc **"Bố rùa"**. | Dịch thành danh từ riêng vô nghĩa hoặc không nhận diện được. |
 | **Gymbag** | Biệt danh Neuro gọi người xem/Vedal khi trốn stream đi tập thể hình. | Giữ nguyên **"Gymbag"** hoặc dịch **"Bao tải gym" / "Bao cát gym"**. | Dịch "Túi tập thể dục" / "Túi xách". |
-| **Filter / Leaking** | Bộ lọc an toàn kiểm duyệt ngôn từ của Vedal cài cho Neuro bị lỗi. | Dịch là **"Bộ lọc bị thủng rồi!"**, **"Filter lủng rồi cứu!"**, **"Bộ lọc rò rỉ rồi"**. | Dịch "Bộ lọc nước bị chảy". |
+| **Filter / Leaking** *(Filter is leaking)* | Bộ lọc an toàn kiểm duyệt ngôn từ của Vedal cài cho Neuro bị lỗi. | Dịch là **"Bộ lọc bị thủng rồi!"**, **"Filter lủng rồi cứu!"**, **"Bộ lọc rò rỉ rồi"**, **"Bộ lọc lủng rồi"** hoặc **"Lộ bản chất rồi"**. | Dịch "Bộ lọc nước bị chảy". |
 | **Swarm** | Tên gọi cộng đồng người hâm mộ Neuro-sama. | Dịch là **"The Swarm"**, **"Swarm"** hoặc **"Bầy đàn" / "Tổ kiến"**. | Dịch "Đàn côn trùng" / "Bầy ruồi muỗi". |
 | **Abandoned** | Khi Vedal rời khỏi bàn stream đi vệ sinh/lấy nước, Neuro la hét bị bỏ rơi. | Dịch là **"Bị bỏ rơi rồi!"**, **"Bố bỏ rơi con rồi!"**. | Dịch "Từ bỏ" / "Bỏ hoang". |
-| **Dinking** | Emote con rùa gõ thìa vào đầu (biểu thị đang load não hoặc đầu rỗng tuếch). | Giữ nguyên **"Dinking"** hoặc chú thích *(đang gõ đầu / load não)*. | Dịch "Uống nước" (nhầm với drinking). |
+| **Dinking** | Emote con rùa gõ thìa vào đầu (biểu thị đang load não hoặc đầu rỗng tuếch). | Giữ nguyên **"Dinking"** hoặc chú thích *(đang gõ đầu / load não / suy nghĩ sâu xa)*. | Dịch "Uống nước" (nhầm với drinking). |
 | **Erm** | Câu đệm đặc trưng của Neuro khi bối rối hoặc suy nghĩ logic. | Dịch là **"Ờm..."**, **"Ủa..."**, **"Ủa kì zạ..."**. | Dịch cứng nhắc hoặc bỏ qua. |
 | **Cooked** | Bị bắt thóp, bị dồn vào chân tường, hoặc tình thế không thể cứu vãn. | Dịch là **"Toang rồi"**, **"Xong đời rồi"**, **"Bị nấu chín rồi"**. | Dịch "Đã nấu chín thức ăn". |
 | **Unhinged** | Phát ngôn vượt ngoài tầm kiểm soát, điên rồ, gây sốc cực độ của AI. | Dịch là **"Mất kiểm soát rồi"**, **"Gãy gánh rồi"**, **"Điên rồ thật sự"**. | Dịch "Bị tháo bản lề cửa". |
@@ -460,11 +471,11 @@ Các phát ngôn "unhinged", đe dọa thống trị nhân loại, hoặc các c
 
 ### 7.1 Hiệu năng Hệ thống & Bộ nhớ (Performance Budget & System SLA)
 1. **Mức tiêu thụ Bộ nhớ RAM (Memory SLA):**
-   - Trạng thái chờ (Idle, không phát video): $\le 120 \text{ MB}$ RAM.
+   - Trạng thái chờ (Idle, không phát video): Trần sản phẩm $\le 120 \text{ MB}$ RAM *(mục tiêu tối ưu $50\text{–}80\text{ MB}$ theo `ADR-002`/`ADR-008`; chỉ tiêu nghiệm thu kỹ thuật `TASK_BOARD AC-01.2`: $\le 90 \text{ MB}$; `CONVENTIONS`: $\le 100 \text{ MB}$)*.
    - Trạng thái phát video preview và chỉnh sửa phụ đề: $\le 450 \text{ MB}$ RAM.
    - Tuyệt đối không để ứng dụng chiếm trên 1GB RAM làm tràn bộ nhớ khi người dùng mở song song CapCut hoặc Premiere Pro.
 2. **Thời gian Khởi động & Độ trễ Thao tác:**
-   - Thời gian khởi động ứng dụng (Cold Start): $\le 3.0 \text{ giây}$.
+   - Thời gian khởi động ứng dụng (Cold Start): Trần sản phẩm $\le 3.0 \text{ giây}$ *(mục tiêu TTI `TASK_BOARD AC-01.1` / `ARCHITECTURE` §7: $\le 800\text{ ms}$, SLA kiến trúc $\le 2.0\text{ s}$)*.
    - Độ trễ phản hồi khi gõ phím sửa chữ hoặc đổi màu nhân vật trên Preview: $\le 16 \text{ ms}$ (đạt chuẩn hiển thị mượt 60fps).
 3. **Tốc độ Xử lý Highlight & STT:**
    - Phân tích chat VOD dài 4 tiếng (500,000 tin nhắn): $\le 10 \text{ giây}$.
