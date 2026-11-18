@@ -138,6 +138,12 @@ pub struct GeminiClientConfig {
     /// Base backoff delay in milliseconds.
     #[serde(default = "default_retry_delay_ms")]
     pub retry_base_delay_ms: u64,
+    /// Style preset override (e.g. "TikTok Gen Z Trend" vs "Formal Subber").
+    #[serde(default)]
+    pub style_preset: Option<String>,
+    /// Participating collab cast members (e.g. `["Anny", "Camila", "Filian"]`).
+    #[serde(default)]
+    pub cast_members: Option<Vec<String>>,
 }
 
 fn default_model() -> String {
@@ -178,7 +184,21 @@ impl GeminiClientConfig {
             context_window_size: default_context_size(),
             max_retries: default_max_retries(),
             retry_base_delay_ms: default_retry_delay_ms(),
+            style_preset: None,
+            cast_members: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_style_preset(mut self, style_preset: String) -> Self {
+        self.style_preset = Some(style_preset);
+        self
+    }
+
+    #[must_use]
+    pub fn with_cast_members(mut self, cast_members: Vec<String>) -> Self {
+        self.cast_members = Some(cast_members);
+        self
     }
 
     #[must_use]
@@ -531,6 +551,7 @@ impl GeminiClient {
     ///
     /// # Errors
     /// Returns [`AppError::Translation`] if serialization, authentication, or HTTP transport fails.
+    #[allow(clippy::too_many_lines)]
     pub async fn translate_chunk(
         &self,
         chunk: &DialogueChunk,
@@ -540,7 +561,14 @@ impl GeminiClient {
         }
 
         let endpoint = self.endpoint_url();
-        let system_instruction_text = PromptBuilder::build_system_instruction();
+        let style = self
+            .config
+            .style_preset
+            .as_deref()
+            .map(crate::translation::pronoun_matrix::StylePreset::from_str_loose);
+        let cast = self.config.cast_members.as_deref();
+        let system_instruction_text =
+            PromptBuilder::build_system_instruction_with_options(style, cast);
         let user_prompt_text = PromptBuilder::build_user_prompt(&chunk.items, &chunk.context);
 
         let request_payload = GeminiRequest {
@@ -642,7 +670,13 @@ impl GeminiClient {
             }
         };
 
-        Ok(Self::merge_translations(&chunk.items, &parsed_items))
+        let empty_cast: [String; 0] = [];
+        let cast_slice = self.config.cast_members.as_deref().unwrap_or(&empty_cast);
+        Ok(Self::merge_translations_with_cast(
+            &chunk.items,
+            &parsed_items,
+            cast_slice,
+        ))
     }
 
     /// Check whether a response was rejected by safety filtering (`finishReason: "SAFETY"` or `blockReason: "SAFETY"`).
@@ -718,12 +752,38 @@ impl GeminiClient {
         updated: &mut TranscriptSegment,
         original: &TranscriptSegment,
         item: &TranslatedSegmentItem,
+        cast_members: &[String],
     ) {
         if let Some(ref raw_speaker) = item.speaker_id {
-            let speaker = raw_speaker.trim();
-            if !speaker.is_empty() {
-                updated.speaker_id = speaker.to_string();
+            let trimmed = raw_speaker.trim();
+            if !trimmed.is_empty() {
+                let normalized =
+                    crate::translation::diarization::normalize_speaker_id(trimmed, cast_members);
+                if normalized != "unknown" {
+                    updated.speaker_id = normalized.to_string();
+                } else if updated.speaker_id.is_empty() || updated.speaker_id == "unknown" {
+                    let fallback = crate::translation::diarization::infer_speaker_heuristic(
+                        &original.text_en,
+                        None,
+                        cast_members,
+                    );
+                    updated.speaker_id = fallback.speaker_id.to_string();
+                }
+            } else if updated.speaker_id.is_empty() || updated.speaker_id == "unknown" {
+                let fallback = crate::translation::diarization::infer_speaker_heuristic(
+                    &original.text_en,
+                    None,
+                    cast_members,
+                );
+                updated.speaker_id = fallback.speaker_id.to_string();
             }
+        } else if updated.speaker_id.is_empty() || updated.speaker_id == "unknown" {
+            let fallback = crate::translation::diarization::infer_speaker_heuristic(
+                &original.text_en,
+                None,
+                cast_members,
+            );
+            updated.speaker_id = fallback.speaker_id.to_string();
         }
 
         let text = item.text_vi.trim().to_string();
@@ -745,6 +805,16 @@ impl GeminiClient {
         original: &[TranscriptSegment],
         translated: &[TranslatedSegmentItem],
     ) -> Vec<TranscriptSegment> {
+        Self::merge_translations_with_cast(original, translated, &[])
+    }
+
+    /// Merge translated items back into the original transcript segments with guest cast support.
+    #[must_use]
+    pub fn merge_translations_with_cast(
+        original: &[TranscriptSegment],
+        translated: &[TranslatedSegmentItem],
+        cast_members: &[String],
+    ) -> Vec<TranscriptSegment> {
         let mut lookup: HashMap<&str, &TranslatedSegmentItem> =
             HashMap::with_capacity(translated.len());
         for item in translated {
@@ -757,12 +827,19 @@ impl GeminiClient {
             .map(|(idx, seg)| {
                 let mut updated = seg.clone();
                 if let Some(item) = lookup.get(seg.segment_id.as_str()) {
-                    Self::apply_translated_item(&mut updated, seg, item);
+                    Self::apply_translated_item(&mut updated, seg, item, cast_members);
                 } else if let Some(item) = translated.get(idx) {
                     // Fallback to sequential index if segment_id was slightly mutated
-                    Self::apply_translated_item(&mut updated, seg, item);
+                    Self::apply_translated_item(&mut updated, seg, item, cast_members);
                 } else {
                     // Segment missing from response
+                    let fallback_speaker = crate::translation::diarization::resolve_speaker_id(
+                        None,
+                        &seg.text_en,
+                        None,
+                        cast_members,
+                    );
+                    updated.speaker_id = fallback_speaker.to_string();
                     updated.text_vi =
                         Some(format!("{} {}", SAFETY_FALLBACK_PREFIX, seg.text_en.trim()));
                     updated.is_flagged_for_review = true;

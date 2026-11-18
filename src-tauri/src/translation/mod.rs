@@ -1,11 +1,20 @@
-//! Translation and Subtitle Localization Subsystem (`TASK-M4-17`, `M4.5`).
+//! Translation and Subtitle Localization Subsystem (`TASK-M4-17`, `TASK-M4-18`, `M4.5`).
 //!
 //! Provides Google Gemini 1.5 Flash translation client with Theatrical Framing,
 //! `BLOCK_NONE` safety settings, defensive safety fallback (`ERR-07`), chunking with
-//! sliding context windows, and Tauri IPC command bindings.
+//! sliding context windows, Community Lore Dictionary (12 terms per PRD §6.2),
+//! Unified Pronoun Matrix & Style Presets (PRD §6.1, ADR-006), and Hybrid Speaker Diarization.
 
+pub mod diarization;
 pub mod gemini_client;
+pub mod lore_dictionary;
 pub mod prompt_builder;
+pub mod pronoun_matrix;
+
+pub use diarization::{
+    infer_speaker_heuristic, normalize_speaker_id, resolve_speaker_id, HybridDiarizer,
+    SpeakerInferenceResult, VALID_SPEAKER_IDS,
+};
 
 pub use gemini_client::{
     strip_markdown_code_fence, GeminiCandidate, GeminiClient, GeminiClientConfig, GeminiContent,
@@ -15,10 +24,20 @@ pub use gemini_client::{
     FORMAT_FALLBACK_PREFIX, MAX_RATE_LIMIT_RETRIES, SAFETY_CATEGORIES, SAFETY_FALLBACK_PREFIX,
 };
 
+pub use lore_dictionary::{
+    contains_approved_translation, detect_forbidden_translations, find_lore_term,
+    format_lore_prompt_section, get_lore_terms, LoreTerm, LORE_TERMS,
+};
+
 pub use prompt_builder::{
     DialogueChunk, PromptBuilder, CONTEXT_WINDOW_HEADER, DEFAULT_CHUNK_SIZE,
     DEFAULT_CONTEXT_WINDOW_SIZE, DIALOGUE_TARGET_HEADER, SUBTITLE_GUIDELINES,
     THEATRICAL_FRAMING_INSTRUCTION,
+};
+
+pub use pronoun_matrix::{
+    format_pronoun_matrix_prompt_section, get_character_pronoun_rule, get_standard_guest_profile,
+    CanonicalSpeaker, CharacterPronounRule, GuestProfile, StylePreset, CHARACTER_PRONOUN_RULES,
 };
 
 use serde::{Deserialize, Serialize};

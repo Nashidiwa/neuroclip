@@ -11,6 +11,15 @@ import type { TranscriptSegment, TranscriptSegmentsContainer } from './transcrip
 export type { TranscriptSegment, TranscriptSegmentsContainer };
 
 /**
+ * Translation style preset (`PRD.md` US4.2).
+ */
+export type StylePreset =
+  | 'TikTok Gen Z Trend'
+  | 'Formal Subber'
+  | 'tiktok_gen_z'
+  | 'formal_subber';
+
+/**
  * Options for triggering Vietsub subtitle translation via Gemini 1.5 Flash.
  */
 export interface TranslateVietsubOptions {
@@ -18,6 +27,8 @@ export interface TranslateVietsubOptions {
   readonly model?: string | undefined;
   readonly chunkSize?: number | undefined;
   readonly contextWindowSize?: number | undefined;
+  readonly stylePreset?: StylePreset | string | undefined;
+  readonly castMembers?: readonly string[] | undefined;
 }
 
 /**

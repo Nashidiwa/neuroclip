@@ -159,6 +159,7 @@ import {
   updateSpeakerRole,
   listenTranslationProgress,
   normalizeTranslationProgressPayload,
+  type StylePreset,
   type TranslateVietsubOptions,
   type TranslationProgressPayload,
   type TranslationProgressPayloadJson,
@@ -3549,6 +3550,154 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(emptyPayload.translatedCount, 0);
       assert.strictEqual(emptyPayload.totalCount, 0);
       assert.strictEqual(emptyPayload.percent, 0);
+    });
+  });
+
+  describe('TASK-M4-18: Neuro-sama Lore Dictionary, Pronoun Matrix & Hybrid Diarization', () => {
+    it('should assert Rust lore, pronoun, diarization modules and integration tests exist in backend', () => {
+      const lorePath = path.resolve('src-tauri/src/translation/lore_dictionary.rs');
+      const pronounPath = path.resolve('src-tauri/src/translation/pronoun_matrix.rs');
+      const diarizationPath = path.resolve('src-tauri/src/translation/diarization.rs');
+      const testPath = path.resolve('src-tauri/tests/lore_pronoun_diarization_test.rs');
+
+      assert.ok(fs.existsSync(lorePath), 'lore_dictionary.rs must exist');
+      assert.ok(fs.existsSync(pronounPath), 'pronoun_matrix.rs must exist');
+      assert.ok(fs.existsSync(diarizationPath), 'diarization.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'lore_pronoun_diarization_test.rs must exist');
+
+      const loreContent = fs.readFileSync(lorePath, 'utf8');
+      assert.ok(loreContent.includes('pub struct LoreTerm'), 'Must define LoreTerm');
+      assert.ok(loreContent.includes('pub const LORE_TERMS'), 'Must define LORE_TERMS');
+      assert.ok(loreContent.includes('pub fn get_lore_terms'), 'Must define get_lore_terms');
+      assert.ok(
+        loreContent.includes('pub fn format_lore_prompt_section'),
+        'Must define format_lore_prompt_section',
+      );
+      assert.ok(
+        loreContent.includes('pub fn detect_forbidden_translations'),
+        'Must define detect_forbidden_translations',
+      );
+
+      const pronounContent = fs.readFileSync(pronounPath, 'utf8');
+      assert.ok(pronounContent.includes('pub enum CanonicalSpeaker'), 'Must define CanonicalSpeaker');
+      assert.ok(pronounContent.includes('pub struct GuestProfile'), 'Must define GuestProfile');
+      assert.ok(pronounContent.includes('pub enum StylePreset'), 'Must define StylePreset');
+      assert.ok(
+        pronounContent.includes('pub fn format_pronoun_matrix_prompt_section'),
+        'Must define format_pronoun_matrix_prompt_section',
+      );
+      assert.ok(
+        pronounContent.includes('pub fn get_standard_guest_profile'),
+        'Must define get_standard_guest_profile',
+      );
+
+      const diarizationContent = fs.readFileSync(diarizationPath, 'utf8');
+      assert.ok(
+        diarizationContent.includes('pub const VALID_SPEAKER_IDS'),
+        'Must define VALID_SPEAKER_IDS',
+      );
+      assert.ok(
+        diarizationContent.includes('pub fn normalize_speaker_id'),
+        'Must define normalize_speaker_id',
+      );
+      assert.ok(
+        diarizationContent.includes('pub fn infer_speaker_heuristic'),
+        'Must define infer_speaker_heuristic',
+      );
+      assert.ok(
+        diarizationContent.includes('pub fn resolve_speaker_id'),
+        'Must define resolve_speaker_id',
+      );
+      assert.ok(
+        diarizationContent.includes('pub struct HybridDiarizer'),
+        'Must define HybridDiarizer',
+      );
+    });
+
+    it('should assert zero-panic clippy invariant in TASK-M4-18 Rust modules', () => {
+      for (const file of [
+        'src-tauri/src/translation/lore_dictionary.rs',
+        'src-tauri/src/translation/pronoun_matrix.rs',
+        'src-tauri/src/translation/diarization.rs',
+      ]) {
+        const content = fs.readFileSync(path.resolve(file), 'utf8');
+        assert.ok(!content.includes('.unwrap()'), `${file} must not contain .unwrap()`);
+        assert.ok(!content.includes('.expect('), `${file} must not contain .expect()`);
+        assert.ok(!content.includes('panic!('), `${file} must not contain panic!()`);
+      }
+    });
+
+    it('should verify all 12 Neuro community lore terms per PRD §6.2 (UT-18.1, AC-18.1)', () => {
+      const loreContent = fs.readFileSync(
+        path.resolve('src-tauri/src/translation/lore_dictionary.rs'),
+        'utf8',
+      );
+      const requiredTerms = [
+        'heart',
+        'tutel',
+        'gymbag',
+        'filter_leaking',
+        'swarm',
+        'abandoned',
+        'dinking',
+        'erm',
+        'cooked',
+        'unhinged',
+        'kekw',
+        'aware_clueless',
+      ];
+      for (const term of requiredTerms) {
+        assert.ok(loreContent.includes(`id: "${term}"`), `Must define lore term id '${term}'`);
+      }
+
+      // Veto terms must be listed
+      assert.ok(loreContent.includes('Trái tim'), 'Must forbid "Trái tim"');
+      assert.ok(loreContent.includes('Túi tập thể dục'), 'Must forbid "Túi tập thể dục"');
+      assert.ok(loreContent.includes('Bộ lọc nước bị chảy'), 'Must forbid "Bộ lọc nước bị chảy"');
+      assert.ok(loreContent.includes('Đàn côn trùng'), 'Must forbid "Đàn côn trùng"');
+      assert.ok(loreContent.includes('Bị tháo bản lề cửa'), 'Must forbid "Bị tháo bản lề cửa"');
+    });
+
+    it('should verify Pronoun Matrix, PO Option 1 colors, and guest profiles (UT-18.2)', () => {
+      const pronounContent = fs.readFileSync(
+        path.resolve('src-tauri/src/translation/pronoun_matrix.rs'),
+        'utf8',
+      );
+      assert.ok(pronounContent.includes('#98FB98'), 'Vedal color must be #98FB98');
+      assert.ok(pronounContent.includes('&H0098FB98&'), 'Vedal ASS color must be &H0098FB98&');
+      assert.ok(pronounContent.includes('#FFB6C1'), 'Neuro color must be #FFB6C1');
+      assert.ok(pronounContent.includes('&H00C1B6FF&'), 'Neuro ASS color must be &H00C1B6FF&');
+      assert.ok(pronounContent.includes('#FF0055'), 'Evil color must be #FF0055');
+      assert.ok(pronounContent.includes('&H005500FF&'), 'Evil ASS color must be &H005500FF&');
+      assert.ok(pronounContent.includes('#FFD700'), 'Guest color must be #FFD700');
+      assert.ok(pronounContent.includes('&H0000D7FF&'), 'Guest ASS color must be &H0000D7FF&');
+      assert.ok(pronounContent.includes('#87CEEB'), 'Chat color must be #87CEEB');
+      assert.ok(pronounContent.includes('&H00EBCE87&'), 'Chat ASS color must be &H00EBCE87&');
+      assert.ok(pronounContent.includes('#FFFFFF'), 'Unknown color must be #FFFFFF');
+      assert.ok(pronounContent.includes('&H00FFFFFF&'), 'Unknown ASS color must be &H00FFFFFF&');
+
+      // Guest profiles
+      assert.ok(pronounContent.includes('"Anny"'), 'Must define Anny profile');
+      assert.ok(pronounContent.includes('"Camila"'), 'Must define Camila profile');
+      assert.ok(pronounContent.includes('"Filian"'), 'Must define Filian profile');
+
+      // Style presets
+      assert.ok(pronounContent.includes('TikTok Gen Z Trend'), 'Must define TikTok Gen Z Trend');
+      assert.ok(pronounContent.includes('Formal Subber'), 'Must define Formal Subber');
+    });
+
+    it('should verify TypeScript translation options support stylePreset and castMembers', () => {
+      const style: StylePreset = 'TikTok Gen Z Trend';
+      const options: TranslateVietsubOptions = {
+        apiKey: 'test_key',
+        model: 'gemini-1.5-flash',
+        chunkSize: 30,
+        contextWindowSize: 5,
+        stylePreset: style,
+        castMembers: ['Anny', 'Camila'],
+      };
+      assert.strictEqual(options.stylePreset, 'TikTok Gen Z Trend');
+      assert.deepStrictEqual(options.castMembers, ['Anny', 'Camila']);
     });
   });
 });

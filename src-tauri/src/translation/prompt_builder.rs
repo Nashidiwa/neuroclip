@@ -1,12 +1,16 @@
-//! Theatrical Framing System Prompt Builder (`TASK-M4-17`, `M4.5`).
+//! Theatrical Framing System Prompt Builder (`TASK-M4-17`, `TASK-M4-18`, `M4.5`).
 //!
 //! Implements:
 //! - Verbatim Theatrical Framing Priming Prompt (`PRD.md` §6.3 & `ADR-001`).
 //! - Subtitle localization guidelines for natural colloquial Vietnamese.
+//! - Community Lore Dictionary injection (`PRD.md` §6.2).
+//! - Pronoun Matrix & Style Presets injection (`PRD.md` §6.1, `ADR-006`).
 //! - Dialogue chunking (25–35 lines, default 30) with sliding context window (5 lines).
 //! - Zero-panic guarantee (`CONVENTIONS.md` §2.1).
 
 use crate::stt::transcript_parser::TranscriptSegment;
+use crate::translation::lore_dictionary::format_lore_prompt_section;
+use crate::translation::pronoun_matrix::{format_pronoun_matrix_prompt_section, StylePreset};
 use serde::{Deserialize, Serialize};
 
 /// Verbatim Theatrical Framing Priming Prompt from `docs/PRD.md` §6.3.
@@ -57,10 +61,27 @@ pub struct DialogueChunk {
 pub struct PromptBuilder;
 
 impl PromptBuilder {
-    /// Build the complete system instruction combining Theatrical Framing and localization guidelines.
+    /// Build the complete system instruction combining Theatrical Framing, localization guidelines,
+    /// Lore Dictionary, and Pronoun Matrix with default options.
     #[must_use]
     pub fn build_system_instruction() -> String {
-        format!("{THEATRICAL_FRAMING_INSTRUCTION}\n\n{SUBTITLE_GUIDELINES}")
+        Self::build_system_instruction_with_options(None, None)
+    }
+
+    /// Build the complete system instruction with custom style preset and guest cast members.
+    #[must_use]
+    pub fn build_system_instruction_with_options(
+        style_preset: Option<StylePreset>,
+        cast_members: Option<&[String]>,
+    ) -> String {
+        let style = style_preset.unwrap_or_default();
+        let empty_cast: [String; 0] = [];
+        let cast = cast_members.unwrap_or(&empty_cast);
+
+        let lore_section = format_lore_prompt_section();
+        let pronoun_section = format_pronoun_matrix_prompt_section(cast, style);
+
+        format!("{THEATRICAL_FRAMING_INSTRUCTION}\n\n{SUBTITLE_GUIDELINES}\n\n{lore_section}\n\n{pronoun_section}")
     }
 
     /// Build the user prompt for a specific chunk with optional sliding context.

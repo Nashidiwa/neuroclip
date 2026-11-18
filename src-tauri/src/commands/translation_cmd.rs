@@ -24,6 +24,8 @@ pub async fn translate_vietsub(
     container: TranscriptSegmentsContainer,
     api_key: Option<String>,
     model: Option<String>,
+    style_preset: Option<String>,
+    cast_members: Option<Vec<String>>,
     app: tauri::AppHandle,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
     let resolved_key = api_key
@@ -37,6 +39,12 @@ pub async fn translate_vietsub(
         config.model = m;
     } else {
         config.model = DEFAULT_GEMINI_MODEL.to_string();
+    }
+    if let Some(s) = style_preset.filter(|s| !s.trim().is_empty()) {
+        config.style_preset = Some(s);
+    }
+    if let Some(cast) = cast_members {
+        config.cast_members = Some(cast);
     }
 
     let client = GeminiClient::from_config(config)?;
@@ -77,9 +85,10 @@ pub async fn update_speaker_role(
     segment_id: String,
     new_speaker: String,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
+    let normalized = crate::translation::diarization::normalize_speaker_id(&new_speaker, &[]);
     for seg in &mut container.segments {
         if seg.segment_id == segment_id {
-            seg.speaker_id.clone_from(&new_speaker);
+            seg.speaker_id = normalized.to_string();
         }
     }
     Ok(container)

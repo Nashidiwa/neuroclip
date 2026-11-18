@@ -50,6 +50,8 @@ export async function translateVietsub(
       container: wireContainer,
       apiKey: options?.apiKey ?? null,
       model: options?.model ?? null,
+      stylePreset: options?.stylePreset ?? null,
+      castMembers: options?.castMembers ? [...options.castMembers] : null,
     });
     return normalizeTranscriptSegmentsContainer(raw);
   } catch (err: unknown) {
