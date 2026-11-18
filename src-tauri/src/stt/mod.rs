@@ -23,12 +23,25 @@ pub use audio_prep::{
     DEFAULT_TARGET_LUFS, DEFAULT_TRUE_PEAK_DBFS, MAX_I16_PEAK_AMPLITUDE, TARGET_CHANNELS,
     TARGET_SAMPLE_RATE,
 };
+pub use faster_whisper_worker::{
+    build_faster_whisper_command_args, build_worker_command_args, check_hardware_guardrail,
+    check_hardware_guardrail_from_profile, check_hardware_guardrail_from_profile_file,
+    enforce_hardware_guardrail, estimate_vram_usage_mb, evaluate_hardware_guardrail,
+    evaluate_hardware_guardrail_from_profile, evaluate_hardware_guardrail_from_profile_file,
+    map_faster_whisper_to_container, parse_faster_whisper_json, resolve_faster_whisper_binary,
+    resolve_faster_whisper_binary as resolve_faster_whisper_worker_binary,
+    run_faster_whisper_worker, FasterWhisperConfig, FasterWhisperSegment,
+    FasterWhisperVerboseJsonResponse, FasterWhisperWord, GuardrailDecision, GuardrailPolicy,
+    DEFAULT_FASTER_WHISPER_DEVICE, DEFAULT_FASTER_WHISPER_MODEL,
+    DEFAULT_FASTER_WHISPER_QUANTIZATION, MAX_INT8_VRAM_CAP_MB, MIN_LARGE_VRAM_MB,
+};
 pub use groq_client::{
     deduplicate_overlap_segments, map_verbose_json_to_container, parse_retry_after, GroqClient,
     GroqClientConfig, GroqErrorBody, GroqErrorEnvelope, GroqSegment, GroqVerboseJsonResponse,
-    GroqWord, DEFAULT_GROQ_API_URL, DEFAULT_GROQ_MODEL, DEFAULT_OVERLAP_MS,
-    MAX_PAYLOAD_BYTES, MAX_RATE_LIMIT_RETRIES, SAFE_CHUNK_BYTES,
+    GroqWord, DEFAULT_GROQ_API_URL, DEFAULT_GROQ_MODEL, DEFAULT_OVERLAP_MS, MAX_PAYLOAD_BYTES,
+    MAX_RATE_LIMIT_RETRIES, SAFE_CHUNK_BYTES,
 };
+pub use model_manager::is_whisper_large;
 pub use model_manager::{
     compute_file_sha256, find_catalog_entry, resolve_models_dir, verify_model, ModelCatalogEntry,
     ModelInfo, MODEL_CATALOG, SHA256_CHUNK_SIZE,
@@ -57,16 +70,3 @@ pub use vad_bridge::{
 pub use whisper_sidecar::{
     resolve_whisper_binary, run_whisper_transcription, SttProgressPayload, WhisperSidecarConfig,
 };
-pub use faster_whisper_worker::{
-    build_faster_whisper_command_args, build_worker_command_args, check_hardware_guardrail,
-    check_hardware_guardrail_from_profile, check_hardware_guardrail_from_profile_file,
-    enforce_hardware_guardrail, estimate_vram_usage_mb, evaluate_hardware_guardrail,
-    evaluate_hardware_guardrail_from_profile, evaluate_hardware_guardrail_from_profile_file,
-    map_faster_whisper_to_container, parse_faster_whisper_json, resolve_faster_whisper_binary,
-    resolve_faster_whisper_binary as resolve_faster_whisper_worker_binary,
-    run_faster_whisper_worker, FasterWhisperConfig, FasterWhisperSegment,
-    FasterWhisperVerboseJsonResponse, FasterWhisperWord, GuardrailDecision, GuardrailPolicy,
-    DEFAULT_FASTER_WHISPER_DEVICE, DEFAULT_FASTER_WHISPER_MODEL,
-    DEFAULT_FASTER_WHISPER_QUANTIZATION, MAX_INT8_VRAM_CAP_MB, MIN_LARGE_VRAM_MB,
-};
-pub use model_manager::is_whisper_large;

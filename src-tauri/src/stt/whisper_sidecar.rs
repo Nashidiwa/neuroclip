@@ -4,10 +4,10 @@
 //! streams real-time progress events (`stt:progress`), and provides mock execution
 //! capabilities for deterministic offline CI testing.
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::error::{AppError, SidecarError, SttError};
@@ -120,6 +120,7 @@ pub fn resolve_whisper_binary() -> Result<PathBuf, AppError> {
 /// - `kill_on_drop(true)` on spawned child process
 /// - Streaming progress event emission
 /// - Deterministic mock runner mode for offline test environments
+#[allow(clippy::too_many_lines)]
 pub async fn run_whisper_transcription(
     clip_id: &str,
     audio_path: &Path,

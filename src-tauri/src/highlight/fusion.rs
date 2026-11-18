@@ -8,6 +8,12 @@
 //! and automatic fallback routing to 100% Audio Energy when chat is absent:
 //! $$Score = 1.0 \times \text{RMS}_{\text{norm}} \times 100.0$$
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
@@ -249,8 +255,7 @@ pub fn fuse_multimodal_series(
         // Advance emote
         let mut e_ratio_val = 0.0;
         let mut top_emotes_val = Vec::new();
-        while emote_idx < emote_series.len()
-            && emote_series[emote_idx].timestamp_sec < t_k - 0.001
+        while emote_idx < emote_series.len() && emote_series[emote_idx].timestamp_sec < t_k - 0.001
         {
             emote_idx += 1;
         }
@@ -258,7 +263,7 @@ pub fn fuse_multimodal_series(
             && (emote_series[emote_idx].timestamp_sec - t_k).abs() < 2.5
         {
             e_ratio_val = emote_series[emote_idx].e_ratio;
-            top_emotes_val = emote_series[emote_idx].top_emotes.clone();
+            top_emotes_val.clone_from(&emote_series[emote_idx].top_emotes);
         }
 
         // Aggregate 10x 500ms audio blocks for this 5s bucket
@@ -370,9 +375,11 @@ mod tests {
         let fused = fuse_multimodal_series(&vel, &emote, &audio, 15.0);
         assert!(fused.is_ok());
         if let Ok(points) = fused {
-            assert!(!points.is_empty());
+            assert_ne!(points, []);
             // Point at 10.0s should have highest score
-            let p10 = points.iter().find(|p| (p.timestamp_sec - 10.0).abs() < 1e-3);
+            let p10 = points
+                .iter()
+                .find(|p| (p.timestamp_sec - 10.0).abs() < 1e-3);
             assert!(p10.is_some());
             if let Some(p) = p10 {
                 assert!((p.score - 89.0).abs() < 1e-2);

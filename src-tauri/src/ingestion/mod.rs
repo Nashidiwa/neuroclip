@@ -17,8 +17,8 @@ pub use buffer::{
     DEFAULT_QUEUE_CAPACITY, MAX_PIPELINE_RAM_CAP_BYTES,
 };
 pub use chat_parser::{
-    extract_message_emotes, is_neuro_swarm_emote, parse_raw_chat_line, ChatDensityPoint,
-    ChatEventsContainer, ChatEvent, ChatHeatmapContainer, ChatHeatmapResponse, HeatmapWindow,
+    extract_message_emotes, is_neuro_swarm_emote, parse_raw_chat_line, ChatDensityPoint, ChatEvent,
+    ChatEventsContainer, ChatHeatmapContainer, ChatHeatmapResponse, HeatmapWindow,
     StreamingChatNormalizer, NEURO_SWARM_EMOTES,
 };
 pub use cookies::{
@@ -38,17 +38,15 @@ pub use range_slicer::{
     MAX_KEYFRAME_DRIFT_MS, MIN_SLICING_DISK_SPACE_MB,
 };
 pub use streamer::{
-    build_ffmpeg_file_args, build_ffmpeg_pipe_args, compute_audio_energy_stream, detect_source_type,
-    download_audio_stream, generate_vod_manifest, generate_vod_manifest_with_streams,
-    parse_ytdlp_progress_line, probe_vod_metadata, resolve_video_stream_url,
-    start_ffmpeg_pcm_stream, AudioEnergyWindow, ChildProcessGuard, IngestOptions,
-    IngestProgressPayload, VodManifest, VodMetadata, WindowsJobObjectGuard,
+    build_ffmpeg_file_args, build_ffmpeg_pipe_args, compute_audio_energy_stream,
+    detect_source_type, download_audio_stream, generate_vod_manifest,
+    generate_vod_manifest_with_streams, parse_ytdlp_progress_line, probe_vod_metadata,
+    resolve_video_stream_url, start_ffmpeg_pcm_stream, AudioEnergyWindow, ChildProcessGuard,
+    IngestOptions, IngestProgressPayload, VodManifest, VodMetadata, WindowsJobObjectGuard,
 };
 pub use twitch_gql::{
     fetch_twitch_vod_chat_gql, ChatProgressPayload, TWITCH_CLIENT_ID, TWITCH_COMMENTS_SHA256,
     TWITCH_GQL_ENDPOINT, TWITCH_USER_AGENT,
 };
-pub use validator::{
-    AudioStreamValidator, BYTES_PER_SAMPLE, TARGET_SAMPLE_RATE, WAV_HEADER_SIZE,
-};
+pub use validator::{AudioStreamValidator, BYTES_PER_SAMPLE, TARGET_SAMPLE_RATE, WAV_HEADER_SIZE};
 pub use youtube_chat::fetch_youtube_live_chat_replay;

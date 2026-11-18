@@ -5,11 +5,10 @@
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 
-use crate::core::storage::{resolve_cache_dir, resolve_projects_dir};
+use crate::core::storage::resolve_vod_project_dir;
 use crate::error::{codes, AppError, IngestError, StorageError};
 use crate::ingestion::chat_parser::{
     ChatEventsContainer, ChatHeatmapResponse, StreamingChatNormalizer,
@@ -28,28 +27,22 @@ pub struct ChatFallbackPayload {
     pub audio_fallback_active: bool,
 }
 
-/// Helper function to resolve the target project directory for a VOD.
-fn resolve_vod_project_dir(vod_id: &str) -> PathBuf {
-    let projects_dir = resolve_projects_dir();
-    let candidate = projects_dir.join(vod_id);
-    if candidate.exists() {
-        candidate
-    } else {
-        resolve_cache_dir().join(vod_id)
-    }
-}
-
 /// Extract and normalize chat replay for a VOD.
 ///
 /// Implements ERR-05 defensive fallback: if chat replay is unavailable,
 /// emits `chat:fallback` event and returns `ERR_INGEST_CHAT_UNAVAILABLE`.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `vod_id` fails path validation or directory creation fails,
+/// or [`AppError::Ingestion`] / [`AppError::Internal`] if chat extraction or normalization fails.
 #[tauri::command]
+#[allow(clippy::too_many_lines)]
 pub async fn start_chat_extraction(
     vod_id: String,
     url: String,
     app: AppHandle,
 ) -> Result<String, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id);
+    let project_dir = resolve_vod_project_dir(&vod_id)?;
     std::fs::create_dir_all(&project_dir).map_err(|e| {
         AppError::Storage(StorageError::DirectoryCreationFailed {
             path: project_dir.display().to_string(),
@@ -155,7 +148,11 @@ pub async fn start_chat_extraction(
             task_id: vod_id,
             stage: "completed".to_string(),
             percent: 100.0,
-            messages_extracted: heatmap.points.iter().map(|p| p.message_count as u64).sum(),
+            messages_extracted: heatmap
+                .points
+                .iter()
+                .map(|p| u64::from(p.message_count))
+                .sum(),
             current_offset_sec: heatmap.peak_timestamp_sec,
         },
     );
@@ -164,13 +161,17 @@ pub async fn start_chat_extraction(
 }
 
 /// Retrieve paginated chat events adhering to Schema 5.3 contract.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `vod_id` is invalid or chat files are missing,
+/// or [`AppError::Highlight`] if JSON deserialization fails.
 #[tauri::command]
 pub async fn get_chat_events(
     vod_id: String,
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<ChatEventsContainer, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id);
+    let project_dir = resolve_vod_project_dir(&vod_id)?;
     let json_path = project_dir.join("chat_events.json");
     let ndjson_path = project_dir.join("chat_events.ndjson");
 
@@ -190,9 +191,8 @@ pub async fn get_chat_events(
         let mut total_count: u64 = 0;
 
         for line_res in reader.lines() {
-            let line = match line_res {
-                Ok(l) => l,
-                Err(_) => break,
+            let Ok(line) = line_res else {
+                break;
             };
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -226,8 +226,11 @@ pub async fn get_chat_events(
         )))
     })?;
 
-    let mut container: ChatEventsContainer = serde_json::from_slice(&bytes)
-        .map_err(|e| AppError::Highlight(crate::error::HighlightError::ChatParsingFailed(e.to_string())))?;
+    let mut container: ChatEventsContainer = serde_json::from_slice(&bytes).map_err(|e| {
+        AppError::Highlight(crate::error::HighlightError::ChatParsingFailed(
+            e.to_string(),
+        ))
+    })?;
 
     let total = container.events.len();
     let start = off.min(total);
@@ -238,12 +241,16 @@ pub async fn get_chat_events(
 }
 
 /// Retrieve the 10-second sliding window velocity heatmap for a VOD.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `vod_id` is invalid or chat files are missing,
+/// or [`AppError::Internal`] if the heatmap computation worker fails.
 #[tauri::command]
 pub async fn get_chat_velocity_heatmap(
     vod_id: String,
     window_sec: Option<f64>,
 ) -> Result<ChatHeatmapResponse, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id);
+    let project_dir = resolve_vod_project_dir(&vod_id)?;
     let heatmap_json_path = project_dir.join("chat_heatmap.json");
     let ndjson_path = project_dir.join("chat_events.ndjson");
     let json_path = project_dir.join("chat_events.json");
@@ -264,9 +271,9 @@ pub async fn get_chat_velocity_heatmap(
     } else if json_path.exists() {
         json_path
     } else {
-        return Err(AppError::Storage(StorageError::FileNotFound(
-            format!("No chat data found for VOD {vod_id}")
-        )));
+        return Err(AppError::Storage(StorageError::FileNotFound(format!(
+            "No chat data found for VOD {vod_id}"
+        ))));
     };
 
     let normalizer = StreamingChatNormalizer::new(vod_id, &project_dir);
@@ -275,4 +282,36 @@ pub async fn get_chat_velocity_heatmap(
     })
     .await
     .map_err(|e| AppError::Internal(format!("Heatmap worker task failed: {e}")))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_chat_commands_reject_invalid_vod_id() {
+        for bad in ["../escape", "C:\\escape", "vod/sub", "vod\0id", ""] {
+            let events_res = get_chat_events(bad.to_string(), None, None).await;
+            assert!(
+                matches!(
+                    events_res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "get_chat_events must reject {bad:?}, got {events_res:?}"
+            );
+
+            let heatmap_res = get_chat_velocity_heatmap(bad.to_string(), None).await;
+            assert!(
+                matches!(
+                    heatmap_res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "get_chat_velocity_heatmap must reject {bad:?}, got {heatmap_res:?}"
+            );
+        }
+    }
 }

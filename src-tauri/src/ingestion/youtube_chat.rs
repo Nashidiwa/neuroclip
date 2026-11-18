@@ -26,6 +26,7 @@ fn resolve_ytdlp_binary() -> String {
 ///
 /// If video has no live chat replay (e.g. standard pre-recorded upload or disabled replay),
 /// returns `ERR_INGEST_CHAT_UNAVAILABLE` within <= 200ms to allow soft fallback (ERR-05).
+#[allow(clippy::too_many_lines)]
 pub async fn fetch_youtube_live_chat_replay<F>(
     url: &str,
     vod_id: &str,
@@ -106,7 +107,7 @@ where
 
     // Watch cancellation while waiting for process
     let output = tokio::select! {
-        _ = cancel_token.cancelled() => {
+        () = cancel_token.cancelled() => {
             return Err(AppError::TaskCancelled);
         }
         res = child.wait_with_output() => {
@@ -120,7 +121,9 @@ where
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     if stderr.contains("Sign in to confirm you’re not a bot") || stderr.contains("429") {
-        return Err(AppError::Ingestion(IngestError::BotBlocked(stderr.to_string())));
+        return Err(AppError::Ingestion(IngestError::BotBlocked(
+            stderr.to_string(),
+        )));
     }
 
     if stderr.contains("No live chat found")

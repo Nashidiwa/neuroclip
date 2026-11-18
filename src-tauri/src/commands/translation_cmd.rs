@@ -43,14 +43,16 @@ pub async fn translate_vietsub(
 
     let app_handle = app.clone();
     let clip_id_owned = clip_id.clone();
-    let on_progress = Some(Arc::new(move |translated_count: usize, total_count: usize| {
-        let payload = TranslationProgressPayload {
-            clip_id: clip_id_owned.clone(),
-            translated_count,
-            total_count,
-        };
-        let _ = app_handle.emit("translation:progress", payload);
-    }) as Arc<dyn Fn(usize, usize) + Send + Sync>);
+    let on_progress = Some(
+        Arc::new(move |translated_count: usize, total_count: usize| {
+            let payload = TranslationProgressPayload {
+                clip_id: clip_id_owned.clone(),
+                translated_count,
+                total_count,
+            };
+            let _ = app_handle.emit("translation:progress", payload);
+        }) as Arc<dyn Fn(usize, usize) + Send + Sync>,
+    );
 
     client
         .translate_segments(&clip_id, &container.segments, on_progress)
@@ -77,7 +79,7 @@ pub async fn update_speaker_role(
 ) -> Result<TranscriptSegmentsContainer, AppError> {
     for seg in &mut container.segments {
         if seg.segment_id == segment_id {
-            seg.speaker_id = new_speaker.clone();
+            seg.speaker_id.clone_from(&new_speaker);
         }
     }
     Ok(container)

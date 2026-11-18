@@ -12,12 +12,11 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use neuroclip_lib::{
-    analyze_audio_samples_default, analyze_wav_file, apply_silence_clamp,
-    calculate_raw_rms, calculate_sine_normalized_rms, clamp_silence_floor,
-    dbfs_to_normalized_scale, dbfs_to_rms, detect_energy_peaks_default,
-    rms_to_dbfs, AudioBlockMetrics, AudioRmsPoint,
-    DEFAULT_BLOCK_SAMPLES, MIN_RMS_THRESHOLD, SILENCE_FLOOR_DBFS,
-    SINE_1KHZ_EXPECTED_RMS, SINE_1KHZ_RMS_TOLERANCE,
+    analyze_audio_samples_default, analyze_wav_file, apply_silence_clamp, calculate_raw_rms,
+    calculate_sine_normalized_rms, clamp_silence_floor, dbfs_to_normalized_scale, dbfs_to_rms,
+    detect_energy_peaks_default, rms_to_dbfs, AudioBlockMetrics, AudioRmsPoint,
+    DEFAULT_BLOCK_SAMPLES, MIN_RMS_THRESHOLD, SILENCE_FLOOR_DBFS, SINE_1KHZ_EXPECTED_RMS,
+    SINE_1KHZ_RMS_TOLERANCE,
 };
 
 /// Helper directory for creating temporary test files with auto-cleanup.
@@ -134,7 +133,7 @@ fn test_ut_11_1_sine_1khz_rms_and_silence_floor_clamp() {
     // Sine-peak normalized RMS should evaluate to 1.0
     let norm_rms = calculate_sine_normalized_rms(&sine_samples);
     assert!(
-        norm_rms >= 0.999 && norm_rms <= 1.0,
+        (0.999..=1.0).contains(&norm_rms),
         "Sine normalized RMS should be ~1.0, got {norm_rms}"
     );
 
@@ -189,9 +188,9 @@ fn test_ut_11_2_peak_threshold_sigma_over_30s_baseline() {
     assert_eq!(points.len(), 62);
 
     // Baseline blocks (0..59) should not be peaks
-    for i in 0..baseline_blocks_count {
+    for (i, pt) in points.iter().take(baseline_blocks_count).enumerate() {
         assert!(
-            !points[i].is_peak,
+            !pt.is_peak,
             "Baseline block {i} should not be flagged as peak"
         );
     }
@@ -247,9 +246,9 @@ fn test_ut_11_3_sudden_volume_spike_21db_sets_is_peak() {
     assert_eq!(points.len(), 62);
 
     // Steady baseline before spike
-    for i in 0..60 {
+    for (i, pt) in points.iter().take(60).enumerate() {
         assert!(
-            !points[i].is_peak,
+            !pt.is_peak,
             "Baseline block {i} at -30dBFS should not be a peak"
         );
     }
@@ -357,7 +356,10 @@ fn test_ed_11_1_8h_audio_streaming_benchmark() {
     // 57,600 points * ~48 bytes/point ≈ 2.7 MB, which is << 60MB limit
     let estimated_points_mem_bytes = points.len() * std::mem::size_of::<AudioRmsPoint>();
     let estimated_points_mem_mb = (estimated_points_mem_bytes as f64) / (1024.0 * 1024.0);
-    println!("Estimated output series memory: {:.2} MB (SLA <= 60 MB)", estimated_points_mem_mb);
+    println!(
+        "Estimated output series memory: {:.2} MB (SLA <= 60 MB)",
+        estimated_points_mem_mb
+    );
     assert!(
         estimated_points_mem_mb < 60.0,
         "Output memory {:.2}MB exceeds 60MB constraint",

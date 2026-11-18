@@ -3,12 +3,12 @@
 //! Complies with docs/CONVENTIONS.md, docs/ARCHITECTURE.md §4.2, §5.2, and TASK-M4-06.
 //! Strict zero-panic invariant: all fallible operations return Result<T, AppError>.
 
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::time::{Duration, Instant};
 use chrono::Utc;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::mpsc;
@@ -421,11 +421,11 @@ pub async fn probe_vod_metadata(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("403")
-            || stderr.contains("429")
-            || stderr.contains("Sign in to confirm")
+        if stderr.contains("403") || stderr.contains("429") || stderr.contains("Sign in to confirm")
         {
-            return Err(AppError::Ingestion(IngestError::BotBlocked(stderr.to_string())));
+            return Err(AppError::Ingestion(IngestError::BotBlocked(
+                stderr.to_string(),
+            )));
         }
         return Err(AppError::Ingestion(IngestError::ExtractionFailed(
             stderr.to_string(),
@@ -513,9 +513,7 @@ pub async fn resolve_video_stream_url(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("403")
-            || stderr.contains("429")
-            || stderr.contains("Sign in to confirm")
+        if stderr.contains("403") || stderr.contains("429") || stderr.contains("Sign in to confirm")
         {
             return Err(AppError::Ingestion(IngestError::BotBlocked(
                 stderr.to_string(),
@@ -543,6 +541,7 @@ pub async fn resolve_video_stream_url(
 /// Download audio-only stream from Twitch or YouTube using yt-dlp.
 ///
 /// Guaranteed to download ONLY audio (<= 450MB for 8h VOD, saving >= 98.5% disk/network).
+#[allow(clippy::too_many_lines)]
 pub async fn download_audio_stream<F>(
     url: &str,
     output_dir: &Path,
@@ -646,7 +645,7 @@ where
     loop {
         tokio::select! {
             biased;
-            _ = cancellation_token.cancelled() => {
+            () = cancellation_token.cancelled() => {
                 if let Some(child) = guard.child_mut() {
                     let _ = child.start_kill();
                 }
@@ -700,7 +699,9 @@ where
         if stderr_output.contains("403") || stderr_output.contains("Sign in to confirm") {
             return Err(AppError::Ingestion(IngestError::BotBlocked(stderr_output)));
         }
-        return Err(AppError::Ingestion(IngestError::ExtractionFailed(stderr_output)));
+        return Err(AppError::Ingestion(IngestError::ExtractionFailed(
+            stderr_output,
+        )));
     }
 
     // Locate the finalized audio file
@@ -793,7 +794,7 @@ pub async fn start_ffmpeg_pcm_stream(
         loop {
             tokio::select! {
                 biased;
-                _ = cancellation_token.cancelled() => {
+                () = cancellation_token.cancelled() => {
                     if let Some(child) = guard.child_mut() {
                         let _ = child.start_kill();
                     }
@@ -847,15 +848,25 @@ pub struct AudioEnergyWindow {
 /// samples via `AudioRingBuffer` sliding window to compute continuous RMS energy telemetry.
 ///
 /// Complies with docs/ARCHITECTURE.md §4.3 (Audio RMS blocks) and CONVENTIONS.md zero-panic policy.
+#[allow(clippy::cast_precision_loss)]
 pub async fn compute_audio_energy_stream(
     input_source: &str,
     window_samples: usize,
     max_windows: Option<usize>,
     cancellation_token: CancellationToken,
 ) -> Result<Vec<AudioEnergyWindow>, AppError> {
-    let mut rx = start_ffmpeg_pcm_stream(input_source, DEFAULT_QUEUE_CAPACITY, cancellation_token.clone()).await?;
+    let mut rx = start_ffmpeg_pcm_stream(
+        input_source,
+        DEFAULT_QUEUE_CAPACITY,
+        cancellation_token.clone(),
+    )
+    .await?;
 
-    let win_size = if window_samples == 0 { 8000 } else { window_samples }; // default 500ms at 16kHz
+    let win_size = if window_samples == 0 {
+        8000
+    } else {
+        window_samples
+    }; // default 500ms at 16kHz
     let mut ring_buf = AudioRingBuffer::with_capacity(win_size * 2);
     let mut windows = Vec::new();
     let mut window_index = 0u64;
@@ -874,12 +885,20 @@ pub async fn compute_audio_energy_stream(
             while ring_buf.available_read() >= win_size {
                 let popped = ring_buf.pop_samples(&mut scratch);
                 if popped == win_size {
-                    let sum_sq: f64 = scratch.iter().map(|&s| {
-                        let v = f64::from(s);
-                        v * v
-                    }).sum();
+                    let sum_sq: f64 = scratch
+                        .iter()
+                        .map(|&s| {
+                            let v = f64::from(s);
+                            v * v
+                        })
+                        .sum();
                     let rms = (sum_sq / win_size as f64).sqrt();
-                    let peak = scratch.iter().copied().map(i16::saturating_abs).max().unwrap_or_default();
+                    let peak = scratch
+                        .iter()
+                        .copied()
+                        .map(i16::saturating_abs)
+                        .max()
+                        .unwrap_or_default();
                     let ts = window_index as f64 * (win_size as f64 / 16000.0);
 
                     windows.push(AudioEnergyWindow {
@@ -906,12 +925,20 @@ pub async fn compute_audio_energy_stream(
         let mut final_scratch = vec![0i16; rem_len];
         let popped = ring_buf.pop_samples(&mut final_scratch);
         if popped > 0 {
-            let sum_sq: f64 = final_scratch.iter().map(|&s| {
-                let v = f64::from(s);
-                v * v
-            }).sum();
+            let sum_sq: f64 = final_scratch
+                .iter()
+                .map(|&s| {
+                    let v = f64::from(s);
+                    v * v
+                })
+                .sum();
             let rms = (sum_sq / popped as f64).sqrt();
-            let peak = final_scratch.iter().copied().map(i16::saturating_abs).max().unwrap_or_default();
+            let peak = final_scratch
+                .iter()
+                .copied()
+                .map(i16::saturating_abs)
+                .max()
+                .unwrap_or_default();
             let ts = window_index as f64 * (win_size as f64 / 16000.0);
 
             windows.push(AudioEnergyWindow {
@@ -925,7 +952,6 @@ pub async fn compute_audio_energy_stream(
 
     Ok(windows)
 }
-
 
 /// Create and persist `vod_manifest.json` compliant with Schema 5.2 into the project directory,
 /// optionally setting `video_stream_url` and `local_video_path`.
@@ -1044,10 +1070,19 @@ mod tests {
 
     #[test]
     fn test_detect_source_type() {
-        assert_eq!(detect_source_type("https://www.twitch.tv/videos/12345"), "twitch_vod");
-        assert_eq!(detect_source_type("https://www.youtube.com/watch?v=abc"), "youtube_vod");
+        assert_eq!(
+            detect_source_type("https://www.twitch.tv/videos/12345"),
+            "twitch_vod"
+        );
+        assert_eq!(
+            detect_source_type("https://www.youtube.com/watch?v=abc"),
+            "youtube_vod"
+        );
         assert_eq!(detect_source_type("https://youtu.be/abc"), "youtube_vod");
-        assert_eq!(detect_source_type("C:\\Videos\\recording.mp4"), "local_file");
+        assert_eq!(
+            detect_source_type("C:\\Videos\\recording.mp4"),
+            "local_file"
+        );
     }
 
     #[test]
@@ -1063,7 +1098,10 @@ mod tests {
 
     #[test]
     fn test_generate_vod_manifest_schema_5_2() {
-        let temp_dir = std::env::temp_dir().join(format!("neuroclip_test_{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_test_{}",
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
         let _ = std::fs::create_dir_all(&temp_dir);
 
         let audio_path = temp_dir.join("audio.m4a");
@@ -1076,14 +1114,15 @@ mod tests {
             3600.0,
             &audio_path,
             &temp_dir,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(manifest.vod_id, "vod_test_1");
         assert_eq!(manifest.source_type, "youtube_vod");
         assert_eq!(manifest.title, "Neuro-sama Sings");
         assert_eq!(manifest.duration_seconds, 3600.0);
         assert_eq!(manifest.streamer, Some("Vedal987".to_string()));
-        assert!(!manifest.created_at.is_empty());
+        assert_ne!(manifest.created_at, "");
 
         let written_path = temp_dir.join("vod_manifest.json");
         assert!(written_path.exists());
@@ -1098,10 +1137,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_compute_audio_energy_stream_with_ring_buffer() {
-        std::env::set_var("NEUROCLIP_MOCK_FFMPEG_STREAM", "1");
+        let _env_guard = crate::core::storage::test_env::ENV_LOCK.lock().await;
+        let _mock_env =
+            crate::core::storage::test_env::ScopedEnvVar::set("NEUROCLIP_MOCK_FFMPEG_STREAM", "1");
         let cancel = CancellationToken::new();
         let res = compute_audio_energy_stream("mock_input", 2, None, cancel).await;
-        std::env::remove_var("NEUROCLIP_MOCK_FFMPEG_STREAM");
 
         assert!(res.is_ok());
         if let Ok(windows) = res {
@@ -1112,4 +1152,3 @@ mod tests {
         }
     }
 }
-

@@ -14,9 +14,9 @@ use std::path::Path;
 
 use neuroclip_lib::stt::audio_prep::{
     apply_screaming_limiter, build_loudnorm_ffmpeg_args, build_loudnorm_pipe_args,
-    calculate_peak_dbfs_f32, compute_true_peak_dbfs,
-    generate_synthetic_normalized_buffer, prepare_audio_file, prepare_audio_to_buffer,
-    verify_screaming_defense, AudioPrepConfig, PreparedAudioBuffer, MAX_I16_PEAK_AMPLITUDE,
+    calculate_peak_dbfs_f32, compute_true_peak_dbfs, generate_synthetic_normalized_buffer,
+    prepare_audio_file, prepare_audio_to_buffer, verify_screaming_defense, AudioPrepConfig,
+    PreparedAudioBuffer, MAX_I16_PEAK_AMPLITUDE,
 };
 use neuroclip_lib::stt::transcript_parser::{TranscriptSegment, WordTiming};
 use neuroclip_lib::stt::vad::{
@@ -27,8 +27,8 @@ use neuroclip_lib::stt::vad_bridge::{align_segments_with_vad, SpeechInterval};
 
 fn real_speech_slice(start_sec: f64, duration_sec: f64) -> Vec<f32> {
     let wav_bytes = include_bytes!("fixtures/silero_test.wav");
-    let buf = PreparedAudioBuffer::from_wav_bytes(wav_bytes)
-        .expect("silero_test.wav fixture must parse");
+    let buf =
+        PreparedAudioBuffer::from_wav_bytes(wav_bytes).expect("silero_test.wav fixture must parse");
     let sr = buf.sample_rate as usize;
     let start = (start_sec * sr as f64).round() as usize;
     let len = (duration_sec * sr as f64).round() as usize;
@@ -127,7 +127,11 @@ fn test_integration_ut_14_1_silero_vad_speech_detection() {
     let config = VadConfig::default();
     let segments = detect_speech_segments(&audio, &config).expect("Speech detection must succeed");
 
-    assert_eq!(segments.len(), 2, "Expected exactly 2 distinct speech blocks");
+    assert_eq!(
+        segments.len(),
+        2,
+        "Expected exactly 2 distinct speech blocks"
+    );
 
     // Check Segment 1 (expected around 15,000ms to 25,000ms)
     let s1 = &segments[0];
@@ -266,15 +270,23 @@ fn test_integration_vad_fallback_on_missing_or_corrupt_model() {
     audio.extend(vec![0.0f32; sample_rate * 3]);
 
     // Test with invalid / missing model path
-    let mut config = VadConfig::default();
-    config.model_path = Some(std::path::PathBuf::from("non_existent_corrupt_model.onnx"));
+    let config = VadConfig {
+        model_path: Some(std::path::PathBuf::from("non_existent_corrupt_model.onnx")),
+        ..VadConfig::default()
+    };
 
     // Under fallback, detect_speech_segments must gracefully use DSP fallback without panicking
     let segments_res = detect_speech_segments(&audio, &config);
-    assert!(segments_res.is_ok(), "VAD must never panic or fail when falling back to Pure Rust DSP");
+    assert!(
+        segments_res.is_ok(),
+        "VAD must never panic or fail when falling back to Pure Rust DSP"
+    );
 
     let segments = segments_res.unwrap();
-    assert!(!segments.is_empty(), "Fallback DSP must detect speech burst(s)");
+    assert!(
+        !segments.is_empty(),
+        "Fallback DSP must detect speech burst(s)"
+    );
     assert!(
         segments[0].start_ms >= 1_800 && segments[0].start_ms <= 2_500,
         "Fallback start {}ms must be near 2000ms",
@@ -300,7 +312,11 @@ fn test_integration_ut_14_3_natural_pause_splitting_invariants() {
 
     let config = VadConfig::default();
     let segments = detect_speech_segments(&audio, &config).expect("VAD must pass");
-    assert!(segments.len() >= 3, "Expected >= 3 speech segments, got {}", segments.len());
+    assert!(
+        segments.len() >= 3,
+        "Expected >= 3 speech segments, got {}",
+        segments.len()
+    );
 
     // Set max chunk duration to 11s to force multiple chunk cuts
     let split_config = ChunkSplitConfig {
@@ -312,7 +328,11 @@ fn test_integration_ut_14_3_natural_pause_splitting_invariants() {
     let chunks = split_into_natural_pause_chunks(&audio, &segments, &split_config, sample_rate)
         .expect("Splitting must pass");
 
-    assert!(chunks.len() >= 2, "Expected multiple chunks, got {}", chunks.len());
+    assert!(
+        chunks.len() >= 2,
+        "Expected multiple chunks, got {}",
+        chunks.len()
+    );
 
     // Invariant check: No chunk boundary cuts inside any speech segment
     let total_duration_ms = ((audio.len() as u64) * 1000) / (sample_rate as u64);
@@ -322,7 +342,9 @@ fn test_integration_ut_14_3_natural_pause_splitting_invariants() {
                 assert!(
                     chunk.end_ms <= seg.start_ms || chunk.end_ms >= seg.end_ms,
                     "Violation: Chunk boundary {}ms cut inside speech segment [{}ms, {}ms]",
-                    chunk.end_ms, seg.start_ms, seg.end_ms
+                    chunk.end_ms,
+                    seg.start_ms,
+                    seg.end_ms
                 );
             }
         }
@@ -375,7 +397,10 @@ fn test_integration_ed_14_1_screaming_defense_saturation() {
     }
 
     let initial_peak = calculate_peak_dbfs_f32(&saturated_samples);
-    assert!((initial_peak - 0.0).abs() < 0.01, "Initial peak must be 0 dBFS");
+    assert!(
+        (initial_peak - 0.0).abs() < 0.01,
+        "Initial peak must be 0 dBFS"
+    );
 
     // Apply screaming defense soft-knee limiter
     apply_screaming_limiter(&mut saturated_samples, -1.5);
@@ -505,7 +530,9 @@ async fn test_integration_mock_audio_prep_pipeline() {
     let out_wav = temp_dir.join("test_out.wav");
 
     let synth_buffer = generate_synthetic_normalized_buffer(16_000, 2.0);
-    synth_buffer.write_wav_file(&in_wav).expect("Writing synthetic WAV must pass");
+    synth_buffer
+        .write_wav_file(&in_wav)
+        .expect("Writing synthetic WAV must pass");
 
     let config = AudioPrepConfig::default();
     let prep_res = prepare_audio_file(&in_wav, &out_wav, &config, None).await;

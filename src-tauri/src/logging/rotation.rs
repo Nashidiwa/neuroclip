@@ -7,10 +7,10 @@
 //! - Safety: Only prune NeuroClip log files, never foreign files
 //! - Zero-panic error propagation via `StorageError`
 
+use crate::error::StorageError;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use crate::error::StorageError;
 
 /// Retention policy parameters for the log storage directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,8 +27,8 @@ impl Default for RetentionPolicy {
     fn default() -> Self {
         Self {
             max_age_days: 14,
-            max_dir_size_bytes: 50 * 1024 * 1024,      // 50 MB
-            target_dir_size_bytes: 30 * 1024 * 1024,   // 30 MB
+            max_dir_size_bytes: 50 * 1024 * 1024,    // 50 MB
+            target_dir_size_bytes: 30 * 1024 * 1024, // 30 MB
         }
     }
 }
@@ -82,7 +82,10 @@ pub fn is_neuroclip_log_file(filename: &str) -> bool {
     }
 
     // Standard .log extension
-    if filename.ends_with(".log") {
+    if std::path::Path::new(filename)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
+    {
         return true;
     }
 
@@ -107,11 +110,9 @@ pub fn prune_logs(log_dir: &Path, policy: &RetentionPolicy) -> Result<PruneRepor
         return Ok(PruneReport::default());
     }
 
-    let read_dir = fs::read_dir(log_dir).map_err(|err| {
-        StorageError::DirectoryCreationFailed {
-            path: log_dir.display().to_string(),
-            details: format!("Failed to read log directory: {err}"),
-        }
+    let read_dir = fs::read_dir(log_dir).map_err(|err| StorageError::DirectoryCreationFailed {
+        path: log_dir.display().to_string(),
+        details: format!("Failed to read log directory: {err}"),
     })?;
 
     let now = SystemTime::now();
@@ -121,9 +122,8 @@ pub fn prune_logs(log_dir: &Path, policy: &RetentionPolicy) -> Result<PruneRepor
     let mut active_files: Vec<LogFileCandidate> = Vec::new();
 
     for entry_res in read_dir {
-        let entry = match entry_res {
-            Ok(e) => e,
-            Err(_) => continue,
+        let Ok(entry) = entry_res else {
+            continue;
         };
 
         let path = entry.path();
@@ -140,9 +140,8 @@ pub fn prune_logs(log_dir: &Path, policy: &RetentionPolicy) -> Result<PruneRepor
             continue;
         }
 
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
+        let Ok(metadata) = entry.metadata() else {
+            continue;
         };
 
         let size_bytes = metadata.len();
@@ -153,8 +152,7 @@ pub fn prune_logs(log_dir: &Path, policy: &RetentionPolicy) -> Result<PruneRepor
             true
         } else {
             now.duration_since(modified_time)
-                .map(|elapsed| elapsed > max_age_duration)
-                .unwrap_or(false)
+                .is_ok_and(|elapsed| elapsed > max_age_duration)
         };
 
         if is_expired {

@@ -21,9 +21,8 @@ use neuroclip_lib::stt::groq_client::{
     TransportResponse, DEFAULT_OVERLAP_MS, SAFE_CHUNK_BYTES,
 };
 use neuroclip_lib::stt::transcript_parser::{TranscriptSegment, WordTiming};
-use neuroclip_lib::stt::vad::{
-    split_into_natural_pause_chunks, ChunkSplitConfig, SpeechSegment,
-};
+use neuroclip_lib::stt::vad::{split_into_natural_pause_chunks, ChunkSplitConfig, SpeechSegment};
+use neuroclip_lib::stt::SttProgressPayload;
 
 /// Captured HTTP request received by mock transport.
 #[derive(Debug, Clone)]
@@ -129,17 +128,32 @@ fn test_ut_15_1_chunk_sizing_under_20mb_with_1_5s_overlap() {
 
     // Define speech segments spaced every 4 minutes (with silence midpoints)
     let speech_segments = vec![
-        SpeechSegment { start_ms: 10_000, end_ms: 200_000 },
-        SpeechSegment { start_ms: 250_000, end_ms: 500_000 },
-        SpeechSegment { start_ms: 550_000, end_ms: 800_000 },
-        SpeechSegment { start_ms: 850_000, end_ms: 1_100_000 },
-        SpeechSegment { start_ms: 1_150_000, end_ms: 1_450_000 },
+        SpeechSegment {
+            start_ms: 10_000,
+            end_ms: 200_000,
+        },
+        SpeechSegment {
+            start_ms: 250_000,
+            end_ms: 500_000,
+        },
+        SpeechSegment {
+            start_ms: 550_000,
+            end_ms: 800_000,
+        },
+        SpeechSegment {
+            start_ms: 850_000,
+            end_ms: 1_100_000,
+        },
+        SpeechSegment {
+            start_ms: 1_150_000,
+            end_ms: 1_450_000,
+        },
     ];
 
     let split_config = ChunkSplitConfig {
         max_chunk_size_bytes: SAFE_CHUNK_BYTES, // 20MB
-        max_chunk_duration_ms: 600_000,          // 10 minutes
-        overlap_ms: DEFAULT_OVERLAP_MS,          // 1.5s
+        max_chunk_duration_ms: 600_000,         // 10 minutes
+        overlap_ms: DEFAULT_OVERLAP_MS,         // 1.5s
     };
 
     let total_samples = (total_duration_sec * sample_rate as f64) as usize;
@@ -237,7 +251,9 @@ async fn test_ut_15_2_music_mode_condition_on_previous_text_false() {
     let requests = harness.recorded_requests();
     assert_eq!(requests.len(), 1);
     assert!(requests[0].auth.starts_with("Bearer gsk_"));
-    assert!(requests[0].content_type.contains("multipart/form-data; boundary="));
+    assert!(requests[0]
+        .content_type
+        .contains("multipart/form-data; boundary="));
     assert!(requests[0].url.ends_with("/audio/transcriptions"));
     let body_music_str = String::from_utf8_lossy(&requests[0].body);
 
@@ -370,8 +386,14 @@ async fn test_it_15_2_rate_limit_exponential_backoff() {
     .to_string();
 
     // Scenario A: 2 retries (HTTP 429) then HTTP 200 OK
-    harness.enqueue_response(TransportResponse::rate_limit(Some("0.05"), rate_limit_body.clone()));
-    harness.enqueue_response(TransportResponse::rate_limit(Some("0.05"), rate_limit_body.clone()));
+    harness.enqueue_response(TransportResponse::rate_limit(
+        Some("0.05"),
+        rate_limit_body.clone(),
+    ));
+    harness.enqueue_response(TransportResponse::rate_limit(
+        Some("0.05"),
+        rate_limit_body.clone(),
+    ));
     harness.enqueue_response(TransportResponse::ok(success_body));
 
     let client = GroqClient::new("gsk_rate_key_11112222".to_string())
@@ -390,7 +412,10 @@ async fn test_it_15_2_rate_limit_exponential_backoff() {
     // Scenario B: 4 consecutive HTTP 429 -> exhausts MAX_RATE_LIMIT_RETRIES (3)
     let harness_fail = MockHttpHarness::new();
     for _ in 0..5 {
-        harness_fail.enqueue_response(TransportResponse::rate_limit(Some("0.05"), rate_limit_body.clone()));
+        harness_fail.enqueue_response(TransportResponse::rate_limit(
+            Some("0.05"),
+            rate_limit_body.clone(),
+        ));
     }
 
     let client_fail = GroqClient::new("gsk_fail_key_33334444".to_string())
@@ -498,12 +523,30 @@ async fn test_ed_15_2_processing_speed_sla() {
     let dummy_samples = vec![0.0f32; total_samples];
 
     let speech_segments = vec![
-        SpeechSegment { start_ms: 10_000, end_ms: 400_000 },
-        SpeechSegment { start_ms: 500_000, end_ms: 900_000 },
-        SpeechSegment { start_ms: 1_000_000, end_ms: 1_400_000 },
-        SpeechSegment { start_ms: 1_500_000, end_ms: 1_900_000 },
-        SpeechSegment { start_ms: 2_000_000, end_ms: 2_400_000 },
-        SpeechSegment { start_ms: 2_500_000, end_ms: 2_650_000 },
+        SpeechSegment {
+            start_ms: 10_000,
+            end_ms: 400_000,
+        },
+        SpeechSegment {
+            start_ms: 500_000,
+            end_ms: 900_000,
+        },
+        SpeechSegment {
+            start_ms: 1_000_000,
+            end_ms: 1_400_000,
+        },
+        SpeechSegment {
+            start_ms: 1_500_000,
+            end_ms: 1_900_000,
+        },
+        SpeechSegment {
+            start_ms: 2_000_000,
+            end_ms: 2_400_000,
+        },
+        SpeechSegment {
+            start_ms: 2_500_000,
+            end_ms: 2_650_000,
+        },
     ];
 
     let split_config = ChunkSplitConfig {
@@ -561,11 +604,36 @@ fn test_deduplicate_overlap_segments_unit() {
         cps_score: 12.0,
         is_flagged_for_review: false,
         words: vec![
-            WordTiming { word: "Hello".to_string(), start_sec: 0.0, end_sec: 1.0, probability: 0.95 },
-            WordTiming { word: "and".to_string(), start_sec: 1.1, end_sec: 1.5, probability: 0.95 },
-            WordTiming { word: "welcome".to_string(), start_sec: 1.6, end_sec: 3.0, probability: 0.95 },
-            WordTiming { word: "to".to_string(), start_sec: 3.1, end_sec: 4.0, probability: 0.95 },
-            WordTiming { word: "NeuroClip".to_string(), start_sec: 4.1, end_sec: 5.5, probability: 0.95 },
+            WordTiming {
+                word: "Hello".to_string(),
+                start_sec: 0.0,
+                end_sec: 1.0,
+                probability: 0.95,
+            },
+            WordTiming {
+                word: "and".to_string(),
+                start_sec: 1.1,
+                end_sec: 1.5,
+                probability: 0.95,
+            },
+            WordTiming {
+                word: "welcome".to_string(),
+                start_sec: 1.6,
+                end_sec: 3.0,
+                probability: 0.95,
+            },
+            WordTiming {
+                word: "to".to_string(),
+                start_sec: 3.1,
+                end_sec: 4.0,
+                probability: 0.95,
+            },
+            WordTiming {
+                word: "NeuroClip".to_string(),
+                start_sec: 4.1,
+                end_sec: 5.5,
+                probability: 0.95,
+            },
         ],
     };
 
@@ -594,8 +662,18 @@ fn test_deduplicate_overlap_segments_unit() {
         cps_score: 14.0,
         is_flagged_for_review: false,
         words: vec![
-            WordTiming { word: "Let's".to_string(), start_sec: 10.5, end_sec: 11.2, probability: 0.92 },
-            WordTiming { word: "edit".to_string(), start_sec: 11.3, end_sec: 12.0, probability: 0.92 },
+            WordTiming {
+                word: "Let's".to_string(),
+                start_sec: 10.5,
+                end_sec: 11.2,
+                probability: 0.92,
+            },
+            WordTiming {
+                word: "edit".to_string(),
+                start_sec: 11.3,
+                end_sec: 12.0,
+                probability: 0.92,
+            },
         ],
     };
 
@@ -617,4 +695,98 @@ fn test_parse_retry_after_helper() {
     assert_eq!(parse_retry_after(None, 2).as_secs(), 2);
     assert_eq!(parse_retry_after(None, 3).as_secs(), 4);
     assert_eq!(parse_retry_after(Some("invalid"), 2).as_secs(), 2);
+}
+
+/// M4-15: Verify real multi-chunk `SttProgressPayload` emission & camelCase JSON contract
+#[tokio::test]
+async fn test_m4_15_transcribe_samples_with_progress_multi_chunk_and_camelcase_json() {
+    let harness = MockHttpHarness::new();
+
+    // Queue 2 responses for 2 chunks (> 20MB / > 600s audio at 16kHz)
+    let make_chunk_resp = |text: &str| {
+        TransportResponse::ok(
+            serde_json::json!({
+                "task": "transcribe",
+                "language": "english",
+                "duration": 5.0,
+                "text": text,
+                "segments": [{
+                    "id": 0, "seek": 0, "start": 0.0, "end": 2.0,
+                    "text": text, "tokens": [],
+                    "temperature": 0.0, "avg_logprob": -0.1,
+                    "compression_ratio": 0.5, "no_speech_prob": 0.01
+                }],
+                "words": []
+            })
+            .to_string(),
+        )
+    };
+    harness.enqueue_response(make_chunk_resp("First chunk dialogue"));
+    harness.enqueue_response(make_chunk_resp("Second chunk dialogue"));
+
+    let client = GroqClient::new("gsk_progress_test_123456".to_string())
+        .expect("Client creation must succeed")
+        .with_mock_handler(harness.to_handler());
+
+    // 15 minutes (900s) at 16kHz -> ~28.8MB WAV > 20MB SAFE_CHUNK_BYTES -> 2 chunks
+    let samples = vec![0.0f32; 16_000 * 900];
+    let events: Arc<Mutex<Vec<SttProgressPayload>>> = Arc::new(Mutex::new(Vec::new()));
+    let events_cb = Arc::clone(&events);
+
+    let result = client
+        .transcribe_samples_with_progress(
+            "clip_multi_progress",
+            &samples,
+            16_000,
+            false,
+            Some(Arc::new(move |payload| {
+                events_cb.lock().unwrap().push(payload);
+            })),
+        )
+        .await
+        .expect("Multi-chunk transcription must succeed");
+
+    assert_eq!(result.clip_id, "clip_multi_progress");
+    assert_eq!(result.segments.len(), 2);
+    assert_eq!(harness.request_count(), 2);
+
+    let captured = events.lock().unwrap().clone();
+    assert_eq!(
+        captured.len(),
+        4,
+        "Expected 2 events per chunk (before/after) for 2 chunks, got: {captured:?}"
+    );
+
+    // Chunk 1 before & after
+    assert_eq!(captured[0].task_id, "clip_multi_progress");
+    assert_eq!(captured[0].stage, "transcribing");
+    assert_eq!(captured[0].current_chunk, 1);
+    assert_eq!(captured[0].total_chunks, 2);
+    assert!((captured[0].percent - 0.0).abs() < 1e-6);
+
+    assert_eq!(captured[1].stage, "transcribing");
+    assert_eq!(captured[1].current_chunk, 1);
+    assert_eq!(captured[1].total_chunks, 2);
+    assert!((captured[1].percent - 50.0).abs() < 1e-6);
+
+    // Chunk 2 before & after
+    assert_eq!(captured[2].stage, "transcribing");
+    assert_eq!(captured[2].current_chunk, 2);
+    assert_eq!(captured[2].total_chunks, 2);
+    assert!((captured[2].percent - 50.0).abs() < 1e-6);
+
+    assert_eq!(captured[3].stage, "completed");
+    assert_eq!(captured[3].current_chunk, 2);
+    assert_eq!(captured[3].total_chunks, 2);
+    assert!((captured[3].percent - 100.0).abs() < 1e-6);
+    assert_eq!(captured[3].eta_sec, Some(0.0));
+
+    // Verify serialized JSON matches camelCase contract required by `isSttProgressPayloadJson`
+    let json_val = serde_json::to_value(&captured[3]).unwrap();
+    assert_eq!(json_val["taskId"], "clip_multi_progress");
+    assert_eq!(json_val["stage"], "completed");
+    assert_eq!(json_val["percent"], 100.0);
+    assert_eq!(json_val["currentChunk"], 2);
+    assert_eq!(json_val["totalChunks"], 2);
+    assert!(json_val.get("clip_id").is_none());
 }

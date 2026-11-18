@@ -11,10 +11,9 @@ use std::time::Instant;
 
 use neuroclip_lib::{
     calculate_clip_bounds, cluster_and_deduplicate, compute_audio_only_score,
-    compute_multimodal_score, compute_overlap_ratio,
-    fuse_multimodal_series, generate_clusters_from_fused_series, normalize_z_score,
-    AudioRmsPoint, ChatVelocityPoint, EmoteDensityPoint, FusedScorePoint,
-    HighlightClustersContainer,
+    compute_multimodal_score, compute_overlap_ratio, fuse_multimodal_series,
+    generate_clusters_from_fused_series, normalize_z_score, AudioRmsPoint, ChatVelocityPoint,
+    EmoteDensityPoint, FusedScorePoint, HighlightClustersContainer,
 };
 
 /// Helper directory for creating temporary test files with auto-cleanup.
@@ -161,7 +160,10 @@ fn test_it_12_1_30s_distance_clustering_integration() {
     );
 
     let first = &clusters[0];
-    assert_eq!(first.peak_sec, 120.0, "Focal peak should be highest scoring point (120s)");
+    assert_eq!(
+        first.peak_sec, 120.0,
+        "Focal peak should be highest scoring point (120s)"
+    );
     assert_eq!(first.score, 88.0);
     assert!(first.start_sec <= 100.0 - 14.5 + 0.1);
     assert!(first.end_sec >= 125.0 + 15.0 - 0.1);
@@ -269,14 +271,22 @@ fn test_ed_12_2_ranking_and_performance_sla_integration() {
         let t = (k as f64) * 5.0;
         let is_spike = k % 115 == 0; // ~50 spikes across 8 hours
 
-        let z = if is_spike { 6.0 + ((k % 5) as f64) } else { 0.2 };
+        let z = if is_spike {
+            6.0 + ((k % 5) as f64)
+        } else {
+            0.2
+        };
         let e = if is_spike { 0.8 } else { 0.05 };
         let count = if is_spike { 60 } else { 5 };
 
         velocity.push(ChatVelocityPoint::new(t, count, z));
         emote.push(EmoteDensityPoint::new(
             t,
-            if is_spike { vec!["KEKW".to_string()] } else { vec![] },
+            if is_spike {
+                vec!["KEKW".to_string()]
+            } else {
+                vec![]
+            },
             e,
             count * 4,
             if is_spike { 30 } else { 1 },
@@ -287,7 +297,11 @@ fn test_ed_12_2_ranking_and_performance_sla_integration() {
     for m in 0..(num_buckets * 10) {
         let t = (m as f64) * 0.5;
         let is_spike = m % 1150 == 0;
-        audio.push(AudioRmsPoint::new(t, if is_spike { 0.75 } else { 0.05 }, is_spike));
+        audio.push(AudioRmsPoint::new(
+            t,
+            if is_spike { 0.75 } else { 0.05 },
+            is_spike,
+        ));
     }
 
     // Benchmark fusion and clustering performance
@@ -307,7 +321,11 @@ fn test_ed_12_2_ranking_and_performance_sla_integration() {
     // Verify ranking: clusters must be sorted by score descending
     assert!(!clusters.is_empty());
     assert!(clusters.len() <= 20);
-    assert!(clusters.len() >= 15, "Should extract 15-20 top clusters, found {}", clusters.len());
+    assert!(
+        clusters.len() >= 15,
+        "Should extract 15-20 top clusters, found {}",
+        clusters.len()
+    );
 
     for i in 1..clusters.len() {
         assert!(
@@ -363,8 +381,14 @@ fn test_ac_12_4_boundary_invariants_across_timeline() {
     for peak in test_peaks {
         let (start, end) = calculate_clip_bounds(peak, peak, duration, false);
         assert!(start >= 0.0, "start {start} must be >= 0.0 for peak {peak}");
-        assert!(start < end, "start {start} must be < end {end} for peak {peak}");
-        assert!(end <= duration, "end {end} must be <= duration {duration} for peak {peak}");
+        assert!(
+            start < end,
+            "start {start} must be < end {end} for peak {peak}"
+        );
+        assert!(
+            end <= duration,
+            "end {end} must be <= duration {duration} for peak {peak}"
+        );
         assert!(
             end - start >= 1.0,
             "clip duration must be positive non-zero for peak {peak}"

@@ -1,12 +1,12 @@
-//! Subtitle export engines for Advanced SubStation Alpha (.ass) and SubRip (.srt).
+//! Subtitle export engines for Advanced SubStation Alpha (`.ass`) and SubRip (`.srt`).
 //!
 //! Implements Schema 5.6 [`SubtitleProject`] generation and character styling
 //! with VTuber color matrices for Vedal, Neuro, Evil, Guest, and Chat.
 
-use std::collections::HashMap;
-use std::fmt::Write;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt::Write;
 
 use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer};
 
@@ -36,6 +36,7 @@ pub struct SubtitleProject {
 }
 
 /// Format time in seconds to ASS timecode `H:MM:SS.cc` (centiseconds, 2 digits).
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn format_ass_timecode(seconds: f64) -> String {
     let safe_sec = if seconds.is_finite() && seconds >= 0.0 {
         seconds
@@ -55,6 +56,7 @@ pub fn format_ass_timecode(seconds: f64) -> String {
 }
 
 /// Format time in seconds to SRT timecode `HH:MM:SS,mmm` (milliseconds, 3 digits).
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn format_srt_timecode(seconds: f64) -> String {
     let safe_sec = if seconds.is_finite() && seconds >= 0.0 {
         seconds
@@ -93,7 +95,7 @@ pub fn map_speaker_to_ass_style(speaker_id: &str) -> &'static str {
     }
 }
 
-/// Generate a complete Advanced SubStation Alpha (.ass v4.00+) subtitle script.
+/// Generate a complete Advanced SubStation Alpha (`.ass` v4.00+) subtitle script.
 ///
 /// Features VTuber character styles in `&HAABBGGRR` hexadecimal format and
 /// proper text escaping.
@@ -112,14 +114,16 @@ pub fn generate_ass_script(container: &TranscriptSegmentsContainer) -> String {
     out.push_str("[V4+ Styles]\n");
     out.push_str("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n");
     out.push_str("Style: Default,Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Vedal,Arial,54,&H0066CC66,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Neuro,Arial,54,&H00B6B6FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Evil,Arial,54,&H000000DC,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Guest,Arial,54,&H00FFCC33,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Chat,Arial,48,&H00CCCCCC,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1\n\n");
+    out.push_str("Style: Vedal,Arial,54,&H0098FB98,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
+    out.push_str("Style: Neuro,Arial,54,&H00C1B6FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
+    out.push_str("Style: Evil,Arial,54,&H005500FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
+    out.push_str("Style: Guest,Arial,54,&H0000D7FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
+    out.push_str("Style: Chat,Arial,48,&H00EBCE87,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1\n\n");
 
     out.push_str("[Events]\n");
-    out.push_str("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n");
+    out.push_str(
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+    );
 
     for seg in &container.segments {
         let start_tc = format_ass_timecode(seg.start_sec);
@@ -137,7 +141,7 @@ pub fn generate_ass_script(container: &TranscriptSegmentsContainer) -> String {
     out
 }
 
-/// Generate a standard SubRip (.srt) subtitle document.
+/// Generate a standard SubRip (`.srt`) subtitle document.
 ///
 /// Outputs sequential 1-based index numbers and comma-separated millisecond timestamps.
 pub fn generate_srt_script(container: &TranscriptSegmentsContainer) -> String {
@@ -173,7 +177,7 @@ pub fn default_speaker_styles() -> HashMap<String, SpeakerStyle> {
     map.insert(
         "evil".to_string(),
         SpeakerStyle {
-            color_hex: "#DC143C".to_string(),
+            color_hex: "#FF0055".to_string(),
             font_name: "Arial".to_string(),
             font_size: 54,
             outline_color_hex: "#000000".to_string(),
@@ -182,7 +186,7 @@ pub fn default_speaker_styles() -> HashMap<String, SpeakerStyle> {
     map.insert(
         "vedal".to_string(),
         SpeakerStyle {
-            color_hex: "#66CC66".to_string(),
+            color_hex: "#98FB98".to_string(),
             font_name: "Arial".to_string(),
             font_size: 54,
             outline_color_hex: "#000000".to_string(),
@@ -191,7 +195,7 @@ pub fn default_speaker_styles() -> HashMap<String, SpeakerStyle> {
     map.insert(
         "guest".to_string(),
         SpeakerStyle {
-            color_hex: "#33CCFF".to_string(),
+            color_hex: "#FFD700".to_string(),
             font_name: "Arial".to_string(),
             font_size: 54,
             outline_color_hex: "#000000".to_string(),
@@ -200,7 +204,7 @@ pub fn default_speaker_styles() -> HashMap<String, SpeakerStyle> {
     map.insert(
         "chat".to_string(),
         SpeakerStyle {
-            color_hex: "#CCCCCC".to_string(),
+            color_hex: "#87CEEB".to_string(),
             font_name: "Arial".to_string(),
             font_size: 48,
             outline_color_hex: "#000000".to_string(),

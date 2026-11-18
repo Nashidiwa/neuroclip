@@ -6,26 +6,30 @@
 //! - `initialize_project(project_id)`: Allocate isolated workspace for a project.
 //! - `clean_expired_cache(cache_dir, max_age_days)`: Clean expired temporary caches.
 
-use std::path::{Path, PathBuf};
 use crate::core::storage::{
     clean_expired_cache as core_clean_expired_cache, init_project_directory,
-    init_storage_directories, query_disk_status, resolve_cache_dir, CacheCleanupStats,
-    DiskStatus, StoragePaths, DEFAULT_CACHE_MAX_AGE_DAYS,
+    init_storage_directories, query_disk_status, resolve_cache_dir, CacheCleanupStats, DiskStatus,
+    StoragePaths, DEFAULT_CACHE_MAX_AGE_DAYS,
 };
 use crate::error::AppError;
+use std::path::{Path, PathBuf};
 
 /// Perform pre-flight storage check on default or custom cache path.
 ///
-/// Execution speed SLA <= 50ms (Win32 GetDiskFreeSpaceExW).
+/// Execution speed SLA <= 50ms (Win32 `GetDiskFreeSpaceExW`).
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if disk space cannot be queried.
 #[tauri::command]
-pub async fn check_preflight_storage(
-    path: Option<String>,
-) -> Result<DiskStatus, AppError> {
+pub async fn check_preflight_storage(path: Option<String>) -> Result<DiskStatus, AppError> {
     let p = path.as_deref().map(Path::new);
     query_disk_status(p)
 }
 
 /// Initialize root cache and projects storage directories.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if creating the cache or projects directory fails.
 #[tauri::command]
 pub async fn initialize_storage(
     custom_cache_dir: Option<String>,
@@ -34,16 +38,20 @@ pub async fn initialize_storage(
     init_storage_directories(p)
 }
 
-/// Initialize a specific project workspace directory (%LOCALAPPDATA%/NeuroClip/projects/<project_id>/).
+/// Initialize a specific project workspace directory (`%LOCALAPPDATA%/NeuroClip/projects/<project_id>/`).
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `project_id` is invalid or creating the directory fails.
 #[tauri::command]
-pub async fn initialize_project(
-    project_id: String,
-) -> Result<String, AppError> {
+pub async fn initialize_project(project_id: String) -> Result<String, AppError> {
     let path = init_project_directory(&project_id)?;
     Ok(path.to_string_lossy().to_string())
 }
 
-/// Clean expired `.tmp` and `.wav` files older than max_age_days (default 7 days).
+/// Clean expired `.tmp` and `.wav` files older than `max_age_days` (default 7 days).
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if reading or pruning the cache directory fails.
 #[tauri::command]
 pub async fn clean_expired_cache(
     cache_dir: Option<String>,
@@ -60,12 +68,13 @@ pub async fn clean_expired_cache(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
 
     #[tokio::test]
     async fn test_check_preflight_storage_ipc() {
-        std::env::set_var("NEUROCLIP_MOCK_DISK_FREE_MB", "20480");
+        let _env_guard = ENV_LOCK.lock().await;
+        let _mock_env = ScopedEnvVar::set("NEUROCLIP_MOCK_DISK_FREE_MB", "20480");
         let result = check_preflight_storage(None).await;
-        std::env::remove_var("NEUROCLIP_MOCK_DISK_FREE_MB");
 
         assert!(result.is_ok());
         if let Ok(status) = result {
@@ -76,10 +85,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_clean_expired_cache_ipc_empty_dir() {
-        let temp_dir = std::env::temp_dir().join(format!("neuroclip_test_clean_ipc_{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("neuroclip_test_clean_ipc_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&temp_dir);
 
-        let result = clean_expired_cache(Some(temp_dir.to_string_lossy().to_string()), Some(7)).await;
+        let result =
+            clean_expired_cache(Some(temp_dir.to_string_lossy().to_string()), Some(7)).await;
         assert!(result.is_ok());
         if let Ok(stats) = result {
             assert_eq!(stats.files_deleted, 0);

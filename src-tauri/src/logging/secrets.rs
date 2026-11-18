@@ -8,9 +8,9 @@
 //!
 //! Complies strictly with `CONVENTIONS.md` §6.3 and zero-panic policies.
 
+use regex::Regex;
 use std::io::Write;
 use std::sync::OnceLock;
-use regex::Regex;
 
 /// Canonical secret redaction formula per `CONVENTIONS.md` §6.3.
 ///

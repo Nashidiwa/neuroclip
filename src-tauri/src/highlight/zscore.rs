@@ -11,6 +11,12 @@
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>)
 //! and `docs/TASK_BOARD.md` §TASK-M4-09.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -117,15 +123,15 @@ pub fn compute_chat_velocity_series(
     baseline_window_sec: f64,
 ) -> Result<Vec<ChatVelocityPoint>, AppError> {
     if !bucket_width_sec.is_finite() || bucket_width_sec <= 0.0 {
-        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-            "Invalid bucket width: {bucket_width_sec}s"
-        ))));
+        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+            format!("Invalid bucket width: {bucket_width_sec}s"),
+        )));
     }
 
     if !baseline_window_sec.is_finite() || baseline_window_sec <= 0.0 {
-        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-            "Invalid baseline window: {baseline_window_sec}s"
-        ))));
+        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+            format!("Invalid baseline window: {baseline_window_sec}s"),
+        )));
     }
 
     let n = buckets.len();
@@ -299,7 +305,11 @@ pub mod tests {
     fn test_ut_09_3_spambot_filter() {
         let mut events = Vec::new();
         for i in 0..20 {
-            events.push(make_event(1.0 + (i as f64) * 0.1, "bad_spambot", "CLICK HERE"));
+            events.push(make_event(
+                1.0 + f64::from(i) * 0.1,
+                "bad_spambot",
+                "CLICK HERE",
+            ));
         }
 
         let buckets = bin_chat_events_default(&events, None).unwrap();
@@ -324,7 +334,7 @@ pub mod tests {
         for b in 0..60 {
             for a in 0..5 {
                 events.push(make_event(
-                    (b as f64) * 5.0 + 1.0,
+                    f64::from(b) * 5.0 + 1.0,
                     &format!("user_{a}"),
                     "chatting",
                 ));
@@ -335,7 +345,7 @@ pub mod tests {
         for a in 0..10 {
             for m in 0..3 {
                 events.push(make_event(
-                    120.0 + (m as f64) * 0.5,
+                    120.0 + f64::from(m) * 0.5,
                     &format!("spike_user_{a}"),
                     "LETS GOOO",
                 ));
@@ -350,7 +360,11 @@ pub mod tests {
         )
         .unwrap();
 
-        assert_eq!(series.len(), 60, "Must have exactly 60 buckets for 300s VOD");
+        assert_eq!(
+            series.len(),
+            60,
+            "Must have exactly 60 buckets for 300s VOD"
+        );
 
         // Verify timestamps are strictly spaced by 5.0s
         for (i, pt) in series.iter().enumerate() {
@@ -405,8 +419,7 @@ pub mod tests {
         assert_eq!(series.len(), 5760);
         assert!(
             elapsed.as_millis() <= 1200,
-            "ED-09.1 SLA failed: took {:?} (limit 1.2s)",
-            elapsed
+            "ED-09.1 SLA failed: took {elapsed:?} (limit 1.2s)"
         );
     }
 

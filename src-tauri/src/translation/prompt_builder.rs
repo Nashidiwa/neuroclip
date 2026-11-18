@@ -6,8 +6,8 @@
 //! - Dialogue chunking (25–35 lines, default 30) with sliding context window (5 lines).
 //! - Zero-panic guarantee (`CONVENTIONS.md` §2.1).
 
-use serde::{Deserialize, Serialize};
 use crate::stt::transcript_parser::TranscriptSegment;
+use serde::{Deserialize, Serialize};
 
 /// Verbatim Theatrical Framing Priming Prompt from `docs/PRD.md` §6.3.
 pub const THEATRICAL_FRAMING_INSTRUCTION: &str = "\
@@ -65,21 +65,15 @@ impl PromptBuilder {
 
     /// Build the user prompt for a specific chunk with optional sliding context.
     #[must_use]
-    pub fn build_user_prompt(
-        chunk: &[TranscriptSegment],
-        context: &[TranscriptSegment],
-    ) -> String {
+    pub fn build_user_prompt(chunk: &[TranscriptSegment], context: &[TranscriptSegment]) -> String {
+        use std::fmt::Write as _;
         let mut prompt = String::with_capacity(2048);
 
         if !context.is_empty() {
             prompt.push_str(CONTEXT_WINDOW_HEADER);
             prompt.push('\n');
             for seg in context {
-                prompt.push_str(&format!(
-                    "- ({}) {}\n",
-                    seg.speaker_id,
-                    seg.text_en.trim()
-                ));
+                let _ = writeln!(prompt, "- ({}) {}", seg.speaker_id, seg.text_en.trim());
             }
             prompt.push('\n');
         }
@@ -87,12 +81,13 @@ impl PromptBuilder {
         prompt.push_str(DIALOGUE_TARGET_HEADER);
         prompt.push('\n');
         for seg in chunk {
-            prompt.push_str(&format!(
-                "- [{}] ({}) {}\n",
+            let _ = writeln!(
+                prompt,
+                "- [{}] ({}) {}",
                 seg.segment_id,
                 seg.speaker_id,
                 seg.text_en.trim()
-            ));
+            );
         }
 
         prompt.push_str(

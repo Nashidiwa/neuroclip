@@ -7,10 +7,10 @@
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>),
 //! `docs/ARCHITECTURE.md` §4.2, `docs/adr/ADR-003`, and `docs/TASK_BOARD.md` TASK-M4-13.
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Instant;
-use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::core::storage::query_disk_status;
@@ -72,7 +72,11 @@ pub struct SliceResult {
     pub clip_path: String,
 
     /// Duration of the sliced segment in seconds.
-    #[serde(alias = "durationSeconds", alias = "durationSec", alias = "duration_sec")]
+    #[serde(
+        alias = "durationSeconds",
+        alias = "durationSec",
+        alias = "duration_sec"
+    )]
     pub duration_seconds: f64,
 
     /// Sliced file size in bytes.
@@ -80,15 +84,29 @@ pub struct SliceResult {
     pub file_size_bytes: u64,
 
     /// Video stream duration in seconds (if probed).
-    #[serde(default, alias = "videoDuration", alias = "videoDurationSec", alias = "video_duration_sec")]
+    #[serde(
+        default,
+        alias = "videoDuration",
+        alias = "videoDurationSec",
+        alias = "video_duration_sec"
+    )]
     pub video_duration: Option<f64>,
 
     /// Audio stream duration in seconds (if probed).
-    #[serde(default, alias = "audioDuration", alias = "audioDurationSec", alias = "audio_duration_sec")]
+    #[serde(
+        default,
+        alias = "audioDuration",
+        alias = "audioDurationSec",
+        alias = "audio_duration_sec"
+    )]
     pub audio_duration: Option<f64>,
 
     /// Duration drift between video and audio in milliseconds (|video - audio| * 1000).
-    #[serde(alias = "streamDriftMs", alias = "durationDeltaMs", alias = "duration_delta_ms")]
+    #[serde(
+        alias = "streamDriftMs",
+        alias = "durationDeltaMs",
+        alias = "duration_delta_ms"
+    )]
     pub stream_drift_ms: f64,
 
     /// Whether the clip passes the keyframe alignment check (drift <= 50ms & start <= 50ms).
@@ -149,7 +167,12 @@ impl KeyframeAlignmentReport {
     /// Convert alignment report to tuple format `(drift_ms, is_aligned, video_duration, audio_duration)`.
     #[must_use]
     pub const fn as_tuple(&self) -> (f64, bool, Option<f64>, Option<f64>) {
-        (self.drift_ms, self.is_aligned, self.video_duration, self.audio_duration)
+        (
+            self.drift_ms,
+            self.is_aligned,
+            self.video_duration,
+            self.audio_duration,
+        )
     }
 }
 
@@ -159,13 +182,10 @@ impl KeyframeAlignmentReport {
 /// - `drift_ms = |video_dur - audio_dur| * 1000.0`
 /// - `is_aligned = drift_ms <= max_drift_ms && video_start <= MAX_INITIAL_PTS_DELAY_SEC`
 #[must_use]
-pub fn verify_stream_durations(
-    video_dur: f64,
-    audio_dur: f64,
-    video_start: f64,
-) -> (bool, f64) {
+pub fn verify_stream_durations(video_dur: f64, audio_dur: f64, video_start: f64) -> (bool, f64) {
     let drift_ms = (video_dur - audio_dur).abs() * 1000.0;
-    let is_aligned = drift_ms <= (MAX_KEYFRAME_DRIFT_MS + 1e-6) && video_start <= (MAX_INITIAL_PTS_DELAY_SEC + 1e-6);
+    let is_aligned = drift_ms <= (MAX_KEYFRAME_DRIFT_MS + 1e-6)
+        && video_start <= (MAX_INITIAL_PTS_DELAY_SEC + 1e-6);
     (is_aligned, drift_ms)
 }
 
@@ -202,7 +222,8 @@ pub fn evaluate_keyframe_alignment(
     let (is_aligned, drift_ms) = match (video_duration, audio_duration) {
         (Some(v_dur), Some(a_dur)) => {
             let drift = (v_dur - a_dur).abs() * 1000.0;
-            let aligned = drift <= (max_drift_ms + 1e-6) && video_start <= (MAX_INITIAL_PTS_DELAY_SEC + 1e-6);
+            let aligned =
+                drift <= (max_drift_ms + 1e-6) && video_start <= (MAX_INITIAL_PTS_DELAY_SEC + 1e-6);
             (aligned, drift)
         }
         (Some(_), None) => {
@@ -321,10 +342,11 @@ pub fn build_slice_ffmpeg_args(req: &RangeSliceRequest) -> Result<Vec<String>, A
 
         if let Some(ref headers) = req.http_headers {
             if !headers.is_empty() {
-                let header_str = headers
-                    .iter()
-                    .map(|(k, v)| format!("{k}: {v}\r\n"))
-                    .collect::<String>();
+                use std::fmt::Write as _;
+                let mut header_str = String::new();
+                for (k, v) in headers {
+                    let _ = write!(header_str, "{k}: {v}\r\n");
+                }
                 args.push("-headers".to_string());
                 args.push(header_str);
             }
@@ -418,7 +440,10 @@ pub async fn probe_keyframe_alignment(
                 size: Some("45000000".to_string()),
             }),
         };
-        return Ok(evaluate_keyframe_alignment(&mock_probe, MAX_KEYFRAME_DRIFT_MS));
+        return Ok(evaluate_keyframe_alignment(
+            &mock_probe,
+            MAX_KEYFRAME_DRIFT_MS,
+        ));
     }
 
     // 2. Real ffprobe process execution
@@ -489,6 +514,11 @@ pub async fn probe_keyframe_alignment(
 ///
 /// # Errors
 /// Returns `AppError` if time range is invalid, storage is full, FFmpeg fails, or process is cancelled.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 pub async fn execute_range_slice(
     req: RangeSliceRequest,
     cancel_token: Option<CancellationToken>,
@@ -516,8 +546,7 @@ pub async fn execute_range_slice(
     let target_dir = req
         .output_path
         .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+        .map_or_else(|| PathBuf::from("."), PathBuf::from);
 
     std::fs::create_dir_all(&target_dir).map_err(|e| {
         AppError::Storage(crate::error::StorageError::DirectoryCreationFailed {
@@ -546,7 +575,9 @@ pub async fn execute_range_slice(
 
         // Generate synthetic clip file if not present (simulating 30MB-80MB for 90s clip)
         // 90s at standard 4.5Mbps ~ 50MB
-        let simulated_size_bytes = ((target_duration / 90.0) * 50.0 * 1024.0 * 1024.0).clamp(30.0 * 1024.0 * 1024.0, 80.0 * 1024.0 * 1024.0) as u64;
+        let simulated_size_bytes = ((target_duration / 90.0) * 50.0 * 1024.0 * 1024.0)
+            .clamp(30.0 * 1024.0 * 1024.0, 80.0 * 1024.0 * 1024.0)
+            as u64;
 
         if !req.output_path.exists() {
             let file = std::fs::File::create(&req.output_path).map_err(|e| {
@@ -564,8 +595,12 @@ pub async fn execute_range_slice(
             clip_path: req.output_path.to_string_lossy().to_string(),
             duration_seconds: target_duration,
             file_size_bytes: simulated_size_bytes,
-            video_duration: probe_report.video_duration.or(Some(target_duration + 0.015)),
-            audio_duration: probe_report.audio_duration.or(Some(target_duration + 0.005)),
+            video_duration: probe_report
+                .video_duration
+                .or(Some(target_duration + 0.015)),
+            audio_duration: probe_report
+                .audio_duration
+                .or(Some(target_duration + 0.005)),
             stream_drift_ms: probe_report.drift_ms,
             keyframe_aligned: probe_report.is_aligned,
         });

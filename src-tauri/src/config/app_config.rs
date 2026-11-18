@@ -3,9 +3,9 @@
 //! Controls user preferences, AI service models, sidecar binaries,
 //! and buffer size constraints.
 
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use crate::error::ConfigError;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// Paths to external managed sidecar executables.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -100,7 +100,9 @@ impl AppConfig {
 #[must_use]
 pub fn resolve_config_file_path() -> PathBuf {
     if let Ok(appdata) = std::env::var("APPDATA") {
-        return PathBuf::from(appdata).join("NeuroClip").join("app_config.json");
+        return PathBuf::from(appdata)
+            .join("NeuroClip")
+            .join("app_config.json");
     }
     if let Ok(userprofile) = std::env::var("USERPROFILE") {
         return PathBuf::from(userprofile)

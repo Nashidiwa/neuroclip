@@ -110,9 +110,9 @@ pub fn query_disk_free_mb(path: &Path) -> Result<u64, StorageError> {
         let success = unsafe {
             windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
                 wide_path.as_ptr(),
-                (&mut free_bytes_available as *mut u64).cast(),
-                (&mut total_bytes as *mut u64).cast(),
-                (&mut total_free_bytes as *mut u64).cast(),
+                (&raw mut free_bytes_available).cast(),
+                (&raw mut total_bytes).cast(),
+                (&raw mut total_free_bytes).cast(),
             )
         };
 
@@ -221,10 +221,35 @@ pub fn query_disk_status(target_path: Option<&Path>) -> Result<DiskStatus, AppEr
     })
 }
 
+/// Check pre-flight disk space against the required 5GB threshold using an explicit free-space value.
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] with [`IngestError::DiskSpaceInsufficient`] if `free_space_mb < MIN_DISK_SPACE_MB`.
+pub fn check_disk_space_with_free_mb(
+    free_space_mb: u64,
+    cache_dir: &Path,
+) -> Result<DiskStatus, AppError> {
+    if free_space_mb >= MIN_DISK_SPACE_MB {
+        Ok(DiskStatus::new(
+            free_space_mb,
+            true,
+            cache_dir.to_string_lossy().to_string(),
+        ))
+    } else {
+        Err(AppError::Ingestion(IngestError::DiskSpaceInsufficient {
+            required_mb: MIN_DISK_SPACE_MB,
+            available_mb: free_space_mb,
+        }))
+    }
+}
+
 /// Check pre-flight disk space against the required 5GB threshold.
 ///
 /// - Returns `Ok(DiskStatus)` if `free_space_mb >= 5120`.
 /// - Returns `Err(AppError::Ingestion(IngestError::DiskSpaceInsufficient))` if `< 5120MB`.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if disk space cannot be queried, or [`AppError::Ingestion`] if below threshold.
 pub fn check_disk_space(target_path: Option<&Path>) -> Result<DiskStatus, AppError> {
     let status = query_disk_status(target_path)?;
     if status.is_sufficient {
@@ -297,22 +322,67 @@ pub fn validate_project_id(project_id: &str) -> Result<&str, StorageError> {
     Ok(trimmed)
 }
 
-/// Initialize root cache and projects storage directories on disk.
-pub fn init_storage_directories(custom_cache_dir: Option<&Path>) -> Result<StoragePaths, AppError> {
-    let cache_dir = match custom_cache_dir {
-        Some(p) => p.to_path_buf(),
-        None => resolve_cache_dir(),
-    };
-    let projects_dir = resolve_projects_dir();
+/// Validate a VOD identifier as a single safe path segment (no traversal, separators, or prefixes).
+///
+/// # Errors
+/// Returns [`StorageError::DirectoryCreationFailed`] if `vod_id` is empty, contains path separators,
+/// `..`, NUL bytes, drive prefixes/UNC/root components, or is an absolute path.
+pub fn validate_vod_id(vod_id: &str) -> Result<&str, StorageError> {
+    let trimmed = vod_id.trim();
+    if trimmed.is_empty() {
+        return Err(StorageError::DirectoryCreationFailed {
+            path: vod_id.to_string(),
+            details: "VOD ID cannot be empty".to_string(),
+        });
+    }
 
-    if let Err(e) = fs::create_dir_all(&cache_dir) {
+    let path = Path::new(trimmed);
+    let has_forbidden_chars = trimmed.contains(['/', '\\', ':', '\0']) || trimmed.contains("..");
+    let mut components = path.components();
+    let is_single_normal = matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none();
+
+    if has_forbidden_chars || path.is_absolute() || !is_single_normal {
+        return Err(StorageError::DirectoryCreationFailed {
+            path: vod_id.to_string(),
+            details: "VOD ID contains forbidden path traversal, separator, or drive prefix"
+                .to_string(),
+        });
+    }
+
+    Ok(trimmed)
+}
+
+/// Resolve the project directory for a validated VOD ID (`projects/<vod_id>` if present, else `cache/<vod_id>`).
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `vod_id` fails path-traversal validation.
+pub fn resolve_vod_project_dir(vod_id: &str) -> Result<PathBuf, AppError> {
+    let clean_id = validate_vod_id(vod_id).map_err(AppError::Storage)?;
+    let candidate = resolve_projects_dir().join(clean_id);
+    if candidate.exists() {
+        Ok(candidate)
+    } else {
+        Ok(resolve_cache_dir().join(clean_id))
+    }
+}
+
+/// Initialize root cache and projects storage directories on disk using explicit roots.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if creating either directory fails.
+pub fn init_storage_directories_with_roots(
+    cache_dir: &Path,
+    projects_dir: &Path,
+) -> Result<StoragePaths, AppError> {
+    if let Err(e) = fs::create_dir_all(cache_dir) {
         return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
             path: cache_dir.to_string_lossy().to_string(),
             details: e.to_string(),
         }));
     }
 
-    if let Err(e) = fs::create_dir_all(&projects_dir) {
+    if let Err(e) = fs::create_dir_all(projects_dir) {
         return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
             path: projects_dir.to_string_lossy().to_string(),
             details: e.to_string(),
@@ -320,9 +390,23 @@ pub fn init_storage_directories(custom_cache_dir: Option<&Path>) -> Result<Stora
     }
 
     Ok(StoragePaths {
-        cache_dir,
-        projects_dir,
+        cache_dir: cache_dir.to_path_buf(),
+        projects_dir: projects_dir.to_path_buf(),
     })
+}
+
+/// Initialize root cache and projects storage directories on disk.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if creating either directory fails.
+pub fn init_storage_directories(custom_cache_dir: Option<&Path>) -> Result<StoragePaths, AppError> {
+    let cache_dir = match custom_cache_dir {
+        Some(p) => p.to_path_buf(),
+        None => resolve_cache_dir(),
+    };
+    let projects_dir = resolve_projects_dir();
+
+    init_storage_directories_with_roots(&cache_dir, &projects_dir)
 }
 
 /// Alias for init_storage_directories with default cache path.
@@ -380,20 +464,14 @@ pub fn clean_expired_cache(
     let max_age_secs = max_age_days.saturating_mul(24 * 3600);
 
     for entry_res in read_dir {
-        let entry = match entry_res {
-            Ok(e) => e,
-            Err(_) => {
-                stats.errors_count += 1;
-                continue;
-            }
+        let Ok(entry) = entry_res else {
+            stats.errors_count += 1;
+            continue;
         };
 
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft,
-            Err(_) => {
-                stats.errors_count += 1;
-                continue;
-            }
+        let Ok(file_type) = entry.file_type() else {
+            stats.errors_count += 1;
+            continue;
         };
 
         if !file_type.is_file() {
@@ -401,9 +479,12 @@ pub fn clean_expired_cache(
         }
 
         let file_path = entry.path();
-        let extension = match file_path.extension().and_then(|ext| ext.to_str()) {
-            Some(ext) => ext.to_ascii_lowercase(),
-            None => continue,
+        let Some(extension) = file_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(str::to_ascii_lowercase)
+        else {
+            continue;
         };
 
         // SAFETY INVARIANT: Strictly protect project files and media outputs
@@ -416,20 +497,14 @@ pub fn clean_expired_cache(
             continue;
         }
 
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => {
-                stats.errors_count += 1;
-                continue;
-            }
+        let Ok(metadata) = entry.metadata() else {
+            stats.errors_count += 1;
+            continue;
         };
 
-        let modified = match metadata.modified() {
-            Ok(m) => m,
-            Err(_) => {
-                // If timestamp cannot be read safely, preserve the file
-                continue;
-            }
+        let Ok(modified) = metadata.modified() else {
+            // If timestamp cannot be read safely, preserve the file
+            continue;
         };
 
         let age_secs = match now.duration_since(modified) {
@@ -454,15 +529,57 @@ pub fn clean_expired_cache(
 }
 
 #[cfg(test)]
+pub(crate) mod test_env {
+    use std::ffi::OsString;
+
+    pub(crate) static ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    pub(crate) struct ScopedEnvVar {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl ScopedEnvVar {
+        pub(crate) fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+
+        pub(crate) fn remove(key: &'static str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for ScopedEnvVar {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(val) => std::env::set_var(self.key, val),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 pub mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let seq = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}_{}_{seq}", std::process::id()))
+    }
 
     #[test]
     fn test_check_disk_space_happy_path_20gb() {
-        std::env::set_var("NEUROCLIP_MOCK_DISK_FREE_MB", "20480");
-        let result = check_disk_space(None);
-        std::env::remove_var("NEUROCLIP_MOCK_DISK_FREE_MB");
+        let temp_cache = unique_temp_dir("neuroclip_disk_ok");
+        let result = check_disk_space_with_free_mb(20480, &temp_cache);
 
         assert!(result.is_ok());
         if let Ok(status) = result {
@@ -474,9 +591,8 @@ pub mod tests {
 
     #[test]
     fn test_check_disk_space_insufficient_3_2gb() {
-        std::env::set_var("NEUROCLIP_MOCK_DISK_FREE_MB", "3276");
-        let result = check_disk_space(None);
-        std::env::remove_var("NEUROCLIP_MOCK_DISK_FREE_MB");
+        let temp_cache = unique_temp_dir("neuroclip_disk_low");
+        let result = check_disk_space_with_free_mb(3276, &temp_cache);
 
         assert!(result.is_err());
         if let Err(AppError::Ingestion(IngestError::DiskSpaceInsufficient {
@@ -512,18 +628,74 @@ pub mod tests {
     }
 
     #[test]
-    fn test_initialize_storage_directories() {
-        let temp_root =
-            std::env::temp_dir().join(format!("neuroclip_test_storage_{}", std::process::id()));
-        let custom_cache = temp_root.join("cache");
-        let _ = fs::create_dir_all(&temp_root);
+    fn test_resolve_vod_project_dir_rejects_traversal_and_prefixes() {
+        let invalid_ids = [
+            "",
+            "   ",
+            ".",
+            "..",
+            "../evil",
+            "a/b",
+            "a\\b",
+            "/etc/passwd",
+            "\\Windows",
+            "C:evil",
+            "C:\\evil",
+            "\\\\server\\share",
+            "\\\\?\\C:\\evil",
+            "vod\0id",
+        ];
 
-        std::env::set_var(
-            "NEUROCLIP_PROJECTS_DIR",
-            temp_root.join("projects").to_string_lossy().to_string(),
+        for bad in invalid_ids {
+            let res = resolve_vod_project_dir(bad);
+            assert!(
+                matches!(
+                    res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "Expected DirectoryCreationFailed for invalid vod_id {bad:?}, got {res:?}"
+            );
+        }
+
+        let _env_guard = test_env::ENV_LOCK.blocking_lock();
+        let temp_root = unique_temp_dir("neuroclip_vod_resolve");
+        let projects_root = temp_root.join("projects");
+        let cache_root = temp_root.join("cache");
+        let existing_project = projects_root.join("123456789");
+        let _ = fs::create_dir_all(&existing_project);
+        let _ = fs::create_dir_all(&cache_root);
+
+        let _proj_env =
+            test_env::ScopedEnvVar::set("NEUROCLIP_PROJECTS_DIR", &projects_root.to_string_lossy());
+        let _cache_env =
+            test_env::ScopedEnvVar::set("NEUROCLIP_CACHE_DIR", &cache_root.to_string_lossy());
+
+        assert_eq!(
+            resolve_vod_project_dir("123456789").unwrap(),
+            existing_project
+        );
+        assert_eq!(
+            resolve_vod_project_dir("dQw4w9WgXcQ").unwrap(),
+            cache_root.join("dQw4w9WgXcQ")
+        );
+        assert_eq!(
+            resolve_vod_project_dir("local_clip_1a2b3c4d").unwrap(),
+            cache_root.join("local_clip_1a2b3c4d")
         );
 
-        let paths = init_storage_directories(Some(&custom_cache));
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn test_initialize_storage_directories() {
+        let temp_root = unique_temp_dir("neuroclip_test_storage");
+        let custom_cache = temp_root.join("cache");
+        let custom_projects = temp_root.join("projects");
+        let _ = fs::create_dir_all(&temp_root);
+
+        let paths = init_storage_directories_with_roots(&custom_cache, &custom_projects);
         assert!(paths.is_ok());
         if let Ok(p) = paths {
             assert!(p.cache_dir.exists());
@@ -531,13 +703,11 @@ pub mod tests {
         }
 
         let _ = fs::remove_dir_all(&temp_root);
-        std::env::remove_var("NEUROCLIP_PROJECTS_DIR");
     }
 
     #[test]
     fn test_cache_cleanup_preserves_json_and_deletes_old_tmp_wav() {
-        let temp_cache =
-            std::env::temp_dir().join(format!("neuroclip_test_clean_{}", std::process::id()));
+        let temp_cache = unique_temp_dir("neuroclip_test_clean");
         let _ = fs::create_dir_all(&temp_cache);
 
         let old_tmp = temp_cache.join("stream_slice_01.tmp");
@@ -574,6 +744,7 @@ pub mod tests {
 
     #[test]
     fn test_preflight_sla_performance() {
+        let _env_guard = test_env::ENV_LOCK.blocking_lock();
         let start = std::time::Instant::now();
         let _ = query_disk_status(None);
         let elapsed = start.elapsed();

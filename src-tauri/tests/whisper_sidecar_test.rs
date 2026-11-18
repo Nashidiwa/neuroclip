@@ -2,13 +2,11 @@
 
 //! Tests for Whisper.cpp sidecar process supervisor and lifecycle management (TASK-M4-08).
 
+use neuroclip_lib::ingestion::streamer::assign_child_to_job_guard;
+use neuroclip_lib::stt::{run_whisper_transcription, WhisperSidecarConfig};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use neuroclip_lib::ingestion::streamer::assign_child_to_job_guard;
-use neuroclip_lib::stt::{
-    run_whisper_transcription, WhisperSidecarConfig,
-};
 
 #[tokio::test]
 async fn test_whisper_mock_runner_execution() {
@@ -56,7 +54,10 @@ async fn test_whisper_mock_runner_execution() {
     }
 
     // Set mock env var
-    std::env::set_var("NEUROCLIP_MOCK_WHISPER_OUTPUT", temp_mock_json.to_string_lossy().to_string());
+    std::env::set_var(
+        "NEUROCLIP_MOCK_WHISPER_OUTPUT",
+        temp_mock_json.to_string_lossy().to_string(),
+    );
 
     let config = WhisperSidecarConfig {
         binary_path: None,
@@ -83,7 +84,10 @@ async fn test_whisper_mock_runner_execution() {
 
 #[tokio::test]
 async fn test_whisper_mock_error_triggers_sidecar_execution_failed() {
-    std::env::set_var("NEUROCLIP_MOCK_WHISPER_ERROR", "Simulated GPU Out Of Memory");
+    std::env::set_var(
+        "NEUROCLIP_MOCK_WHISPER_ERROR",
+        "Simulated GPU Out Of Memory",
+    );
 
     let config = WhisperSidecarConfig::default();
     let fake_audio = PathBuf::from("fake_audio.wav");

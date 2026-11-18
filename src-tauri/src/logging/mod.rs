@@ -13,10 +13,10 @@
 pub mod rotation;
 pub mod secrets;
 
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use serde::{Deserialize, Serialize};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
@@ -95,6 +95,15 @@ pub fn init_logging() -> Result<(), String> {
     init_logging_with_dir(&log_dir)
 }
 
+/// Default tracing filter directive enabling debug logs for `neuroclip_lib` and `neuroclip`.
+pub const DEFAULT_LOG_FILTER: &str = "info,neuroclip_lib=debug,neuroclip=debug";
+
+/// Build the default `EnvFilter` from `RUST_LOG` or fall back to [`DEFAULT_LOG_FILTER`].
+#[must_use]
+pub fn build_default_env_filter() -> EnvFilter {
+    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_LOG_FILTER))
+}
+
 /// Initialize the global logging subsystem targeting a specific directory.
 ///
 /// # Errors
@@ -122,8 +131,7 @@ pub fn init_logging_with_dir(log_dir: &Path) -> Result<(), String> {
     let _ = LOG_GUARD.set(guard);
 
     // 4. Configure EnvFilter with sensible defaults
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,neuroclip=debug"));
+    let env_filter = build_default_env_filter();
 
     // 5. Build structured file logging layer (Release & Debug)
     let file_layer = tracing_subscriber::fmt::layer()
@@ -159,13 +167,36 @@ pub fn init_logging_with_dir(log_dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
 
     #[test]
     fn test_resolve_log_dir_override() {
-        std::env::set_var("NEUROCLIP_LOG_DIR", "C:\\test\\neuroclip_isolated_logs");
+        let _env_guard = ENV_LOCK.blocking_lock();
+        let _log_env = ScopedEnvVar::set("NEUROCLIP_LOG_DIR", "C:\\test\\neuroclip_isolated_logs");
         let dir = resolve_log_dir();
         assert_eq!(dir, PathBuf::from("C:\\test\\neuroclip_isolated_logs"));
-        std::env::remove_var("NEUROCLIP_LOG_DIR");
+    }
+
+    #[test]
+    fn test_default_env_filter_enables_neuroclip_lib_debug() {
+        let _env_guard = ENV_LOCK.blocking_lock();
+        let _rust_log_env = ScopedEnvVar::remove("RUST_LOG");
+
+        let rendered_constant = EnvFilter::new(DEFAULT_LOG_FILTER).to_string();
+        assert!(
+            rendered_constant.contains("neuroclip_lib=debug"),
+            "DEFAULT_LOG_FILTER must enable neuroclip_lib=debug, got: {rendered_constant}"
+        );
+        assert!(
+            rendered_constant.contains("neuroclip=debug"),
+            "DEFAULT_LOG_FILTER must enable neuroclip=debug, got: {rendered_constant}"
+        );
+
+        let built = build_default_env_filter().to_string();
+        assert!(
+            built.contains("neuroclip_lib=debug"),
+            "build_default_env_filter must enable neuroclip_lib=debug, got: {built}"
+        );
     }
 
     #[test]

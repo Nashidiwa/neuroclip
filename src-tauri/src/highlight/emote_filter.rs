@@ -3,6 +3,12 @@
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>),
 //! `docs/ARCHITECTURE.md` §4.3 & §5.3, and `docs/TASK_BOARD.md` §TASK-M4-10.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -295,6 +301,7 @@ struct EmoteBucketAcc<'a> {
 /// # Errors
 /// Returns `AppError::Highlight(HighlightError::ChatParsingFailed)` if parameters are invalid
 /// or bucket allocation exceeds limits.
+#[allow(clippy::too_many_lines)]
 pub fn compute_emote_density_series(
     events: &[ChatEvent],
     dict: Option<&SwarmDictionary>,
@@ -302,26 +309,25 @@ pub fn compute_emote_density_series(
     vod_duration_sec: Option<f64>,
 ) -> Result<Vec<EmoteDensityPoint>, AppError> {
     if !bucket_width_sec.is_finite() || bucket_width_sec <= 0.0 || bucket_width_sec > 3600.0 {
-        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-            "Invalid bucket width: {bucket_width_sec}s (must be > 0.0 and <= 3600.0)"
-        ))));
+        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+            format!("Invalid bucket width: {bucket_width_sec}s (must be > 0.0 and <= 3600.0)"),
+        )));
     }
 
     if let Some(dur) = vod_duration_sec {
         if !dur.is_finite() || dur < 0.0 || dur > MAX_CHAT_TIMESTAMP_SEC {
-            return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-                "Invalid VOD duration: {dur}s"
-            ))));
+            return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+                format!("Invalid VOD duration: {dur}s"),
+            )));
         }
     }
 
     let default_dict;
-    let active_dict = match dict {
-        Some(d) => d,
-        None => {
-            default_dict = default_swarm_dictionary();
-            &default_dict
-        }
+    let active_dict = if let Some(d) = dict {
+        d
+    } else {
+        default_dict = default_swarm_dictionary();
+        &default_dict
     };
 
     // Pass 1: Find maximum timestamp without extra vector allocations
@@ -366,9 +372,11 @@ pub fn compute_emote_density_series(
     };
 
     if total_buckets > MAX_ALLOWED_BUCKETS {
-        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+            format!(
             "Calculated bucket count {total_buckets} exceeds maximum limit of {MAX_ALLOWED_BUCKETS}"
-        ))));
+        ),
+        )));
     }
 
     if total_buckets == 0 {
@@ -402,8 +410,7 @@ pub fn compute_emote_density_series(
                         &mut acc.emote_count,
                         &mut acc.weighted_sum,
                         |canonical_name| {
-                            if let Some(counter) =
-                                acc.canonical_frequencies.get_mut(canonical_name)
+                            if let Some(counter) = acc.canonical_frequencies.get_mut(canonical_name)
                             {
                                 *counter = counter.saturating_add(1);
                             } else {
@@ -525,46 +532,45 @@ pub fn compute_emote_density_series_from_file<P: AsRef<Path>>(
     } else {
         let container: Result<crate::ingestion::ChatEventsContainer, _> =
             serde_json::from_reader(reader);
-        match container {
-            Ok(c) => c.events,
-            Err(_) => {
-                let file_retry = File::open(path).map_err(|e| {
+        if let Ok(c) = container {
+            c.events
+        } else {
+            let file_retry = File::open(path).map_err(|e| {
+                AppError::Storage(StorageError::DiskCheckFailed {
+                    path: path.display().to_string(),
+                    message: e.to_string(),
+                })
+            })?;
+            if let Ok(events) =
+                serde_json::from_reader::<_, Vec<ChatEvent>>(BufReader::new(file_retry))
+            {
+                events
+            } else {
+                let file_retry2 = File::open(path).map_err(|e| {
                     AppError::Storage(StorageError::DiskCheckFailed {
                         path: path.display().to_string(),
                         message: e.to_string(),
                     })
                 })?;
-                if let Ok(events) =
-                    serde_json::from_reader::<_, Vec<ChatEvent>>(BufReader::new(file_retry))
-                {
-                    events
-                } else {
-                    let file_retry2 = File::open(path).map_err(|e| {
-                        AppError::Storage(StorageError::DiskCheckFailed {
-                            path: path.display().to_string(),
-                            message: e.to_string(),
-                        })
-                    })?;
-                    let raw_items = serde_json::from_reader::<_, Vec<RawChatEventFileItem>>(
-                        BufReader::new(file_retry2),
-                    )
-                    .map_err(|e| {
-                        AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-                            "Failed to parse chat events JSON: {e}"
-                        )))
-                    })?;
-                    raw_items
-                        .into_iter()
-                        .map(|raw| ChatEvent {
-                            timestamp_sec: raw.timestamp_sec,
-                            author: raw.author,
-                            message: raw.message,
-                            badges: Vec::new(),
-                            emotes_detected: Vec::new(),
-                            is_swarm_emote: false,
-                        })
-                        .collect()
-                }
+                let raw_items = serde_json::from_reader::<_, Vec<RawChatEventFileItem>>(
+                    BufReader::new(file_retry2),
+                )
+                .map_err(|e| {
+                    AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+                        "Failed to parse chat events JSON: {e}"
+                    )))
+                })?;
+                raw_items
+                    .into_iter()
+                    .map(|raw| ChatEvent {
+                        timestamp_sec: raw.timestamp_sec,
+                        author: raw.author,
+                        message: raw.message,
+                        badges: Vec::new(),
+                        emotes_detected: Vec::new(),
+                        is_swarm_emote: false,
+                    })
+                    .collect()
             }
         }
     };
@@ -673,7 +679,7 @@ pub mod tests {
         // Generate 50,000 messages (microbenchmark in unit test)
         let mut events = Vec::with_capacity(50_000);
         for i in 0..50_000 {
-            let ts = (i as f64) * 0.05; // 20 msgs per second
+            let ts = f64::from(i) * 0.05; // 20 msgs per second
             let author = format!("user_{}", i % 500);
             let msg = match i % 5 {
                 0 => "KEKW look at that tutel 💀",

@@ -16,8 +16,8 @@ pub use cluster::{
     calculate_clip_bounds, cluster_and_deduplicate, compute_overlap_ratio,
     determine_primary_reason, generate_clusters_from_fused_series, HighlightCluster,
     HighlightClustersContainer, CLUSTER_MERGE_DISTANCE_SEC, DEFAULT_MAX_CLUSTERS,
-    DEFAULT_POST_ROLL_SEC, DEFAULT_PRE_ROLL_SEC, DEFAULT_TOTAL_PRE_OFFSET_SEC,
-    MAX_OVERLAP_RATIO, MAX_PRE_ROLL_SEC, MIN_CLIP_DURATION_SEC, STREAM_LATENCY_COMPENSATION_SEC,
+    DEFAULT_POST_ROLL_SEC, DEFAULT_PRE_ROLL_SEC, DEFAULT_TOTAL_PRE_OFFSET_SEC, MAX_OVERLAP_RATIO,
+    MAX_PRE_ROLL_SEC, MIN_CLIP_DURATION_SEC, STREAM_LATENCY_COMPENSATION_SEC,
 };
 
 pub use fusion::{
@@ -52,7 +52,8 @@ pub use emote_filter::{
 pub use energy_analyzer::{
     analyze_audio_samples, analyze_audio_samples_default, analyze_wav_file, detect_energy_peaks,
     detect_energy_peaks_default, process_pcm_reader, AudioRmsPoint, AudioRmsSeriesResponse,
-    EnergyAnalyzerConfig, EnergyBaselineStats, DEFAULT_BASELINE_WINDOW_SEC as DEFAULT_AUDIO_BASELINE_WINDOW_SEC,
+    EnergyAnalyzerConfig, EnergyBaselineStats,
+    DEFAULT_BASELINE_WINDOW_SEC as DEFAULT_AUDIO_BASELINE_WINDOW_SEC,
     DEFAULT_PEAK_DB_SPIKE_THRESHOLD, DEFAULT_PEAK_SIGMA_THRESHOLD, EPSILON_RMS, PEAK_DB_THRESHOLD,
     PEAK_SIGMA_THRESHOLD,
 };
@@ -62,8 +63,8 @@ pub use swarm_dict::{
 };
 
 pub use zscore::{
-    calculate_adjusted_zscore, compute_chat_velocity_series,
-    compute_chat_velocity_series_default, compute_chat_velocity_series_from_events,
-    compute_chat_velocity_series_from_file, compute_zscore, ChatVelocityPoint,
-    DEFAULT_BASELINE_WINDOW_SEC, MESSAGE_FLOOR_THRESHOLD, SMOOTHING_EPSILON,
+    calculate_adjusted_zscore, compute_chat_velocity_series, compute_chat_velocity_series_default,
+    compute_chat_velocity_series_from_events, compute_chat_velocity_series_from_file,
+    compute_zscore, ChatVelocityPoint, DEFAULT_BASELINE_WINDOW_SEC, MESSAGE_FLOOR_THRESHOLD,
+    SMOOTHING_EPSILON,
 };

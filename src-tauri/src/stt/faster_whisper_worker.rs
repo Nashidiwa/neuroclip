@@ -4,9 +4,9 @@
 //! CUDA Out-of-Memory crashes (`ADR-001`, `ADR-007`, `ERR-02`), Windows Job Object supervision,
 //! and 100% homomorphic output parsing to Schema 5.5 (`TranscriptSegmentsContainer`).
 
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::config::HardwareProfile;
@@ -171,8 +171,7 @@ pub fn estimate_vram_usage_mb(model: &str, quantization: &str) -> u64 {
     };
 
     match lower_quant.as_str() {
-        "int8" | "int8_float16" => base_mb,
-        "float16" => ((base_mb as f64) * 1.6) as u64,
+        "float16" => (base_mb * 16) / 10,
         "float32" | "default" => base_mb * 2,
         _ => base_mb,
     }
@@ -225,7 +224,7 @@ pub fn evaluate_hardware_guardrail(
         match policy {
             GuardrailPolicy::StrictReject => {
                 return Err(AppError::Stt(SttError::InsufficientVram {
-                    available_mb: vram_mb as u32,
+                    available_mb: u32::try_from(vram_mb).unwrap_or(u32::MAX),
                 }));
             }
             GuardrailPolicy::AutoDowngrade => {
@@ -246,7 +245,7 @@ pub fn evaluate_hardware_guardrail(
             match policy {
                 GuardrailPolicy::StrictReject => {
                     return Err(AppError::Stt(SttError::InsufficientVram {
-                        available_mb: vram_mb as u32,
+                        available_mb: u32::try_from(vram_mb).unwrap_or(u32::MAX),
                     }));
                 }
                 GuardrailPolicy::AutoDowngrade => {
@@ -524,9 +523,17 @@ pub fn resolve_faster_whisper_binary() -> Result<PathBuf, AppError> {
     }
 
     let probe_names = if cfg!(windows) {
-        vec!["faster-whisper-worker.exe", "faster_whisper_worker.exe", "whisper-ct2.exe"]
+        vec![
+            "faster-whisper-worker.exe",
+            "faster_whisper_worker.exe",
+            "whisper-ct2.exe",
+        ]
     } else {
-        vec!["faster-whisper-worker", "faster_whisper_worker", "whisper-ct2"]
+        vec![
+            "faster-whisper-worker",
+            "faster_whisper_worker",
+            "whisper-ct2",
+        ]
     };
 
     if let Ok(path_var) = std::env::var("PATH") {
@@ -559,6 +566,7 @@ fn sanitize_positive(val: f64) -> f64 {
 ///
 /// Guaranteed 100% homomorphic to Groq Cloud API output (`IT-16.1`).
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn map_faster_whisper_to_container(
     clip_id: &str,
     response: FasterWhisperVerboseJsonResponse,
@@ -691,11 +699,12 @@ pub fn parse_faster_whisper_json(
     json_str: &str,
     clip_id: &str,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
-    let response: FasterWhisperVerboseJsonResponse = serde_json::from_str(json_str).map_err(|e| {
-        AppError::Stt(SttError::ParserFailed(format!(
-            "Failed parsing Faster-Whisper verbose_json output: {e}"
-        )))
-    })?;
+    let response: FasterWhisperVerboseJsonResponse =
+        serde_json::from_str(json_str).map_err(|e| {
+            AppError::Stt(SttError::ParserFailed(format!(
+                "Failed parsing Faster-Whisper verbose_json output: {e}"
+            )))
+        })?;
     Ok(map_faster_whisper_to_container(clip_id, response, 0.0))
 }
 
@@ -724,6 +733,7 @@ fn parse_faster_whisper_progress_line(line: &str) -> Option<f64> {
 /// - Streaming progress callbacks via `stt:progress`
 /// - Mock bypass support via `NEUROCLIP_MOCK_FASTER_WHISPER_OUTPUT`,
 ///   `NEUROCLIP_MOCK_FASTER_WHISPER_ERROR`, and `NEUROCLIP_MOCK_CUDA_OOM`.
+#[allow(clippy::too_many_lines)]
 pub async fn run_faster_whisper_worker(
     clip_id: &str,
     audio_path: &Path,
@@ -740,7 +750,10 @@ pub async fn run_faster_whisper_worker(
     // 2. Check for simulated mock error
     if let Ok(err_msg) = std::env::var("NEUROCLIP_MOCK_FASTER_WHISPER_ERROR") {
         let lower = err_msg.to_ascii_lowercase();
-        if lower.contains("out of memory") || lower.contains("cuda oom") || lower.contains("cuda out of memory") {
+        if lower.contains("out of memory")
+            || lower.contains("cuda oom")
+            || lower.contains("cuda out of memory")
+        {
             return Err(AppError::Stt(SttError::CudaOom(err_msg)));
         }
         return Err(AppError::Stt(SttError::SidecarExecutionFailed {
@@ -855,7 +868,10 @@ pub async fn run_faster_whisper_worker(
 
     if !status.success() {
         let lower = captured_stderr.to_ascii_lowercase();
-        if lower.contains("out of memory") || lower.contains("cuda oom") || lower.contains("cuda out of memory") {
+        if lower.contains("out of memory")
+            || lower.contains("cuda oom")
+            || lower.contains("cuda out of memory")
+        {
             return Err(AppError::Stt(SttError::CudaOom(captured_stderr)));
         }
 
@@ -882,5 +898,18 @@ pub async fn run_faster_whisper_worker(
 
     let _ = std::fs::remove_file(&output_json);
 
-    parse_faster_whisper_json(&json_content, clip_id)
+    let container = parse_faster_whisper_json(&json_content, clip_id)?;
+
+    if let Some(ref cb) = on_progress {
+        cb(SttProgressPayload {
+            task_id: clip_id.to_string(),
+            stage: "completed".to_string(),
+            percent: 100.0,
+            eta_sec: Some(0.0),
+            current_chunk: 1,
+            total_chunks: 1,
+        });
+    }
+
+    Ok(container)
 }

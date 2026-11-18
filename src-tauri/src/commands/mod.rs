@@ -44,6 +44,13 @@ pub use log_cmd::{
     __tauri_command_name_clear_logs, __tauri_command_name_get_recent_logs,
     __tauri_command_name_log_frontend_event, clear_logs, get_recent_logs, log_frontend_event,
 };
+pub use slice_cmd::{
+    __cmd__cancel_slice_video_segment, __cmd__slice_video_segment,
+    __tauri_command_name_cancel_slice_video_segment, __tauri_command_name_slice_video_segment,
+    cancel_slice_task_token, cancel_slice_video_segment, register_slice_task_token,
+    resolve_vod_project_dir, slice_video_segment, slice_video_segment_internal,
+    unregister_slice_task_token,
+};
 pub use storage_cmd::{
     __cmd__check_preflight_storage, __cmd__clean_expired_cache, __cmd__initialize_project,
     __cmd__initialize_storage, __tauri_command_name_check_preflight_storage,
@@ -53,20 +60,14 @@ pub use storage_cmd::{
 };
 pub use stt_cmd::{
     __cmd__export_subtitles_ass, __cmd__export_subtitles_srt,
-    __cmd__start_whisper_transcription, __cmd__transcribe_highlight_clip,
-    __cmd__verify_stt_model, __tauri_command_name_export_subtitles_ass,
-    __tauri_command_name_export_subtitles_srt,
+    __cmd__start_faster_whisper_transcription, __cmd__start_whisper_transcription,
+    __cmd__transcribe_highlight_clip, __cmd__verify_stt_model,
+    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_srt,
+    __tauri_command_name_start_faster_whisper_transcription,
     __tauri_command_name_start_whisper_transcription,
     __tauri_command_name_transcribe_highlight_clip, __tauri_command_name_verify_stt_model,
-    export_subtitles_ass, export_subtitles_srt, start_whisper_transcription,
-    transcribe_highlight_clip, verify_stt_model,
-};
-pub use slice_cmd::{
-    __cmd__cancel_slice_video_segment, __cmd__slice_video_segment,
-    __tauri_command_name_cancel_slice_video_segment, __tauri_command_name_slice_video_segment,
-    cancel_slice_task_token, cancel_slice_video_segment, register_slice_task_token,
-    resolve_vod_project_dir, slice_video_segment, slice_video_segment_internal,
-    unregister_slice_task_token,
+    export_subtitles_ass, export_subtitles_srt, start_faster_whisper_transcription,
+    start_whisper_transcription, transcribe_highlight_clip, verify_stt_model,
 };
 pub use translation_cmd::{
     __cmd__test_gemini_connection, __cmd__translate_vietsub, __cmd__update_speaker_role,

@@ -16,7 +16,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use neuroclip_lib::config::{CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode};
+use neuroclip_lib::config::{
+    CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode,
+};
 use neuroclip_lib::error::{codes, AppError, SttError};
 use neuroclip_lib::ingestion::streamer::assign_child_to_job_guard;
 use neuroclip_lib::stt::groq_client::{map_verbose_json_to_container, GroqVerboseJsonResponse};
@@ -26,10 +28,10 @@ use neuroclip_lib::stt::{
     enforce_hardware_guardrail, estimate_vram_usage_mb, evaluate_hardware_guardrail,
     evaluate_hardware_guardrail_from_profile, evaluate_hardware_guardrail_from_profile_file,
     is_whisper_large, map_faster_whisper_to_container, parse_faster_whisper_json,
-    resolve_faster_whisper_binary, run_faster_whisper_worker, verify_model,
-    FasterWhisperConfig, FasterWhisperVerboseJsonResponse, GuardrailPolicy,
-    DEFAULT_FASTER_WHISPER_DEVICE, DEFAULT_FASTER_WHISPER_MODEL,
-    DEFAULT_FASTER_WHISPER_QUANTIZATION, MAX_INT8_VRAM_CAP_MB, MIN_LARGE_VRAM_MB,
+    resolve_faster_whisper_binary, run_faster_whisper_worker, verify_model, FasterWhisperConfig,
+    FasterWhisperVerboseJsonResponse, GuardrailPolicy, DEFAULT_FASTER_WHISPER_DEVICE,
+    DEFAULT_FASTER_WHISPER_MODEL, DEFAULT_FASTER_WHISPER_QUANTIZATION, MAX_INT8_VRAM_CAP_MB,
+    MIN_LARGE_VRAM_MB,
 };
 
 // ============================================================================
@@ -42,7 +44,14 @@ fn test_ut_16_1_command_construction_default() {
     let args = build_worker_command_args(None, None, &config);
 
     // Assert mandatory CTranslate2 parameter triad: --model medium --quantization int8 --device auto
-    let triad = ["--model", "medium", "--quantization", "int8", "--device", "auto"];
+    let triad = [
+        "--model",
+        "medium",
+        "--quantization",
+        "int8",
+        "--device",
+        "auto",
+    ];
     for i in 0..triad.len() {
         assert_eq!(args[i], triad[i], "Mismatch at parameter index {i}");
     }
@@ -96,7 +105,10 @@ fn test_ut_16_1_command_construction_alias_parity() {
     let config = FasterWhisperConfig::default();
     let args1 = build_worker_command_args(None, None, &config);
     let args2 = build_faster_whisper_command_args(None, None, &config);
-    assert_eq!(args1, args2, "build_worker_command_args and build_faster_whisper_command_args must be identical");
+    assert_eq!(
+        args1, args2,
+        "build_worker_command_args and build_faster_whisper_command_args must be identical"
+    );
 }
 
 // ============================================================================
@@ -115,7 +127,10 @@ fn test_ut_16_2_guardrail_reject_large_when_vram_under_2500mb() {
         GuardrailPolicy::StrictReject,
     );
 
-    assert!(res.is_err(), "Expected StrictReject to return error for VRAM < 2500MB");
+    assert!(
+        res.is_err(),
+        "Expected StrictReject to return error for VRAM < 2500MB"
+    );
     let err = res.unwrap_err();
     assert_eq!(
         err.code(),
@@ -143,8 +158,14 @@ fn test_ut_16_2_guardrail_auto_downgrade_large_to_medium_int8() {
 
     assert!(res.is_ok(), "AutoDowngrade should succeed without error");
     let decision = res.unwrap();
-    assert_eq!(decision.effective_model, "medium", "Large model must be auto-downgraded to medium");
-    assert_eq!(decision.effective_quantization, "int8", "Must enforce INT8 quantization");
+    assert_eq!(
+        decision.effective_model, "medium",
+        "Large model must be auto-downgraded to medium"
+    );
+    assert_eq!(
+        decision.effective_quantization, "int8",
+        "Must enforce INT8 quantization"
+    );
     assert!(decision.was_downgraded, "was_downgraded flag must be true");
     assert!(decision.reason.is_some(), "Must record downgrade reason");
 
@@ -167,7 +188,10 @@ fn test_ut_16_2_guardrail_pass_large_when_vram_sufficient() {
         GuardrailPolicy::StrictReject,
     );
 
-    assert!(res.is_ok(), "Large model must be allowed when VRAM >= 2500MB");
+    assert!(
+        res.is_ok(),
+        "Large model must be allowed when VRAM >= 2500MB"
+    );
     let decision = res.unwrap();
     assert_eq!(decision.effective_model, "large-v3");
     assert_eq!(decision.effective_device, "cuda");
@@ -188,13 +212,17 @@ fn test_ut_16_2_guardrail_non_cuda_fallback_cpu() {
 
     assert!(res.is_ok());
     let decision = res.unwrap();
-    assert_eq!(decision.effective_device, "cpu", "Must fallback to CPU when CUDA is unsupported");
+    assert_eq!(
+        decision.effective_device, "cpu",
+        "Must fallback to CPU when CUDA is unsupported"
+    );
     assert!(decision.was_downgraded);
 }
 
 #[test]
 fn test_ut_16_2_guardrail_from_profile_file() {
-    let temp_profile = std::env::temp_dir().join(format!("test_hw_profile_{}.json", std::process::id()));
+    let temp_profile =
+        std::env::temp_dir().join(format!("test_hw_profile_{}.json", std::process::id()));
 
     let profile = HardwareProfile {
         cpu_info: CpuInfo {
@@ -283,7 +311,10 @@ fn test_default_constants() {
 fn test_binary_resolution_failure_path() {
     std::env::remove_var("NEUROCLIP_FASTER_WHISPER_PATH");
     let res = resolve_faster_whisper_binary();
-    if let Err(AppError::Sidecar(neuroclip_lib::error::SidecarError::BinaryNotFound { name, .. })) = res {
+    if let Err(AppError::Sidecar(neuroclip_lib::error::SidecarError::BinaryNotFound {
+        name, ..
+    })) = res
+    {
         assert_eq!(name, "faster-whisper-worker");
     }
 }
@@ -482,7 +513,10 @@ async fn test_ed_16_1_simulated_cuda_oom_error_handling() {
 
 #[tokio::test]
 async fn test_ed_16_1_simulated_error_handling_sidecar_failure() {
-    std::env::set_var("NEUROCLIP_MOCK_FASTER_WHISPER_ERROR", "CUDA out of memory: tried to allocate 2.5GiB");
+    std::env::set_var(
+        "NEUROCLIP_MOCK_FASTER_WHISPER_ERROR",
+        "CUDA out of memory: tried to allocate 2.5GiB",
+    );
 
     let config = FasterWhisperConfig::default();
     let fake_audio = PathBuf::from("fake_audio.wav");
@@ -501,7 +535,8 @@ async fn test_ed_16_1_simulated_error_handling_sidecar_failure() {
 
 #[tokio::test]
 async fn test_subprocess_mock_runner_execution() {
-    let temp_mock_json = std::env::temp_dir().join(format!("test_fw_mock_output_{}.json", std::process::id()));
+    let temp_mock_json =
+        std::env::temp_dir().join(format!("test_fw_mock_output_{}.json", std::process::id()));
     let mock_content = r#"{
         "task": "transcribe",
         "language": "en",
@@ -555,7 +590,11 @@ async fn test_subprocess_mock_runner_execution() {
     assert_eq!(container.clip_id, "clip_mock_fw");
     assert_eq!(container.segments.len(), 1);
     assert_eq!(container.segments[0].words.len(), 3);
-    assert_eq!(progress_count.load(Ordering::SeqCst), 2, "Expected 2 progress events (50% and 100%)");
+    assert_eq!(
+        progress_count.load(Ordering::SeqCst),
+        2,
+        "Expected 2 progress events (50% and 100%)"
+    );
 }
 
 #[tokio::test]
@@ -590,7 +629,10 @@ fn test_model_manager_ctranslate2_directory_verification() {
 
     // Verify directory-based model resolution without expected hash constraint
     let res = verify_model("custom-faster-whisper", Some(&temp_dir));
-    assert!(res.is_ok(), "Directory model verification should succeed when model.bin is present");
+    assert!(
+        res.is_ok(),
+        "Directory model verification should succeed when model.bin is present"
+    );
 
     let info = res.unwrap();
     assert_eq!(info.model_name, "custom-faster-whisper");

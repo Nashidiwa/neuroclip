@@ -3,11 +3,11 @@
 //! Provides bounded-memory streaming SHA-256 verification (64KB chunks, peak heap < 128KB)
 //! to protect against corrupted, truncated, or tampered model files (`ADR-001`, `AC-08.2`).
 
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::error::{AppError, SttError};
 
@@ -61,16 +61,20 @@ pub const MODEL_CATALOG: &[ModelCatalogEntry] = &[
         expected_sha256: Some("a57c5a6d5ee3df38f2cb4244ab92ec694e9f740e53a3eb2d32782e3c015b6b15"),
         approx_size_mb: 1100,
     },
+    // Note: CTranslate2 (`faster-whisper`) models vary across upstream conversions and runtime
+    // quantization (`compute_type="int8"` on float16 weights vs third-party pre-quantized artifacts)
+    // and NeuroClip does not yet ship a pinned model downloader/manifest, so `expected_sha256` is
+    // `None` here while `verify_model` still enforces non-empty (`size_bytes > 0`) integrity.
     ModelCatalogEntry {
         model_name: "faster-whisper-medium-int8",
         filename: "faster-whisper-medium-int8",
-        expected_sha256: Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        expected_sha256: None,
         approx_size_mb: 1500,
     },
     ModelCatalogEntry {
         model_name: "faster-whisper-small-int8",
         filename: "faster-whisper-small-int8",
-        expected_sha256: Some("f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2"),
+        expected_sha256: None,
         approx_size_mb: 500,
     },
 ];
@@ -133,10 +137,13 @@ pub fn is_whisper_large(model: &str) -> bool {
     lower.contains("large")
 }
 
-/// Compute the SHA-256 checksum of a file on disk using a fixed 64KB stack buffer.
+/// Compute the SHA-256 checksum of a file on disk using a bounded 64KB chunk buffer.
 ///
 /// Peak heap allocation is bounded below 128KB regardless of whether the file
 /// is 100MB or 2GB.
+///
+/// # Errors
+/// Returns [`AppError::Stt`] if opening or reading the model file fails.
 pub fn compute_file_sha256(path: &Path) -> Result<String, AppError> {
     let mut file = File::open(path).map_err(|_| {
         AppError::Stt(SttError::ModelNotFound {
@@ -145,7 +152,7 @@ pub fn compute_file_sha256(path: &Path) -> Result<String, AppError> {
     })?;
 
     let mut hasher = Sha256::new();
-    let mut buffer = [0u8; SHA256_CHUNK_SIZE];
+    let mut buffer = vec![0u8; SHA256_CHUNK_SIZE];
 
     loop {
         let bytes_read = file.read(&mut buffer).map_err(|e| {
@@ -169,23 +176,25 @@ pub fn compute_file_sha256(path: &Path) -> Result<String, AppError> {
 /// Verify the existence and cryptographic SHA-256 integrity of a Whisper model file.
 ///
 /// Fast fails with `SttError::ModelNotFound` if missing, or `SttError::ModelIntegrityFailed`
-/// if the hash does not match the authoritative registry or expected hash.
-pub fn verify_model(
-    model_name: &str,
-    custom_path: Option<&Path>,
-) -> Result<ModelInfo, AppError> {
+/// if the file is 0 bytes or the hash does not match the authoritative registry.
+///
+/// # Errors
+/// Returns [`AppError::Stt`] if the model is missing, empty, unreadable, or fails hash verification.
+pub fn verify_model(model_name: &str, custom_path: Option<&Path>) -> Result<ModelInfo, AppError> {
     let catalog_entry = find_catalog_entry(model_name);
 
-    let (filename, expected_hash) = match catalog_entry {
-        Some(entry) => (entry.filename.to_string(), entry.expected_sha256),
-        None => {
-            let fname = if model_name.ends_with(".bin") {
-                model_name.to_string()
-            } else {
-                format!("{model_name}.bin")
-            };
-            (fname, None)
-        }
+    let (filename, expected_hash) = if let Some(entry) = catalog_entry {
+        (entry.filename.to_string(), entry.expected_sha256)
+    } else {
+        let is_bin = Path::new(model_name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"));
+        let fname = if is_bin {
+            model_name.to_string()
+        } else {
+            format!("{model_name}.bin")
+        };
+        (fname, None)
     };
 
     let target_path = match custom_path {
@@ -218,6 +227,14 @@ pub fn verify_model(
         let size_bytes = metadata.len();
         let actual_sha256 = compute_file_sha256(&model_bin_path)?;
 
+        if size_bytes == 0 {
+            return Err(AppError::Stt(SttError::ModelIntegrityFailed {
+                path: model_bin_path.display().to_string(),
+                expected_sha256: expected_hash.unwrap_or("non-empty-binary").to_string(),
+                actual_sha256,
+            }));
+        }
+
         if let Some(expected) = expected_hash {
             if !actual_sha256.eq_ignore_ascii_case(expected) {
                 return Err(AppError::Stt(SttError::ModelIntegrityFailed {
@@ -247,6 +264,14 @@ pub fn verify_model(
 
     let size_bytes = metadata.len();
     let actual_sha256 = compute_file_sha256(&target_path)?;
+
+    if size_bytes == 0 {
+        return Err(AppError::Stt(SttError::ModelIntegrityFailed {
+            path: target_path.display().to_string(),
+            expected_sha256: expected_hash.unwrap_or("non-empty-binary").to_string(),
+            actual_sha256,
+        }));
+    }
 
     if let Some(expected) = expected_hash {
         if !actual_sha256.eq_ignore_ascii_case(expected) {

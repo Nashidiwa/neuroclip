@@ -279,7 +279,9 @@ fn test_two_pass_streaming_normalization_schema_5_3() {
     assert_eq!(container.events[1].author, "Neuro");
     assert_eq!(container.events[1].message, "Heart Tutel");
     assert!(container.events[1].is_swarm_emote);
-    assert!(container.events[1].emotes_detected.contains(&"Tutel".to_string()));
+    assert!(container.events[1]
+        .emotes_detected
+        .contains(&"Tutel".to_string()));
 }
 
 // ---------------------------------------------------------------------------
@@ -296,7 +298,11 @@ fn test_throughput_benchmark_10k_messages() {
     for i in 0..10_000 {
         let t = (i as f64) * 0.1;
         let is_swarm = i % 5 == 0;
-        let text = if is_swarm { "KEKW Tutel!" } else { "normal chat message" };
+        let text = if is_swarm {
+            "KEKW Tutel!"
+        } else {
+            "normal chat message"
+        };
         writeln!(
             file,
             r#"{{"timestamp_sec":{t:.1},"author":"user_{i}","message":"{text}","emotes_detected":[],"is_swarm_emote":{is_swarm}}}"#

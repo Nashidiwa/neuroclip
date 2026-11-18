@@ -74,6 +74,11 @@ pub fn resolve_vod_project_dir(vod_id: &str) -> PathBuf {
 }
 
 /// Internal slice video segment execution logic, callable without a Tauri AppHandle.
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 pub async fn slice_video_segment_internal(
     vod_id: &str,
     start_sec: f64,
@@ -327,6 +332,8 @@ pub async fn slice_video_segment(
 /// # Errors
 /// Always returns `Ok(true)` if found and cancelled, or `Ok(false)` if not active.
 #[tauri::command]
+// Tauri command IPC deserializes owned String arguments from JS invocations.
+#[allow(clippy::needless_pass_by_value)]
 pub fn cancel_slice_video_segment(task_id: String) -> Result<bool, AppError> {
     Ok(cancel_slice_task_token(&task_id))
 }

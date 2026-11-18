@@ -8,16 +8,15 @@
 //! 3. VAD bridge: Empty intervals, multiple pause gaps > 1.0s, boundary integrity, 0/1-word segments.
 //! 4. Subtitle export: ASS injection attacks, newline escaping, SRT sequential invariants.
 
-use std::fs::File;
-use std::io::Write;
 use neuroclip_lib::stt::{
     align_segments_with_vad, calculate_cps, compute_file_sha256, escape_ass_text,
     format_ass_timecode, format_srt_timecode, generate_ass_script, generate_srt_script,
-    is_special_token, parse_timestamp_to_seconds, parse_whisper_json_full,
+    is_special_token, parse_timestamp_to_seconds, parse_whisper_json_full, verify_model,
     SpeechInterval, TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
-    CPS_FLAG_THRESHOLD, CONFIDENCE_FLAG_THRESHOLD,
-    verify_model,
+    CONFIDENCE_FLAG_THRESHOLD, CPS_FLAG_THRESHOLD,
 };
+use std::fs::File;
+use std::io::Write;
 
 #[test]
 fn test_adv_malformed_json_variants() {
@@ -98,14 +97,20 @@ fn test_adv_negative_and_extreme_timestamps() {
     assert!(res.is_ok());
     let seg = &res.unwrap().segments[0];
     assert_eq!(seg.start_sec, 50.0);
-    assert_eq!(seg.end_sec, 50.0, "end_sec should be clamped to >= start_sec");
+    assert_eq!(
+        seg.end_sec, 50.0,
+        "end_sec should be clamped to >= start_sec"
+    );
 
     // 3. String timestamp parsing stress
     assert_eq!(parse_timestamp_to_seconds("-01:00:00,000"), Some(0.0));
     assert_eq!(parse_timestamp_to_seconds("00:-05:00,000"), Some(0.0));
     assert_eq!(parse_timestamp_to_seconds("00:00:-10,000"), Some(0.0));
     assert_eq!(parse_timestamp_to_seconds("00:00:00,000"), Some(0.0));
-    assert_eq!(parse_timestamp_to_seconds("99:59:59.999"), Some(99.0 * 3600.0 + 59.0 * 60.0 + 59.999));
+    assert_eq!(
+        parse_timestamp_to_seconds("99:59:59.999"),
+        Some(99.0 * 3600.0 + 59.0 * 60.0 + 59.999)
+    );
     assert_eq!(parse_timestamp_to_seconds(":::"), None);
     assert_eq!(parse_timestamp_to_seconds("invalid:string"), None);
 }
@@ -141,7 +146,10 @@ fn test_adv_extreme_cps_and_flagging() {
     assert!(res.is_ok());
     let seg = &res.unwrap().segments[0];
     assert!(seg.cps_score > CPS_FLAG_THRESHOLD);
-    assert!(seg.is_flagged_for_review, "Should be flagged for review due to high CPS");
+    assert!(
+        seg.is_flagged_for_review,
+        "Should be flagged for review due to high CPS"
+    );
 
     // 5. Low confidence (< 0.6) sets is_flagged_for_review = true
     let low_conf_json = r#"{
@@ -160,7 +168,10 @@ fn test_adv_extreme_cps_and_flagging() {
     assert!(res_low.is_ok());
     let seg_low = &res_low.unwrap().segments[0];
     assert!(seg_low.confidence < CONFIDENCE_FLAG_THRESHOLD);
-    assert!(seg_low.is_flagged_for_review, "Should be flagged for review due to low confidence");
+    assert!(
+        seg_low.is_flagged_for_review,
+        "Should be flagged for review due to low confidence"
+    );
 }
 
 #[test]
@@ -181,11 +192,20 @@ fn test_adv_special_tokens_comprehensive_filtering() {
     ];
 
     for tok in &tokens {
-        assert!(is_special_token(tok), "Expected {tok} to be recognized as special token");
+        assert!(
+            is_special_token(tok),
+            "Expected {tok} to be recognized as special token"
+        );
     }
 
     // Normal speech should NOT be identified as special token
-    let normal_tokens = ["Hello", "Vedal", "Neuro-sama", "[bracketed banter]", "tutel"];
+    let normal_tokens = [
+        "Hello",
+        "Vedal",
+        "Neuro-sama",
+        "[bracketed banter]",
+        "tutel",
+    ];
     assert!(!is_special_token(normal_tokens[0]));
     assert!(!is_special_token(normal_tokens[1]));
     assert!(!is_special_token(normal_tokens[2]));
@@ -209,7 +229,11 @@ fn test_adv_special_tokens_comprehensive_filtering() {
 
     let res = parse_whisper_json_full(&special_json, "adv_special_only");
     assert!(res.is_ok());
-    assert_eq!(res.unwrap().segments.len(), 0, "All special token segments must be suppressed");
+    assert_eq!(
+        res.unwrap().segments.len(),
+        0,
+        "All special token segments must be suppressed"
+    );
 }
 
 #[test]
@@ -229,7 +253,10 @@ fn test_adv_model_integrity_fast_fail_1byte_mutations() {
     }
     let res_empty = verify_model("base.en-q5_k", Some(&empty_path));
     assert!(res_empty.is_err());
-    assert_eq!(res_empty.unwrap_err().code(), "ERR_STT_MODEL_INTEGRITY_FAILED");
+    assert_eq!(
+        res_empty.unwrap_err().code(),
+        "ERR_STT_MODEL_INTEGRITY_FAILED"
+    );
     let _ = std::fs::remove_file(&empty_path);
 
     // 3. Synthetic reference file with known hash
@@ -251,7 +278,10 @@ fn test_adv_model_integrity_fast_fail_1byte_mutations() {
         f.write_all(&data_mut_start).unwrap();
     }
     let hash_mut_start = compute_file_sha256(&mut_start_path).unwrap();
-    assert_ne!(ref_hash, hash_mut_start, "Start byte mutation must change hash");
+    assert_ne!(
+        ref_hash, hash_mut_start,
+        "Start byte mutation must change hash"
+    );
     let _ = std::fs::remove_file(&mut_start_path);
 
     // 5. 1-byte mutation at middle (index 5000)
@@ -263,7 +293,10 @@ fn test_adv_model_integrity_fast_fail_1byte_mutations() {
         f.write_all(&data_mut_mid).unwrap();
     }
     let hash_mut_mid = compute_file_sha256(&mut_mid_path).unwrap();
-    assert_ne!(ref_hash, hash_mut_mid, "Middle byte mutation must change hash");
+    assert_ne!(
+        ref_hash, hash_mut_mid,
+        "Middle byte mutation must change hash"
+    );
     let _ = std::fs::remove_file(&mut_mid_path);
 
     // 6. 1-byte mutation at end (index 9999)
@@ -305,15 +338,40 @@ fn test_adv_vad_bridge_empty_intervals_and_multi_gap_splitting() {
         cps_score: 1.5,
         is_flagged_for_review: false,
         words: vec![
-            WordTiming { word: "one".to_string(), start_sec: 1.0, end_sec: 1.5, probability: 0.99 },
+            WordTiming {
+                word: "one".to_string(),
+                start_sec: 1.0,
+                end_sec: 1.5,
+                probability: 0.99,
+            },
             // Gap 1: 1.5 to 3.5 (2.0s gap > 1.0s) -> split!
-            WordTiming { word: "two".to_string(), start_sec: 3.5, end_sec: 4.0, probability: 0.95 },
+            WordTiming {
+                word: "two".to_string(),
+                start_sec: 3.5,
+                end_sec: 4.0,
+                probability: 0.95,
+            },
             // Gap 2: 4.0 to 7.0 (3.0s gap > 1.0s) -> split!
-            WordTiming { word: "three".to_string(), start_sec: 7.0, end_sec: 7.5, probability: 0.96 },
+            WordTiming {
+                word: "three".to_string(),
+                start_sec: 7.0,
+                end_sec: 7.5,
+                probability: 0.96,
+            },
             // Small gap: 7.5 to 8.0 (0.5s gap <= 1.0s) -> no split
-            WordTiming { word: "four".to_string(), start_sec: 8.0, end_sec: 8.5, probability: 0.97 },
+            WordTiming {
+                word: "four".to_string(),
+                start_sec: 8.0,
+                end_sec: 8.5,
+                probability: 0.97,
+            },
             // Gap 3: 8.5 to 12.0 (3.5s gap > 1.0s) -> split!
-            WordTiming { word: "five".to_string(), start_sec: 12.0, end_sec: 12.5, probability: 0.98 },
+            WordTiming {
+                word: "five".to_string(),
+                start_sec: 12.0,
+                end_sec: 12.5,
+                probability: 0.98,
+            },
         ],
     };
 
@@ -326,7 +384,11 @@ fn test_adv_vad_bridge_empty_intervals_and_multi_gap_splitting() {
     // Sub 2: "two"
     // Sub 3: "three four"
     // Sub 4: "five"
-    assert_eq!(aligned_empty.len(), 4, "Should split into exactly 4 subsegments");
+    assert_eq!(
+        aligned_empty.len(),
+        4,
+        "Should split into exactly 4 subsegments"
+    );
     assert_eq!(aligned_empty[0].segment_id, "seg_0010_1");
     assert_eq!(aligned_empty[0].text_en, "one");
     assert_eq!(aligned_empty[0].words.len(), 1);
@@ -345,7 +407,10 @@ fn test_adv_vad_bridge_empty_intervals_and_multi_gap_splitting() {
 
     // Verify token conservation: total words across subsegments must equal original words (5)
     let total_words: usize = aligned_empty.iter().map(|s| s.words.len()).sum();
-    assert_eq!(total_words, 5, "Total words must be preserved across splits");
+    assert_eq!(
+        total_words, 5,
+        "Total words must be preserved across splits"
+    );
 
     // 2. Segment with 0 words
     let empty_words_seg = TranscriptSegment {
@@ -444,8 +509,11 @@ fn test_adv_subtitle_export_injection_and_escaping() {
     };
 
     let ass = generate_ass_script(&container);
-    assert!(ass.contains("Dialogue: 0,0:00:00.00,0:00:02.50,Neuro,Neuro,0,0,0,,Sub 1 with (override)"));
-    assert!(ass.contains("Dialogue: 0,0:00:03.00,0:00:05.50,Default,Default,0,0,0,,Sub 2\\Nwith newline"));
+    assert!(
+        ass.contains("Dialogue: 0,0:00:00.00,0:00:02.50,Neuro,Neuro,0,0,0,,Sub 1 with (override)")
+    );
+    assert!(ass
+        .contains("Dialogue: 0,0:00:03.00,0:00:05.50,Default,Default,0,0,0,,Sub 2\\Nwith newline"));
 
     let srt = generate_srt_script(&container);
     assert!(srt.contains("1\n00:00:00,000 --> 00:00:02,500\nSub 1 with {override}"));

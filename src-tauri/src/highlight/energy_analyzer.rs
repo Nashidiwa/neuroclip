@@ -3,6 +3,12 @@
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>),
 //! `docs/ARCHITECTURE.md` §4.3 & §5.4, and `docs/TASK_BOARD.md` TASK-M4-11.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
@@ -185,9 +191,7 @@ pub fn detect_energy_peaks(
         return Ok(Vec::new());
     }
 
-    let lookback_k = (baseline_window_sec / block_duration_sec)
-        .round()
-        .max(1.0) as usize;
+    let lookback_k = (baseline_window_sec / block_duration_sec).round().max(1.0) as usize;
 
     // Cumulative prefix sums for RMS, RMS^2, and dBFS enabling O(1) sliding window statistics
     let mut prefix_rms = Vec::with_capacity(n + 1);
@@ -258,8 +262,8 @@ pub fn detect_energy_peaks(
 
         // Dual-condition peak classification
         let is_db_peak = delta_db >= peak_db_threshold;
-        let is_sigma_peak =
-            sigma_rms > EPSILON_RMS && (b.normalized_rms - mu_rms) >= peak_sigma_threshold * sigma_rms;
+        let is_sigma_peak = sigma_rms > EPSILON_RMS
+            && (b.normalized_rms - mu_rms) >= peak_sigma_threshold * sigma_rms;
 
         let is_peak = !is_silence && (is_db_peak || is_sigma_peak);
 
@@ -358,9 +362,7 @@ pub fn process_pcm_reader<R: Read>(
         )));
     }
 
-    let block_samples = ((sample_rate as f64) * block_duration_sec)
-        .round()
-        .max(1.0) as usize;
+    let block_samples = ((sample_rate as f64) * block_duration_sec).round().max(1.0) as usize;
     let block_bytes = block_samples * 2; // 2 bytes per 16-bit PCM sample
 
     let mut byte_buffer = vec![0u8; block_bytes];
@@ -374,7 +376,7 @@ pub fn process_pcm_reader<R: Read>(
             match reader.read(&mut byte_buffer[total_read..]) {
                 Ok(0) => break, // EOF reached
                 Ok(n) => total_read += n,
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
                 Err(e) => {
                     return Err(AppError::Highlight(HighlightError::AudioAnalysisFailed(
                         format!("I/O error reading PCM audio stream: {e}"),
@@ -478,7 +480,9 @@ pub fn analyze_wav_file(path: &Path) -> Result<Vec<AudioRmsPoint>, AppError> {
 
     if channels != 1 && channels != 2 {
         return Err(AppError::Highlight(HighlightError::AudioAnalysisFailed(
-            format!("Unsupported channel count ({channels}), only mono (1) or stereo (2) supported"),
+            format!(
+                "Unsupported channel count ({channels}), only mono (1) or stereo (2) supported"
+            ),
         )));
     }
 
@@ -495,12 +499,12 @@ pub fn analyze_wav_file(path: &Path) -> Result<Vec<AudioRmsPoint>, AppError> {
         let mut chunk_header = [0u8; 8];
         while reader.read_exact(&mut chunk_header).is_ok() {
             let chunk_id = &chunk_header[0..4];
-            let chunk_size = u32::from_le_bytes([
+            let chunk_size = i64::from(u32::from_le_bytes([
                 chunk_header[4],
                 chunk_header[5],
                 chunk_header[6],
                 chunk_header[7],
-            ]) as i64;
+            ]));
 
             if chunk_id == b"data" {
                 found_data = true;
@@ -517,7 +521,10 @@ pub fn analyze_wav_file(path: &Path) -> Result<Vec<AudioRmsPoint>, AppError> {
 
         if !found_data {
             return Err(AppError::Highlight(HighlightError::AudioAnalysisFailed(
-                format!("Could not locate 'data' subchunk in WAV file '{}'", path.display()),
+                format!(
+                    "Could not locate 'data' subchunk in WAV file '{}'",
+                    path.display()
+                ),
             )));
         }
     }
@@ -539,9 +546,7 @@ fn process_stereo_pcm_reader<R: Read>(
     sample_rate: usize,
     block_duration_sec: f64,
 ) -> Result<Vec<AudioBlockMetrics>, AppError> {
-    let block_samples = ((sample_rate as f64) * block_duration_sec)
-        .round()
-        .max(1.0) as usize;
+    let block_samples = ((sample_rate as f64) * block_duration_sec).round().max(1.0) as usize;
     let block_bytes = block_samples * 4; // 2 channels * 2 bytes = 4 bytes per stereo sample
 
     let mut byte_buffer = vec![0u8; block_bytes];
@@ -555,7 +560,7 @@ fn process_stereo_pcm_reader<R: Read>(
             match reader.read(&mut byte_buffer[total_read..]) {
                 Ok(0) => break,
                 Ok(n) => total_read += n,
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
                 Err(e) => {
                     return Err(AppError::Highlight(HighlightError::AudioAnalysisFailed(
                         format!("I/O error reading stereo WAV: {e}"),
@@ -574,7 +579,7 @@ fn process_stereo_pcm_reader<R: Read>(
             let left = i16::from_le_bytes([byte_buffer[i * 4], byte_buffer[i * 4 + 1]]);
             let right = i16::from_le_bytes([byte_buffer[i * 4 + 2], byte_buffer[i * 4 + 3]]);
             // Average stereo channels
-            let mono = ((i32::from(left) + i32::from(right)) / 2) as i16;
+            let mono = i32::midpoint(i32::from(left), i32::from(right)) as i16;
             sample_buffer.push(mono);
         }
 
@@ -615,7 +620,7 @@ mod tests {
     #[test]
     fn test_detect_energy_peaks_empty() {
         let res = detect_energy_peaks_default(&[]).unwrap();
-        assert!(res.is_empty());
+        assert_eq!(res, []);
     }
 
     #[test]
@@ -634,7 +639,11 @@ mod tests {
         let points = detect_energy_peaks_default(&blocks).unwrap();
         assert_eq!(points.len(), 100);
         for p in &points {
-            assert!(!p.is_peak, "Silence block at ts {} was flagged as peak", p.timestamp_sec);
+            assert!(
+                !p.is_peak,
+                "Silence block at ts {} was flagged as peak",
+                p.timestamp_sec
+            );
         }
     }
 
@@ -675,10 +684,16 @@ mod tests {
         }
 
         // Block 60 must be a peak
-        assert!(points[60].is_peak, "Spike block 60 (+21dB) must be flagged is_peak = true");
+        assert!(
+            points[60].is_peak,
+            "Spike block 60 (+21dB) must be flagged is_peak = true"
+        );
         assert_eq!(points[60].timestamp_sec, 30.0);
         if let Some(delta) = points[60].delta_db {
-            assert!((delta - 21.0).abs() < 0.1, "Delta dB should be ~21.0 dB, got {delta}");
+            assert!(
+                (delta - 21.0).abs() < 0.1,
+                "Delta dB should be ~21.0 dB, got {delta}"
+            );
         }
     }
 

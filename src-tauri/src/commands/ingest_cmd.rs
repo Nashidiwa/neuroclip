@@ -59,9 +59,8 @@ fn cancel_task_token(task_id: &str) -> bool {
 }
 
 fn resolve_cookie_source(options: Option<&IngestOptions>) -> CookieSource {
-    let opts = match options {
-        Some(o) => o,
-        None => return CookieSource::None,
+    let Some(opts) = options else {
+        return CookieSource::None;
     };
 
     if let Some(ref path) = opts.cookies_path {
@@ -108,6 +107,7 @@ pub async fn probe_vod(
 /// 3. Download audio-only stream with yt-dlp anti-bot defense.
 /// 4. Generate Schema 5.2 compliant `vod_manifest.json`.
 #[tauri::command]
+#[allow(clippy::too_many_lines)]
 pub async fn start_vod_ingestion(
     url: String,
     options: Option<IngestOptions>,
@@ -119,17 +119,17 @@ pub async fn start_vod_ingestion(
     // Register cancellation token immediately so early cancellation works reliably
     let cancellation_token = CancellationToken::new();
     let client_task_id = opts.task_id.as_deref().unwrap_or("").trim().to_string();
-    let initial_task_id = if !client_task_id.is_empty() {
-        client_task_id
-    } else {
+    let initial_task_id = if client_task_id.is_empty() {
         format!("task_{}", chrono::Utc::now().timestamp_millis())
+    } else {
+        client_task_id
     };
     register_task_token(&initial_task_id, cancellation_token.clone());
 
     // Step 1: Probe metadata (with early cancellation awareness)
     let metadata_res = tokio::select! {
         biased;
-        _ = cancellation_token.cancelled() => {
+        () = cancellation_token.cancelled() => {
             unregister_task_token(&initial_task_id);
             return Err(AppError::TaskCancelled);
         }
@@ -156,8 +156,8 @@ pub async fn start_vod_ingestion(
     }
 
     // Step 2: Resolve workspace and cache paths
-    let projects_dir = resolve_projects_dir();
-    let project_dir = projects_dir.join(&vod_id);
+    let projects_root = resolve_projects_dir();
+    let project_dir = projects_root.join(&vod_id);
     if let Err(e) = std::fs::create_dir_all(&project_dir) {
         unregister_task_token(&initial_task_id);
         if vod_id != initial_task_id {
@@ -296,6 +296,8 @@ pub async fn import_local_video(
 }
 
 /// Cancel an ongoing VOD ingestion task.
+// Owned `String` matches the Tauri IPC command deserialization contract.
+#[allow(clippy::needless_pass_by_value)]
 #[tauri::command]
 pub fn cancel_vod_ingestion(task_id: String) -> Result<bool, AppError> {
     let cancelled = cancel_task_token(&task_id);
@@ -303,6 +305,8 @@ pub fn cancel_vod_ingestion(task_id: String) -> Result<bool, AppError> {
 }
 
 /// Retrieve the Schema 5.2 `vod_manifest.json` for a specific project.
+// Owned `String` matches the Tauri IPC command deserialization contract.
+#[allow(clippy::needless_pass_by_value)]
 #[tauri::command]
 pub fn get_vod_manifest(project_id: String) -> Result<VodManifest, AppError> {
     let project_dir = resolve_projects_dir().join(&project_id);
@@ -320,9 +324,8 @@ pub fn get_vod_manifest(project_id: String) -> Result<VodManifest, AppError> {
         )))
     })?;
 
-    let manifest: VodManifest = serde_json::from_slice(&bytes).map_err(|e| {
-        AppError::Internal(format!("Failed to parse vod_manifest.json: {e}"))
-    })?;
+    let manifest: VodManifest = serde_json::from_slice(&bytes)
+        .map_err(|e| AppError::Internal(format!("Failed to parse vod_manifest.json: {e}")))?;
 
     Ok(manifest)
 }
@@ -341,13 +344,9 @@ pub async fn extract_pcm_stream(
     register_task_token(&tid, cancellation_token.clone());
 
     let win_samples = window_samples.unwrap_or(8000); // 500ms at 16kHz mono
-    let res = compute_audio_energy_stream(
-        &source_path,
-        win_samples,
-        max_windows,
-        cancellation_token,
-    )
-    .await;
+    let res =
+        compute_audio_energy_stream(&source_path, win_samples, max_windows, cancellation_token)
+            .await;
 
     unregister_task_token(&tid);
     res
@@ -389,8 +388,19 @@ mod tests {
         assert_eq!(resolve_cookie_source(None), CookieSource::None);
     }
 
+    static TASK_TOKEN_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_task_token_lifecycle() {
+        let _guard = TASK_TOKEN_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Ok(mut map_lock) = ACTIVE_TASKS.lock() {
+            if let Some(map) = map_lock.as_mut() {
+                map.clear();
+            }
+        }
+
         let token = CancellationToken::new();
         register_task_token("task_123", token.clone());
         assert!(!token.is_cancelled());
@@ -405,6 +415,15 @@ mod tests {
 
     #[test]
     fn test_task_token_empty_id_fallback() {
+        let _guard = TASK_TOKEN_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Ok(mut map_lock) = ACTIVE_TASKS.lock() {
+            if let Some(map) = map_lock.as_mut() {
+                map.clear();
+            }
+        }
+
         let token = CancellationToken::new();
         register_task_token("task_fallback", token.clone());
         assert!(!token.is_cancelled());

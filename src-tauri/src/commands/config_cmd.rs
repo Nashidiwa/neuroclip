@@ -1,11 +1,11 @@
 //! IPC Command handlers for Application Configuration and Hardware Profiling.
 
-use std::sync::RwLock;
-use tauri::State;
 use crate::config::app_config::{resolve_config_file_path, AppConfig};
 use crate::config::atomic::atomic_save_json;
 use crate::config::hardware::{probe_system_hardware, HardwareProfile};
 use crate::error::AppError;
+use std::sync::RwLock;
+use tauri::State;
 
 /// Shared application state managed across Tauri IPC commands.
 pub struct AppState {
@@ -16,8 +16,8 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let path = resolve_config_file_path();
-        let config = crate::config::atomic::atomic_load_json::<AppConfig>(&path)
-            .unwrap_or_default();
+        let config =
+            crate::config::atomic::atomic_load_json::<AppConfig>(&path).unwrap_or_default();
 
         Self {
             config: RwLock::new(config),
@@ -31,7 +31,11 @@ impl Default for AppState {
 pub async fn get_app_config(state: State<'_, AppState>) -> Result<AppConfig, AppError> {
     let guard = match state.config.read() {
         Ok(g) => g,
-        Err(e) => return Err(AppError::Internal(format!("Failed to acquire config read lock: {e}"))),
+        Err(e) => {
+            return Err(AppError::Internal(format!(
+                "Failed to acquire config read lock: {e}"
+            )))
+        }
     };
     Ok(guard.clone())
 }
@@ -48,7 +52,11 @@ pub async fn save_app_config(
     // 2. Acquire exclusive write lock to strictly serialize disk persistence and memory update
     let mut guard = match state.config.write() {
         Ok(g) => g,
-        Err(e) => return Err(AppError::Internal(format!("Failed to acquire config write lock: {e}"))),
+        Err(e) => {
+            return Err(AppError::Internal(format!(
+                "Failed to acquire config write lock: {e}"
+            )))
+        }
     };
 
     // 3. Persist to disk atomically under lock
@@ -68,21 +76,27 @@ pub async fn get_hardware_profile(
 ) -> Result<Option<HardwareProfile>, AppError> {
     let guard = match state.hardware_profile.read() {
         Ok(g) => g,
-        Err(e) => return Err(AppError::Internal(format!("Failed to acquire hardware profile read lock: {e}"))),
+        Err(e) => {
+            return Err(AppError::Internal(format!(
+                "Failed to acquire hardware profile read lock: {e}"
+            )))
+        }
     };
     Ok(guard.clone())
 }
 
 /// Probe system hardware capabilities, evaluate recommendation, and cache the profile.
 #[tauri::command]
-pub async fn detect_hardware(
-    state: State<'_, AppState>,
-) -> Result<HardwareProfile, AppError> {
+pub async fn detect_hardware(state: State<'_, AppState>) -> Result<HardwareProfile, AppError> {
     let profile = probe_system_hardware()?;
 
     let mut guard = match state.hardware_profile.write() {
         Ok(g) => g,
-        Err(e) => return Err(AppError::Internal(format!("Failed to acquire hardware profile write lock: {e}"))),
+        Err(e) => {
+            return Err(AppError::Internal(format!(
+                "Failed to acquire hardware profile write lock: {e}"
+            )))
+        }
     };
     *guard = Some(profile.clone());
 

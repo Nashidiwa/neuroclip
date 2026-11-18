@@ -56,6 +56,7 @@ impl AudioStreamValidator {
     ///
     /// # Errors
     /// Returns `IngestError::ExtractionFailed` if an invalid or corrupted WAV header is encountered.
+    #[allow(clippy::too_many_lines, clippy::cast_precision_loss)]
     pub fn process_chunk(
         &mut self,
         chunk_bytes: &[u8],
@@ -67,11 +68,14 @@ impl AudioStreamValidator {
         let slice: &[u8];
 
         // Check for 44-byte WAV header, buffering fragmented initial chunks if needed
-        if !self.header_checked {
+        if self.header_checked {
+            slice = chunk_bytes;
+        } else {
             self.header_buf.extend_from_slice(chunk_bytes);
 
             let check_len = self.header_buf.len().min(4);
-            let matches_riff_prefix = check_len > 0 && self.header_buf[..check_len] == b"RIFF"[..check_len];
+            let matches_riff_prefix =
+                check_len > 0 && self.header_buf[..check_len] == b"RIFF"[..check_len];
 
             if matches_riff_prefix && self.header_buf.len() < 4 && !is_eof {
                 // Potential RIFF header fragmented under 4 bytes: wait for more bytes
@@ -92,7 +96,8 @@ impl AudioStreamValidator {
                 if self.header_buf.len() < WAV_HEADER_SIZE {
                     if is_eof {
                         return Err(IngestError::ExtractionFailed(
-                            "Truncated WAV container: stream ended before complete 44-byte header".to_string(),
+                            "Truncated WAV container: stream ended before complete 44-byte header"
+                                .to_string(),
                         ));
                     }
                     // Wait for subsequent chunk(s) to reach full 44-byte header
@@ -122,7 +127,8 @@ impl AudioStreamValidator {
                     self.header_buf[26],
                     self.header_buf[27],
                 ]);
-                let bits_per_sample = u16::from_le_bytes([self.header_buf[34], self.header_buf[35]]);
+                let bits_per_sample =
+                    u16::from_le_bytes([self.header_buf[34], self.header_buf[35]]);
 
                 if audio_format != 1 {
                     return Err(IngestError::ExtractionFailed(format!(
@@ -162,12 +168,11 @@ impl AudioStreamValidator {
                 working_bytes_owner = std::mem::take(&mut self.header_buf);
                 slice = &working_bytes_owner;
             }
-        } else {
-            slice = chunk_bytes;
         }
 
         // Assemble working bytes taking carry_byte into account
-        let mut samples = Vec::with_capacity((slice.len() + usize::from(self.carry_byte.is_some())) / 2);
+        let mut samples =
+            Vec::with_capacity(slice.len().midpoint(usize::from(self.carry_byte.is_some())));
         let mut idx = 0;
 
         // If there was an orphan byte from the previous chunk, combine with first byte
@@ -214,7 +219,7 @@ impl AudioStreamValidator {
             }
         }
 
-        let chunk_timestamp = self.total_samples_processed as f64 / TARGET_SAMPLE_RATE as f64;
+        let chunk_timestamp = self.total_samples_processed as f64 / f64::from(TARGET_SAMPLE_RATE);
         self.total_samples_processed += samples.len() as u64;
 
         let seq = self.sequence;
@@ -253,12 +258,14 @@ impl AudioStreamValidator {
     /// Current timestamp in seconds based on decoded sample count.
     #[inline]
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn current_timestamp_sec(&self) -> f64 {
-        self.total_samples_processed as f64 / TARGET_SAMPLE_RATE as f64
+        self.total_samples_processed as f64 / f64::from(TARGET_SAMPLE_RATE)
     }
 
     /// Ratio of clipped samples over all processed samples (0.0 to 1.0).
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn clipping_ratio(&self) -> f64 {
         if self.total_samples_processed == 0 {
             0.0
@@ -338,11 +345,11 @@ mod tests {
         wav[8..12].copy_from_slice(b"WAVE");
         wav[12..16].copy_from_slice(b"fmt ");
         wav[16..20].copy_from_slice(&16u32.to_le_bytes()); // subchunk size
-        wav[20..22].copy_from_slice(&1u16.to_le_bytes());  // PCM
-        wav[22..24].copy_from_slice(&1u16.to_le_bytes());  // mono
+        wav[20..22].copy_from_slice(&1u16.to_le_bytes()); // PCM
+        wav[22..24].copy_from_slice(&1u16.to_le_bytes()); // mono
         wav[24..28].copy_from_slice(&16000u32.to_le_bytes()); // 16kHz
         wav[28..32].copy_from_slice(&32000u32.to_le_bytes()); // byte rate
-        wav[32..34].copy_from_slice(&2u16.to_le_bytes());  // block align
+        wav[32..34].copy_from_slice(&2u16.to_le_bytes()); // block align
         wav[34..36].copy_from_slice(&16u16.to_le_bytes()); // bits per sample
         wav[36..40].copy_from_slice(b"data");
 
@@ -450,4 +457,3 @@ mod tests {
         assert_eq!(chunk.samples[0], 0x0052);
     }
 }
-

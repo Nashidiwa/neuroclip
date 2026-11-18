@@ -11,13 +11,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
-use neuroclip_lib::{
-    extract_message_emotes, parse_raw_chat_line, AppError,
-    ChatEventsContainer, StreamingChatNormalizer,
-};
 use neuroclip_lib::ingestion::streamer::{assign_child_to_job_guard, WindowsJobObjectGuard};
 use neuroclip_lib::ingestion::twitch_gql::fetch_twitch_vod_chat_gql;
 use neuroclip_lib::ingestion::youtube_chat::fetch_youtube_live_chat_replay;
+use neuroclip_lib::{
+    extract_message_emotes, parse_raw_chat_line, AppError, ChatEventsContainer,
+    StreamingChatNormalizer,
+};
 
 struct AdversarialTestDir {
     path: PathBuf,
@@ -130,7 +130,10 @@ async fn test_adv_err_05_twitch_gql_empty_mock_file_returns_chat_unavailable() {
     let mock_file = dir.path().join("empty_gql.ndjson");
     File::create(&mock_file).unwrap(); // 0 bytes
 
-    std::env::set_var("NEUROCLIP_MOCK_TWITCH_CHAT_FILE", mock_file.to_str().unwrap());
+    std::env::set_var(
+        "NEUROCLIP_MOCK_TWITCH_CHAT_FILE",
+        mock_file.to_str().unwrap(),
+    );
 
     let out_file = dir.path().join("out.ndjson");
     let cancel = CancellationToken::new();
@@ -159,13 +162,21 @@ async fn test_adv_windows_job_object_guard_lifecycle_and_zombie_termination() {
 
     // 1. Initialize WindowsJobObjectGuard
     let guard = WindowsJobObjectGuard::new();
-    assert!(guard.is_ok(), "WindowsJobObjectGuard::new() must succeed on Windows");
+    assert!(
+        guard.is_ok(),
+        "WindowsJobObjectGuard::new() must succeed on Windows"
+    );
     let guard = guard.unwrap();
 
     // 2. Spawn a long-running child process that would otherwise outlive the test
     // Use powershell Start-Sleep 30
     let mut cmd = Command::new("powershell.exe");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"]);
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Start-Sleep -Seconds 30",
+    ]);
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::null());
 
@@ -263,16 +274,26 @@ fn test_adv_negative_timestamps_stream_resilience() {
 
     // Normalize file must not crash on negative timestamps
     let norm_res = normalizer.normalize_file(&input_path, &out_json_path, &cancel);
-    assert!(norm_res.is_ok(), "normalize_file failed on negative timestamps: {:?}", norm_res.err());
+    assert!(
+        norm_res.is_ok(),
+        "normalize_file failed on negative timestamps: {:?}",
+        norm_res.err()
+    );
 
     let (total_msgs, ndjson_path) = norm_res.unwrap();
     // parse_raw_chat_line filters event.timestamp_sec >= 0.0 for ChatEvent
     // So only 1 valid event should be recognized
-    assert_eq!(total_msgs, 1, "Only non-negative timestamps should be parsed");
+    assert_eq!(
+        total_msgs, 1,
+        "Only non-negative timestamps should be parsed"
+    );
 
     // Heatmap calculation must not panic or crash
     let heatmap_res = normalizer.compute_density_heatmap(&ndjson_path, 10.0, 10.0);
-    assert!(heatmap_res.is_ok(), "compute_density_heatmap failed on negative ts");
+    assert!(
+        heatmap_res.is_ok(),
+        "compute_density_heatmap failed on negative ts"
+    );
     let heatmap = heatmap_res.unwrap();
     assert_eq!(heatmap.total_buckets, 1);
     assert_eq!(heatmap.points[0].message_count, 1);
@@ -301,7 +322,10 @@ fn test_adv_all_negative_timestamps_file_empty_heatmap() {
         .normalize_file(&input_path, &out_json_path, &cancel)
         .unwrap();
 
-    assert_eq!(total_msgs, 0, "All negative timestamps should result in 0 valid messages");
+    assert_eq!(
+        total_msgs, 0,
+        "All negative timestamps should result in 0 valid messages"
+    );
 
     let heatmap = normalizer
         .compute_density_heatmap(&ndjson_path, 10.0, 10.0)
@@ -409,8 +433,15 @@ fn test_adv_all_swarm_emote_chat_stream() {
         pt.swarm_ratio
     );
     // Message count >= 15 with quiet baseline triggers Z-score spike and is_peak!
-    assert!(pt.z_score >= 2.0, "Expected z_score >= 2.0, got {}", pt.z_score);
-    assert!(pt.is_peak, "Expected is_peak == true for 25 messages after quiet baseline");
+    assert!(
+        pt.z_score >= 2.0,
+        "Expected z_score >= 2.0, got {}",
+        pt.z_score
+    );
+    assert!(
+        pt.is_peak,
+        "Expected is_peak == true for 25 messages after quiet baseline"
+    );
     // No NaN or Inf
     assert!(!pt.z_score.is_nan());
     assert!(!pt.z_score.is_infinite());
@@ -544,7 +575,10 @@ fn test_adv_unicode_vietnamese_and_emoji_stress() {
             emotes
         );
         let parsed = parse_raw_chat_line(&raw);
-        assert!(parsed.is_some(), "Failed parsing Vietnamese unicode message: {msg}");
+        assert!(
+            parsed.is_some(),
+            "Failed parsing Vietnamese unicode message: {msg}"
+        );
         let event = parsed.unwrap();
         assert_eq!(event.author, "Người Dùng VN");
         assert_eq!(event.message, *msg);

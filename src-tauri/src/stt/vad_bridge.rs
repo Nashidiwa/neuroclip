@@ -100,6 +100,7 @@ pub fn align_segments_with_vad(
 }
 
 /// Helper to build a child segment resulting from a word gap split.
+#[allow(clippy::cast_precision_loss)]
 fn build_subsegment(
     parent: &TranscriptSegment,
     words: &[WordTiming],
@@ -117,11 +118,11 @@ fn build_subsegment(
         .collect::<Vec<&str>>()
         .join(" ");
 
-    let confidence = if !words.is_empty() {
+    let confidence = if words.is_empty() {
+        parent.confidence
+    } else {
         let sum: f64 = words.iter().map(|w| w.probability).sum();
         (sum / words.len() as f64).clamp(0.0, 1.0)
-    } else {
-        parent.confidence
     };
 
     let cps_score = calculate_cps(&text_en, start_sec, end_sec);

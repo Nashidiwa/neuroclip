@@ -4,13 +4,13 @@
 //! truncated files, torn writes, or data corruption in the event of unexpected
 //! application termination, OS crash, or power loss.
 
+use crate::error::ConfigError;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use crate::error::ConfigError;
 
 /// Monotonically increasing atomic sequence counter ensuring unique temporary
 /// filenames across all threads in the current process.
@@ -48,14 +48,10 @@ pub fn atomic_save_json<T: Serialize>(path: &Path, data: &T) -> Result<(), Confi
     // 3. Generate unique temporary filename in the exact same directory (avoids EXDEV)
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     let pid = std::process::id();
     let seq = ATOMIC_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let base_name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file");
+    let base_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
     let temp_name = format!(".{base_name}.tmp.{pid}.{nonce}.{seq}");
     let temp_path = parent.join(temp_name);
 

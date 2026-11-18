@@ -3,11 +3,11 @@
 //! Complies with docs/CONVENTIONS.md (zero-panic invariant, Result<T, AppError>)
 //! and docs/ARCHITECTURE.md §5.3.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, HighlightError, StorageError};
@@ -22,12 +22,49 @@ pub const MAX_HEATMAP_BUCKETS: usize = 1_000_001;
 /// Neuro Swarm Cultural Emote Dictionary (ADR-004 §1, PRD Table §4.4).
 pub static NEURO_SWARM_EMOTES: &[&str] = &[
     // Humor / Reaction
-    "KEKW", "LUL", "OMEGALUL", "LOLW", "HASTAG", "💀", "LMAO", "LOL", "XD", "WutFace", "ICANT",
+    "KEKW",
+    "LUL",
+    "OMEGALUL",
+    "LOLW",
+    "HASTAG",
+    "💀",
+    "LMAO",
+    "LOL",
+    "XD",
+    "WutFace",
+    "ICANT",
     // Surprise / Shock / Cringe
-    "Pog", "PogBones", "Aware", "Clueless", "WTF", "monkaS", "monkaW", "DESPAIR", "HUH",
+    "Pog",
+    "PogBones",
+    "Aware",
+    "Clueless",
+    "WTF",
+    "monkaS",
+    "monkaW",
+    "DESPAIR",
+    "HUH",
     // Swarm Lore & Characters
-    "Tutel", "Gymbag", "Heart", "neuroHeart", "evilHeart", "Dinking", "Vedal", "Evil", "Neuro", "Erm",
-    "Filtered", "SoCute", "AYAYA", "Anny", "Camila", "Bedge", "Corpa", "GIGACHAD", "pepeJAM", "CatJAM", "SOUTHSIDE",
+    "Tutel",
+    "Gymbag",
+    "Heart",
+    "neuroHeart",
+    "evilHeart",
+    "Dinking",
+    "Vedal",
+    "Evil",
+    "Neuro",
+    "Erm",
+    "Filtered",
+    "SoCute",
+    "AYAYA",
+    "Anny",
+    "Camila",
+    "Bedge",
+    "Corpa",
+    "GIGACHAD",
+    "pepeJAM",
+    "CatJAM",
+    "SOUTHSIDE",
 ];
 
 /// Schema 5.3 Chat Event item (`docs/ARCHITECTURE.md` §5.3).
@@ -114,7 +151,10 @@ pub fn extract_message_emotes(message: &str) -> (Vec<String>, bool) {
                 .copied()
                 .unwrap_or(clean);
 
-            if !detected.iter().any(|d| d.eq_ignore_ascii_case(matched_name)) {
+            if !detected
+                .iter()
+                .any(|d| d.eq_ignore_ascii_case(matched_name))
+            {
                 detected.push(matched_name.to_string());
             }
             is_swarm = true;
@@ -337,7 +377,12 @@ fn parse_twitch_node(node: &RawTwitchNode) -> Option<ChatEvent> {
 fn parse_youtube_line(yt: &RawYouTubeLine) -> Option<ChatEvent> {
     let action = yt.replay_chat_item_action.as_ref()?;
     let action_items = action.actions.as_ref()?;
-    let first_item = action_items.first()?.add_chat_item_action.as_ref()?.item.as_ref()?;
+    let first_item = action_items
+        .first()?
+        .add_chat_item_action
+        .as_ref()?
+        .item
+        .as_ref()?;
 
     let renderer = first_item
         .live_chat_text_message_renderer
@@ -435,6 +480,7 @@ impl StreamingChatNormalizer {
     ///
     /// Peak RAM consumption is strictly <= 80MB (invariant AC-08.2) through
     /// two-pass disk buffered stream processing.
+    #[allow(clippy::too_many_lines)]
     pub fn normalize_file(
         &self,
         raw_input_path: &Path,
@@ -525,17 +571,15 @@ impl StreamingChatNormalizer {
             .map_err(|e| AppError::Internal(format!("Failed writing JSON header: {e}")))?;
 
         // Stream NDJSON lines into events array
-        let ndjson_read_file = File::open(&output_ndjson_path).map_err(|e| {
-            AppError::Internal(format!("Failed reading NDJSON for assembly: {e}"))
-        })?;
+        let ndjson_read_file = File::open(&output_ndjson_path)
+            .map_err(|e| AppError::Internal(format!("Failed reading NDJSON for assembly: {e}")))?;
         let mut ndjson_reader = BufReader::with_capacity(64 * 1024, ndjson_read_file);
 
         let mut first = true;
         loop {
             byte_buf.clear();
-            let bytes_read = match ndjson_reader.read_until(b'\n', &mut byte_buf) {
-                Ok(b) => b,
-                Err(_) => break,
+            let Ok(bytes_read) = ndjson_reader.read_until(b'\n', &mut byte_buf) else {
+                break;
             };
             if bytes_read == 0 {
                 break;
@@ -547,12 +591,12 @@ impl StreamingChatNormalizer {
                 continue;
             }
 
-            if !first {
+            if first {
+                first = false;
+            } else {
                 json_writer
                     .write_all(b",")
                     .map_err(|e| AppError::Internal(format!("JSON write error: {e}")))?;
-            } else {
-                first = false;
             }
 
             json_writer
@@ -575,20 +619,34 @@ impl StreamingChatNormalizer {
     ///
     /// Applies spam bot filter (max 3 messages per author per window),
     /// noise-floor clamp ($X < 15 \Rightarrow Z = 0$), and smoothed Z-score with $\epsilon = 0.5$.
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub fn compute_density_heatmap(
         &self,
         chat_source_path: &Path,
         window_sec: f64,
         step_sec: f64,
     ) -> Result<ChatHeatmapResponse, AppError> {
-        let win_sec = if window_sec <= 0.0 || !window_sec.is_finite() { 10.0 } else { window_sec };
-        let st_sec = if step_sec <= 0.0 || !step_sec.is_finite() { win_sec } else { step_sec };
-
         // Accumulate raw bucket data: index -> (author -> count, swarm_count)
         struct BucketAccumulator {
             author_counts: HashMap<String, u32>,
             swarm_count: u32,
         }
+
+        let win_sec = if window_sec <= 0.0 || !window_sec.is_finite() {
+            10.0
+        } else {
+            window_sec
+        };
+        let st_sec = if step_sec <= 0.0 || !step_sec.is_finite() {
+            win_sec
+        } else {
+            step_sec
+        };
 
         let mut buckets: HashMap<usize, BucketAccumulator> = HashMap::new();
         let mut max_bucket_idx: usize = 0;
@@ -612,10 +670,12 @@ impl StreamingChatNormalizer {
                 max_bucket_idx = bucket_idx;
             }
 
-            let entry = buckets.entry(bucket_idx).or_insert_with(|| BucketAccumulator {
-                author_counts: HashMap::new(),
-                swarm_count: 0,
-            });
+            let entry = buckets
+                .entry(bucket_idx)
+                .or_insert_with(|| BucketAccumulator {
+                    author_counts: HashMap::new(),
+                    swarm_count: 0,
+                });
 
             *entry.author_counts.entry(event.author).or_insert(0) += 1;
             if event.is_swarm_emote || !event.emotes_detected.is_empty() {
@@ -657,9 +717,8 @@ impl StreamingChatNormalizer {
 
             loop {
                 byte_buf.clear();
-                let bytes_read = match reader.read_until(b'\n', &mut byte_buf) {
-                    Ok(b) => b,
-                    Err(_) => break,
+                let Ok(bytes_read) = reader.read_until(b'\n', &mut byte_buf) else {
+                    break;
                 };
                 if bytes_read == 0 {
                     break;
@@ -715,7 +774,7 @@ impl StreamingChatNormalizer {
             let count = effective_counts[i];
             let swarm = swarm_counts[i];
             let timestamp_sec = (i as f64) * st_sec;
-            let velocity_mps = (count as f64) / win_sec;
+            let velocity_mps = f64::from(count) / win_sec;
 
             if velocity_mps > max_velocity_mps {
                 max_velocity_mps = velocity_mps;
@@ -723,7 +782,7 @@ impl StreamingChatNormalizer {
             }
 
             let swarm_ratio = if count > 0 {
-                (swarm as f64) / (count as f64)
+                f64::from(swarm) / f64::from(count)
             } else {
                 0.0
             };
@@ -735,19 +794,19 @@ impl StreamingChatNormalizer {
                 let start_idx = i.saturating_sub(baseline_buckets);
                 let window_slice = &effective_counts[start_idx..=i];
                 let n = window_slice.len() as f64;
-                let sum: f64 = window_slice.iter().map(|&c| c as f64).sum();
+                let sum: f64 = window_slice.iter().map(|&c| f64::from(c)).sum();
                 let mean = sum / n;
                 let variance: f64 = window_slice
                     .iter()
                     .map(|&c| {
-                        let diff = (c as f64) - mean;
+                        let diff = f64::from(c) - mean;
                         diff * diff
                     })
                     .sum::<f64>()
                     / n;
                 let std_dev = variance.sqrt();
                 // Smoothed Z-score with epsilon = 0.5 (UT-09.2) to prevent division by zero
-                ((count as f64) - mean) / (std_dev + 0.5)
+                (f64::from(count) - mean) / (std_dev + 0.5)
             };
 
             let is_peak = z_score >= 2.0 && count >= 15;

@@ -3,6 +3,12 @@
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>)
 //! and `docs/TASK_BOARD.md` §TASK-M4-09.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -42,7 +48,12 @@ pub struct ChatBucket {
 impl ChatBucket {
     /// Construct a new `ChatBucket`.
     #[must_use]
-    pub const fn new(index: usize, timestamp_sec: f64, raw_count: u32, effective_count: u32) -> Self {
+    pub const fn new(
+        index: usize,
+        timestamp_sec: f64,
+        raw_count: u32,
+        effective_count: u32,
+    ) -> Self {
         Self {
             index,
             timestamp_sec,
@@ -81,16 +92,16 @@ pub fn bin_chat_events(
     vod_duration_sec: Option<f64>,
 ) -> Result<Vec<ChatBucket>, AppError> {
     if !bucket_width_sec.is_finite() || bucket_width_sec <= 0.0 || bucket_width_sec > 3600.0 {
-        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-            "Invalid bucket width: {bucket_width_sec}s (must be > 0.0 and <= 3600.0)"
-        ))));
+        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+            format!("Invalid bucket width: {bucket_width_sec}s (must be > 0.0 and <= 3600.0)"),
+        )));
     }
 
     if let Some(dur) = vod_duration_sec {
         if !dur.is_finite() || dur < 0.0 || dur > MAX_CHAT_TIMESTAMP_SEC {
-            return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-                "Invalid VOD duration: {dur}s"
-            ))));
+            return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+                format!("Invalid VOD duration: {dur}s"),
+            )));
         }
     }
 
@@ -137,9 +148,11 @@ pub fn bin_chat_events(
     };
 
     if total_buckets > MAX_ALLOWED_BUCKETS {
-        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+        return Err(AppError::Highlight(HighlightError::ChatParsingFailed(
+            format!(
             "Calculated bucket count {total_buckets} exceeds maximum limit of {MAX_ALLOWED_BUCKETS}"
-        ))));
+        ),
+        )));
     }
 
     if total_buckets == 0 {
@@ -251,23 +264,22 @@ pub fn bin_chat_events_from_file<P: AsRef<Path>>(
         // Attempt container parsing, then raw array parsing
         let container: Result<crate::ingestion::ChatEventsContainer, _> =
             serde_json::from_reader(reader);
-        match container {
-            Ok(c) => c.events,
-            Err(_) => {
-                let file_retry = File::open(path).map_err(|e| {
-                    AppError::Storage(StorageError::DiskCheckFailed {
-                        path: path.display().to_string(),
-                        message: e.to_string(),
-                    })
-                })?;
-                serde_json::from_reader::<_, Vec<ChatEvent>>(BufReader::new(file_retry)).map_err(
-                    |e| {
-                        AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-                            "Failed to parse chat events JSON: {e}"
-                        )))
-                    },
-                )?
-            }
+        if let Ok(c) = container {
+            c.events
+        } else {
+            let file_retry = File::open(path).map_err(|e| {
+                AppError::Storage(StorageError::DiskCheckFailed {
+                    path: path.display().to_string(),
+                    message: e.to_string(),
+                })
+            })?;
+            serde_json::from_reader::<_, Vec<ChatEvent>>(BufReader::new(file_retry)).map_err(
+                |e| {
+                    AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+                        "Failed to parse chat events JSON: {e}"
+                    )))
+                },
+            )?
         }
     };
 
@@ -327,7 +339,11 @@ pub mod tests {
         // UT-09.3 requirement: 20 messages by 1 author in 5s bucket
         let mut events = Vec::new();
         for i in 0..20 {
-            events.push(make_event(1.0 + (i as f64) * 0.1, "spambot9000", "BUY BITCOIN"));
+            events.push(make_event(
+                1.0 + f64::from(i) * 0.1,
+                "spambot9000",
+                "BUY BITCOIN",
+            ));
         }
 
         let buckets = bin_chat_events_default(&events, None).unwrap();

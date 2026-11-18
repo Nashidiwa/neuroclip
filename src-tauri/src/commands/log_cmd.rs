@@ -5,14 +5,88 @@
 //! - `clear_logs()`: Purge / truncate log files on disk.
 //! - `log_frontend_event(level, target, message, context)`: Bridge frontend logs to Rust backend tracing.
 
+use crate::error::{AppError, StorageError};
+use crate::logging::{is_neuroclip_log_file, redact_secrets_in_text, resolve_log_dir, LogEntry};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use crate::error::{AppError, StorageError};
-use crate::logging::{is_neuroclip_log_file, redact_secrets_in_text, resolve_log_dir, LogEntry};
 
 const DEFAULT_LOG_LIMIT: usize = 200;
 const MAX_LOG_LIMIT: usize = 1_000;
+
+/// Parse a single structured JSON or raw plain-text log line into a [`LogEntry`].
+fn parse_log_line(trimmed: &str) -> LogEntry {
+    if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        let timestamp = val
+            .get("timestamp")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let level = val
+            .get("level")
+            .and_then(|l| l.as_str())
+            .unwrap_or("INFO")
+            .to_uppercase();
+
+        let target = val
+            .get("target")
+            .and_then(|t| t.as_str())
+            .unwrap_or("app")
+            .to_string();
+
+        let message = val
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Extract fields object excluding core envelope attributes; preserve line & file even if extra fields are empty
+        let (fields_val, line_num, file_str) = if let Some(map) = val.as_object_mut() {
+            map.remove("timestamp");
+            map.remove("level");
+            map.remove("target");
+            map.remove("message");
+            let line_num = map
+                .remove("line")
+                .and_then(|l| l.as_u64())
+                .and_then(|n| u32::try_from(n).ok());
+            let file_str = map
+                .remove("file")
+                .and_then(|f| f.as_str().map(ToString::to_string));
+
+            let fields_val = if map.is_empty() {
+                None
+            } else {
+                Some(serde_json::Value::Object(map.clone()))
+            };
+            (fields_val, line_num, file_str)
+        } else {
+            (None, None, None)
+        };
+
+        LogEntry {
+            timestamp,
+            level,
+            target,
+            message,
+            fields: fields_val,
+            line: line_num,
+            file: file_str,
+        }
+    } else {
+        // Raw plain text line fallback
+        LogEntry {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            level: "INFO".to_string(),
+            target: "system".to_string(),
+            message: trimmed.to_string(),
+            fields: None,
+            line: None,
+            file: None,
+        }
+    }
+}
 
 /// Helper to extract YYYY-MM-DD date string from candidate log filenames for sorting.
 fn extract_log_date(path: &std::path::Path) -> Option<&str> {
@@ -36,6 +110,9 @@ fn extract_log_date(path: &std::path::Path) -> Option<&str> {
 /// Retrieve recent structured log entries from the local storage directory.
 ///
 /// Limits results to a maximum of 1,000 entries and filters by log level if specified.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if reading the log directory fails.
 #[tauri::command]
 pub async fn get_recent_logs(
     limit: Option<usize>,
@@ -93,18 +170,16 @@ pub async fn get_recent_logs(
             break;
         }
 
-        let file = match File::open(&file_path) {
-            Ok(f) => f,
-            Err(_) => continue,
+        let Ok(file) = File::open(&file_path) else {
+            continue;
         };
 
         let reader = BufReader::new(file);
         let mut file_entries: Vec<LogEntry> = Vec::new();
 
         for line_res in reader.lines() {
-            let line = match line_res {
-                Ok(l) => l,
-                Err(_) => continue,
+            let Ok(line) = line_res else {
+                continue;
             };
 
             let trimmed = line.trim();
@@ -112,77 +187,7 @@ pub async fn get_recent_logs(
                 continue;
             }
 
-            // Attempt structured JSON parse
-            if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(trimmed) {
-                let timestamp = val
-                    .get("timestamp")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("")
-                    .to_string();
-
-                let level = val
-                    .get("level")
-                    .and_then(|l| l.as_str())
-                    .unwrap_or("INFO")
-                    .to_uppercase();
-
-                let target = val
-                    .get("target")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("app")
-                    .to_string();
-
-                let message = val
-                    .get("message")
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("")
-                    .to_string();
-
-                // Extract fields object excluding core envelope attributes
-                let fields = if let Some(map) = val.as_object_mut() {
-                    map.remove("timestamp");
-                    map.remove("level");
-                    map.remove("target");
-                    map.remove("message");
-                    let line_num = map.remove("line").and_then(|l| l.as_u64()).map(|n| n as u32);
-                    let file_str = map.remove("file").and_then(|f| f.as_str().map(ToString::to_string));
-
-                    if map.is_empty() {
-                        None
-                    } else {
-                        Some(serde_json::Value::Object(map.clone()))
-                    }
-                    .map(|f_val| (f_val, line_num, file_str))
-                } else {
-                    None
-                };
-
-                let (fields_val, line_num, file_str) = match fields {
-                    Some((fv, ln, fs)) => (Some(fv), ln, fs),
-                    None => (None, None, None),
-                };
-
-                file_entries.push(LogEntry {
-                    timestamp,
-                    level,
-                    target,
-                    message,
-                    fields: fields_val,
-                    line: line_num,
-                    file: file_str,
-                });
-            } else {
-                // Raw plain text line fallback
-                file_entries.push(LogEntry {
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                    level: "INFO".to_string(),
-                    target: "system".to_string(),
-                    message: trimmed.to_string(),
-                    fields: None,
-                    line: None,
-                    file: None,
-                });
-            }
+            file_entries.push(parse_log_line(trimmed));
         }
 
         // Apply level filter
@@ -211,6 +216,9 @@ pub async fn get_recent_logs(
 }
 
 /// Purge all log files from the local logs storage directory.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if reading the log directory fails.
 #[tauri::command]
 pub async fn clear_logs() -> Result<(), AppError> {
     let log_dir = resolve_log_dir();
@@ -243,6 +251,9 @@ pub async fn clear_logs() -> Result<(), AppError> {
 }
 
 /// Receive a frontend logging event, apply defense-in-depth sanitization, and forward to Rust tracing.
+///
+/// # Errors
+/// Never returns an error under normal operation; preserves the uniform `Result<(), AppError>` IPC contract.
 #[tauri::command]
 pub async fn log_frontend_event(
     level: String,
@@ -289,11 +300,19 @@ pub async fn log_frontend_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
+    use std::fmt::Write as _;
 
     #[tokio::test]
     async fn test_get_recent_logs_empty_on_missing_dir() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let missing =
+            std::env::temp_dir().join(format!("neuroclip_missing_logs_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&missing);
+        let _log_env = ScopedEnvVar::set("NEUROCLIP_LOG_DIR", &missing.to_string_lossy());
         let res = get_recent_logs(Some(10), None).await;
         assert!(res.is_ok());
+        assert_eq!(res.unwrap(), Vec::new());
     }
 
     #[tokio::test]
@@ -311,22 +330,26 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_recent_logs_multi_file_retention_order() {
-        let temp_dir = std::env::temp_dir().join(format!("neuroclip_test_logs_{}", std::process::id()));
+        let _env_guard = ENV_LOCK.lock().await;
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_test_logs_retention_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
         let _ = fs::create_dir_all(&temp_dir);
-        let temp_str = match temp_dir.to_str() {
-            Some(s) => s,
-            None => return,
+        let Some(temp_str) = temp_dir.to_str() else {
+            return;
         };
-        std::env::set_var("NEUROCLIP_LOG_DIR", temp_str);
+        let _log_env = ScopedEnvVar::set("NEUROCLIP_LOG_DIR", temp_str);
 
         // File 1 (Yesterday): 30 entries (yesterday_00..yesterday_29)
         let file_yesterday = temp_dir.join("neuroclip-2026-11-09.log");
         let mut y_content = String::new();
         for i in 0..30 {
-            y_content.push_str(&format!(
-                "{{\"timestamp\":\"2026-11-09T10:{:02}:00Z\",\"level\":\"INFO\",\"target\":\"app\",\"message\":\"yesterday_{}\"}}\n",
-                i, i
-            ));
+            let _ = writeln!(
+                y_content,
+                "{{\"timestamp\":\"2026-11-09T10:{i:02}:00Z\",\"level\":\"INFO\",\"target\":\"app\",\"message\":\"yesterday_{i}\"}}"
+            );
         }
         let _ = fs::write(&file_yesterday, y_content);
 
@@ -334,10 +357,10 @@ mod tests {
         let file_today = temp_dir.join("neuroclip-2026-11-10.log");
         let mut t_content = String::new();
         for i in 0..20 {
-            t_content.push_str(&format!(
-                "{{\"timestamp\":\"2026-11-10T10:{:02}:00Z\",\"level\":\"INFO\",\"target\":\"app\",\"message\":\"today_{}\"}}\n",
-                i, i
-            ));
+            let _ = writeln!(
+                t_content,
+                "{{\"timestamp\":\"2026-11-10T10:{i:02}:00Z\",\"level\":\"INFO\",\"target\":\"app\",\"message\":\"today_{i}\"}}"
+            );
         }
         let _ = fs::write(&file_today, t_content);
 
@@ -347,19 +370,68 @@ mod tests {
         if let Ok(entries) = res {
             assert_eq!(entries.len(), 35);
             // Verify that all 20 entries from today are retained at the tail
-            let today_count = entries.iter().filter(|e| e.message.starts_with("today_")).count();
+            let today_count = entries
+                .iter()
+                .filter(|e| e.message.starts_with("today_"))
+                .count();
             assert_eq!(today_count, 20);
 
             // Verify that 15 entries from yesterday are retained at the head
-            let yesterday_count = entries.iter().filter(|e| e.message.starts_with("yesterday_")).count();
+            let yesterday_count = entries
+                .iter()
+                .filter(|e| e.message.starts_with("yesterday_"))
+                .count();
             assert_eq!(yesterday_count, 15);
 
             // First entry is yesterday_15, last entry is today_19
-            assert_eq!(entries.first().map(|e| e.message.as_str()), Some("yesterday_15"));
+            assert_eq!(
+                entries.first().map(|e| e.message.as_str()),
+                Some("yesterday_15")
+            );
             assert_eq!(entries.last().map(|e| e.message.as_str()), Some("today_19"));
         }
 
         let _ = fs::remove_dir_all(&temp_dir);
-        std::env::remove_var("NEUROCLIP_LOG_DIR");
+    }
+
+    #[tokio::test]
+    async fn test_get_recent_logs_preserves_line_and_file_when_fields_empty() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_test_logs_line_file_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = fs::create_dir_all(&temp_dir);
+        let Some(temp_str) = temp_dir.to_str() else {
+            return;
+        };
+        let _log_env = ScopedEnvVar::set("NEUROCLIP_LOG_DIR", temp_str);
+
+        let log_file = temp_dir.join("neuroclip-2026-11-18.log");
+        let lines = [
+            r#"{"timestamp":"2026-11-18T01:00:00Z","level":"INFO","target":"neuroclip_lib::core","message":"no extra fields","line":42,"file":"src/lib.rs"}"#,
+            r#"{"timestamp":"2026-11-18T01:00:01Z","level":"DEBUG","target":"neuroclip_lib::chat","message":"with extra field","line":99,"file":"src/main.rs","vod_id":"123"}"#,
+        ]
+        .join("\n");
+        let _ = fs::write(&log_file, lines);
+
+        let entries = get_recent_logs(Some(10), None).await.unwrap();
+        assert_eq!(entries.len(), 2);
+
+        // Entry 0: extra fields map is empty, yet line and file MUST be preserved
+        assert_eq!(entries[0].fields, None);
+        assert_eq!(entries[0].line, Some(42));
+        assert_eq!(entries[0].file.as_deref(), Some("src/lib.rs"));
+
+        // Entry 1: extra fields map contains vod_id, and line/file are also preserved
+        assert_eq!(
+            entries[1].fields,
+            Some(serde_json::json!({ "vod_id": "123" }))
+        );
+        assert_eq!(entries[1].line, Some(99));
+        assert_eq!(entries[1].file.as_deref(), Some("src/main.rs"));
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

@@ -18,9 +18,9 @@ use tokio_util::sync::CancellationToken;
 
 use neuroclip_lib::{
     build_ffmpeg_range_slice_args, build_slice_ffmpeg_args, evaluate_keyframe_alignment,
-    execute_range_slice, parse_ffprobe_json, slice_video_segment_internal,
-    verify_stream_durations, AppError, FfprobeOutput, FfprobeStream, IngestError,
-    RangeSliceRequest, SliceResult, VodManifest,
+    execute_range_slice, parse_ffprobe_json, slice_video_segment_internal, verify_stream_durations,
+    AppError, FfprobeOutput, FfprobeStream, IngestError, RangeSliceRequest, SliceResult,
+    VodManifest,
 };
 
 /// Helper directory for creating temporary test files with auto-cleanup.
@@ -65,15 +65,24 @@ fn test_ut_13_1_online_m3u8_ffmpeg_range_args() {
         .expect("UT-13.1 builder must succeed for valid online m3u8 inputs");
 
     // Invariant 1: Input seeking (-ss) MUST appear before input flag (-i)
-    let ss_idx = args.iter().position(|a| a == "-ss").expect("Must contain -ss");
-    let i_idx = args.iter().position(|a| a == "-i").expect("Must contain -i");
+    let ss_idx = args
+        .iter()
+        .position(|a| a == "-ss")
+        .expect("Must contain -ss");
+    let i_idx = args
+        .iter()
+        .position(|a| a == "-i")
+        .expect("Must contain -i");
     assert!(
         ss_idx < i_idx,
         "Invariant violated: -ss ({ss_idx}) must precede -i ({i_idx}) for HTTP Range request seeking"
     );
 
     // Invariant 2: -to must appear before -i
-    let to_idx = args.iter().position(|a| a == "-to").expect("Must contain -to");
+    let to_idx = args
+        .iter()
+        .position(|a| a == "-to")
+        .expect("Must contain -to");
     assert!(
         to_idx < i_idx,
         "Invariant violated: -to ({to_idx}) must precede -i ({i_idx})"
@@ -87,7 +96,10 @@ fn test_ut_13_1_online_m3u8_ffmpeg_range_args() {
     assert_eq!(args[i_idx + 1], url);
 
     // Invariant 5: Lossless stream copy flag
-    let c_idx = args.iter().position(|a| a == "-c").expect("Must contain -c");
+    let c_idx = args
+        .iter()
+        .position(|a| a == "-c")
+        .expect("Must contain -c");
     assert_eq!(args[c_idx + 1], "copy");
 
     // Invariant 6: PTS timestamp normalization
@@ -116,15 +128,24 @@ fn test_ut_13_1_local_file_ffmpeg_range_args() {
     let args = build_ffmpeg_range_slice_args(local_file, start_sec, end_sec, output_path, false)
         .expect("UT-13.1 builder must succeed for valid local file inputs");
 
-    let ss_idx = args.iter().position(|a| a == "-ss").expect("Must contain -ss");
-    let i_idx = args.iter().position(|a| a == "-i").expect("Must contain -i");
+    let ss_idx = args
+        .iter()
+        .position(|a| a == "-ss")
+        .expect("Must contain -ss");
+    let i_idx = args
+        .iter()
+        .position(|a| a == "-i")
+        .expect("Must contain -i");
     assert!(ss_idx < i_idx);
 
     // Local file MUST NOT contain network reconnect options
     assert!(!args.contains(&"-reconnect".to_string()));
     assert!(!args.contains(&"-reconnect_streamed".to_string()));
 
-    let c_idx = args.iter().position(|a| a == "-c").expect("Must contain -c");
+    let c_idx = args
+        .iter()
+        .position(|a| a == "-c")
+        .expect("Must contain -c");
     assert_eq!(args[c_idx + 1], "copy");
     assert!(args.contains(&"-avoid_negative_ts".to_string()));
 }
@@ -153,8 +174,8 @@ fn test_ut_13_1_parameter_formatting_with_duration_flag() {
 #[test]
 fn test_ut_13_1_invalid_range_validation() {
     // start >= end
-    let err1 = build_ffmpeg_range_slice_args("stream.m3u8", 100.0, 50.0, "out.mp4", true)
-        .unwrap_err();
+    let err1 =
+        build_ffmpeg_range_slice_args("stream.m3u8", 100.0, 50.0, "out.mp4", true).unwrap_err();
     match err1 {
         AppError::Ingestion(IngestError::InvalidTimeRange { start_sec, end_sec }) => {
             assert_eq!(start_sec, 100.0);
@@ -164,16 +185,16 @@ fn test_ut_13_1_invalid_range_validation() {
     }
 
     // start < 0.0
-    let err2 = build_ffmpeg_range_slice_args("stream.m3u8", -5.0, 50.0, "out.mp4", true)
-        .unwrap_err();
+    let err2 =
+        build_ffmpeg_range_slice_args("stream.m3u8", -5.0, 50.0, "out.mp4", true).unwrap_err();
     assert!(matches!(
         err2,
         AppError::Ingestion(IngestError::InvalidTimeRange { .. })
     ));
 
     // start == end
-    let err3 = build_ffmpeg_range_slice_args("stream.m3u8", 30.0, 30.0, "out.mp4", true)
-        .unwrap_err();
+    let err3 =
+        build_ffmpeg_range_slice_args("stream.m3u8", 30.0, 30.0, "out.mp4", true).unwrap_err();
     assert!(matches!(
         err3,
         AppError::Ingestion(IngestError::InvalidTimeRange { .. })
@@ -365,7 +386,9 @@ async fn test_it_13_1_manifest_integration_online_stream_slice() {
         duration_seconds: 7200.0,
         audio_path: project_dir.join("audio.wav").to_string_lossy().to_string(),
         chat_file_path: None,
-        video_stream_url: Some("https://video-weaver.sfo03.hls.ttvnw.net/v1/playlist/index-dvr.m3u8".to_string()),
+        video_stream_url: Some(
+            "https://video-weaver.sfo03.hls.ttvnw.net/v1/playlist/index-dvr.m3u8".to_string(),
+        ),
         local_video_path: None,
         created_at: "2026-11-15T10:00:00Z".to_string(),
     };
@@ -409,7 +432,9 @@ async fn test_it_13_1_file_size_and_bandwidth_savings_99_percent() {
         task_id: None,
     };
 
-    let result = execute_range_slice(req, None).await.expect("Slicing must succeed");
+    let result = execute_range_slice(req, None)
+        .await
+        .expect("Slicing must succeed");
 
     // AC-13.2 Check: File size must be between 30MB and 80MB
     let size_mb = result.file_size_bytes as f64 / (1024.0 * 1024.0);
@@ -446,7 +471,9 @@ async fn test_it_13_2_sla_execution_duration_under_10s() {
     };
 
     let start = Instant::now();
-    let res = execute_range_slice(req, None).await.expect("Slice should complete");
+    let res = execute_range_slice(req, None)
+        .await
+        .expect("Slice should complete");
     let elapsed = start.elapsed();
 
     // AC-13.1 SLA: Slicing a 90s clip must complete in <= 10.0 seconds
@@ -531,15 +558,36 @@ fn test_slice_result_serialization_and_deserialization_contract() {
     let json_str = serde_json::to_string(&result).expect("Serialization should succeed");
 
     // Must follow CONVENTIONS.md §4.2: snake_case wire serialization
-    assert!(json_str.contains("\"clip_path\":"), "Must serialize as clip_path: {json_str}");
-    assert!(json_str.contains("\"duration_seconds\":"), "Must serialize as duration_seconds: {json_str}");
-    assert!(json_str.contains("\"file_size_bytes\":"), "Must serialize as file_size_bytes: {json_str}");
-    assert!(json_str.contains("\"stream_drift_ms\":"), "Must serialize as stream_drift_ms: {json_str}");
-    assert!(json_str.contains("\"keyframe_aligned\":"), "Must serialize as keyframe_aligned: {json_str}");
+    assert!(
+        json_str.contains("\"clip_path\":"),
+        "Must serialize as clip_path: {json_str}"
+    );
+    assert!(
+        json_str.contains("\"duration_seconds\":"),
+        "Must serialize as duration_seconds: {json_str}"
+    );
+    assert!(
+        json_str.contains("\"file_size_bytes\":"),
+        "Must serialize as file_size_bytes: {json_str}"
+    );
+    assert!(
+        json_str.contains("\"stream_drift_ms\":"),
+        "Must serialize as stream_drift_ms: {json_str}"
+    );
+    assert!(
+        json_str.contains("\"keyframe_aligned\":"),
+        "Must serialize as keyframe_aligned: {json_str}"
+    );
 
     // Must NOT contain camelCase keys in serialization output
-    assert!(!json_str.contains("\"clipPath\":"), "Should not serialize as clipPath: {json_str}");
-    assert!(!json_str.contains("\"durationSeconds\":"), "Should not serialize as durationSeconds: {json_str}");
+    assert!(
+        !json_str.contains("\"clipPath\":"),
+        "Should not serialize as clipPath: {json_str}"
+    );
+    assert!(
+        !json_str.contains("\"durationSeconds\":"),
+        "Should not serialize as durationSeconds: {json_str}"
+    );
 
     // Deserialization with camelCase input (dual-case alias support)
     let camel_json = r#"{
@@ -551,8 +599,12 @@ fn test_slice_result_serialization_and_deserialization_contract() {
         "streamDriftMs": 10.0,
         "keyframeAligned": true
     }"#;
-    let parsed_camel: SliceResult = serde_json::from_str(camel_json).expect("Deserializing camelCase must succeed");
-    assert_eq!(parsed_camel.clip_path, "C:/NeuroClip/projects/vod_2/clips/clip_2.mp4");
+    let parsed_camel: SliceResult =
+        serde_json::from_str(camel_json).expect("Deserializing camelCase must succeed");
+    assert_eq!(
+        parsed_camel.clip_path,
+        "C:/NeuroClip/projects/vod_2/clips/clip_2.mp4"
+    );
     assert_eq!(parsed_camel.duration_seconds, 15.0);
     assert_eq!(parsed_camel.file_size_bytes, 20971520);
     assert_eq!(parsed_camel.stream_drift_ms, 10.0);
@@ -566,8 +618,12 @@ fn test_slice_result_serialization_and_deserialization_contract() {
         "stream_drift_ms": 5.0,
         "keyframe_aligned": true
     }"#;
-    let parsed_snake: SliceResult = serde_json::from_str(snake_json).expect("Deserializing snake_case must succeed");
-    assert_eq!(parsed_snake.clip_path, "C:/NeuroClip/projects/vod_3/clips/clip_3.mp4");
+    let parsed_snake: SliceResult =
+        serde_json::from_str(snake_json).expect("Deserializing snake_case must succeed");
+    assert_eq!(
+        parsed_snake.clip_path,
+        "C:/NeuroClip/projects/vod_3/clips/clip_3.mp4"
+    );
     assert_eq!(parsed_snake.duration_seconds, 45.0);
     assert_eq!(parsed_snake.file_size_bytes, 1048576);
     assert_eq!(parsed_snake.stream_drift_ms, 5.0);
@@ -616,6 +672,14 @@ async fn test_path_traversal_sanitization() {
 
     // The output must be sanitized to be inside clips/ directory, named "evil.mp4"
     let clips_dir = vod_dir.join("clips");
-    assert_eq!(clip_path.parent().unwrap(), clips_dir.as_path(), "Clip must reside in clips dir");
-    assert_eq!(clip_path.file_name().unwrap(), "evil.mp4", "File name must be sanitized to evil.mp4");
+    assert_eq!(
+        clip_path.parent().unwrap(),
+        clips_dir.as_path(),
+        "Clip must reside in clips dir"
+    );
+    assert_eq!(
+        clip_path.file_name().unwrap(),
+        "evil.mp4",
+        "File name must be sanitized to evil.mp4"
+    );
 }

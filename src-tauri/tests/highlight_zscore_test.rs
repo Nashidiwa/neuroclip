@@ -63,8 +63,17 @@ fn test_ut_09_1_message_floor_strict_cutoff() {
     // Exactly 14 messages (under floor) -> 0.0
     for mu in [0.0, 1.0, 5.0, 10.0, 50.0] {
         for sigma in [0.0, 0.1, 1.0, 5.0, 10.0] {
-            let z = calculate_adjusted_zscore(14, mu, sigma, SMOOTHING_EPSILON, MESSAGE_FLOOR_THRESHOLD);
-            assert_eq!(z, 0.0, "Count 14 must return 0.0 for mu={mu}, sigma={sigma}");
+            let z = calculate_adjusted_zscore(
+                14,
+                mu,
+                sigma,
+                SMOOTHING_EPSILON,
+                MESSAGE_FLOOR_THRESHOLD,
+            );
+            assert_eq!(
+                z, 0.0,
+                "Count 14 must return 0.0 for mu={mu}, sigma={sigma}"
+            );
         }
     }
 
@@ -146,8 +155,16 @@ fn test_ut_09_3_multiple_authors_organic_vs_spam() {
 
     // 4 Organic users send 2 messages each (4 * 2 = 8)
     for u in 1..=4 {
-        events.push(create_event(2.1, &format!("viewer_{u}"), "normal message 1"));
-        events.push(create_event(2.2, &format!("viewer_{u}"), "normal message 2"));
+        events.push(create_event(
+            2.1,
+            &format!("viewer_{u}"),
+            "normal message 1",
+        ));
+        events.push(create_event(
+            2.2,
+            &format!("viewer_{u}"),
+            "normal message 2",
+        ));
     }
 
     let buckets = bin_chat_events_default(&events, None).unwrap();
@@ -168,14 +185,14 @@ fn test_ut_09_3_multiple_authors_organic_vs_spam() {
 #[test]
 fn test_it_09_1_continuous_timeline_and_gaps() {
     let vod_dur = 600.0; // 10 minutes = 120 buckets
-    let mut events = Vec::new();
-
-    // Event at minute 0 (bucket 0)
-    events.push(create_event(1.0, "user_a", "start"));
-    // Event at minute 5 (bucket 60, t=300.0s)
-    events.push(create_event(301.0, "user_b", "middle"));
-    // Event at minute 9:55 (bucket 119, t=595.0s)
-    events.push(create_event(596.0, "user_c", "end"));
+    let events = vec![
+        // Event at minute 0 (bucket 0)
+        create_event(1.0, "user_a", "start"),
+        // Event at minute 5 (bucket 60, t=300.0s)
+        create_event(301.0, "user_b", "middle"),
+        // Event at minute 9:55 (bucket 119, t=595.0s)
+        create_event(596.0, "user_c", "end"),
+    ];
 
     let series = compute_chat_velocity_series_from_events(
         &events,

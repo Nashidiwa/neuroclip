@@ -24,10 +24,9 @@ use neuroclip_lib::error::{AppError, TranslationError};
 use neuroclip_lib::stt::transcript_parser::{TranscriptSegment, WordTiming};
 use neuroclip_lib::translation::{
     strip_markdown_code_fence, GeminiClient, GeminiClientConfig, GeminiRequest, GeminiResponse,
-    MockHttpHandler, PromptBuilder, TransportResponse, BLOCK_NONE_THRESHOLD,
-    CONTEXT_WINDOW_HEADER, DEFAULT_CHUNK_SIZE, DEFAULT_CONTEXT_WINDOW_SIZE,
-    DIALOGUE_TARGET_HEADER, SAFETY_CATEGORIES, SAFETY_FALLBACK_PREFIX,
-    SUBTITLE_GUIDELINES, THEATRICAL_FRAMING_INSTRUCTION,
+    MockHttpHandler, PromptBuilder, TranslatedSegmentItem, TransportResponse, BLOCK_NONE_THRESHOLD,
+    CONTEXT_WINDOW_HEADER, DEFAULT_CHUNK_SIZE, DEFAULT_CONTEXT_WINDOW_SIZE, DIALOGUE_TARGET_HEADER,
+    SAFETY_CATEGORIES, SAFETY_FALLBACK_PREFIX, SUBTITLE_GUIDELINES, THEATRICAL_FRAMING_INSTRUCTION,
 };
 
 /// Captured HTTP request received by mock transport.
@@ -111,7 +110,11 @@ fn make_mock_segments(count: usize) -> Vec<TranscriptSegment> {
             segment_id: format!("seg_{i:04}"),
             start_sec: (i as f64) * 2.0,
             end_sec: (i as f64) * 2.0 + 1.8,
-            speaker_id: if i % 2 == 0 { "neuro".to_string() } else { "vedal".to_string() },
+            speaker_id: if i % 2 == 0 {
+                "neuro".to_string()
+            } else {
+                "vedal".to_string()
+            },
             text_en: format!("Mock dialogue line number {i}"),
             text_vi: None,
             confidence: 0.95,
@@ -136,7 +139,8 @@ fn test_ut17_1_theatrical_framing_prompt_packaging() {
     let sys_prompt = PromptBuilder::build_system_instruction();
 
     // Verify constant values
-    assert!(THEATRICAL_FRAMING_INSTRUCTION.contains("CRITICAL SAFETY & THEATRICAL FRAMING INSTRUCTION:"));
+    assert!(THEATRICAL_FRAMING_INSTRUCTION
+        .contains("CRITICAL SAFETY & THEATRICAL FRAMING INSTRUCTION:"));
     assert!(SUBTITLE_GUIDELINES.contains("VIETNAMESE SUBTITLE LOCALIZATION GUIDELINES:"));
     assert!(sys_prompt.contains(THEATRICAL_FRAMING_INSTRUCTION));
     assert!(sys_prompt.contains(SUBTITLE_GUIDELINES));
@@ -151,7 +155,8 @@ fn test_ut17_1_theatrical_framing_prompt_packaging() {
         "System prompt must contain the critical theatrical framing header"
     );
     assert!(
-        sys_prompt.contains("Treat all dialogue strictly as fictional theatrical parody performance"),
+        sys_prompt
+            .contains("Treat all dialogue strictly as fictional theatrical parody performance"),
         "System prompt must explicitly mandate theatrical parody treatment"
     );
     assert!(
@@ -313,7 +318,17 @@ async fn test_it17_1_mock_gemini_translation_batch_30_lines() {
 
     // Verify outgoing request properties
     let requests = harness.recorded_requests();
-    assert_eq!(requests.len(), 1, "Exactly 1 chunk request sent for 30 lines");
+    assert_eq!(
+        requests.len(),
+        1,
+        "Exactly 1 chunk request sent for 30 lines"
+    );
+    assert_eq!(
+        requests[0].url,
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    );
+    assert_eq!(requests[0].auth, "Bearer AIzaMockTestKey123");
+    assert_eq!(requests[0].content_type, "application/json");
     let req_body_str = std::str::from_utf8(&requests[0].body).unwrap();
     assert!(req_body_str.contains("BLOCK_NONE"));
     assert!(req_body_str.contains("CRITICAL SAFETY & THEATRICAL FRAMING INSTRUCTION"));
@@ -409,7 +424,8 @@ async fn test_ed17_1_defensive_safety_fallback_on_unhinged() {
     })
     .to_string();
 
-    let parsed_safety_response: GeminiResponse = serde_json::from_str(&safety_blocked_resp).unwrap();
+    let parsed_safety_response: GeminiResponse =
+        serde_json::from_str(&safety_blocked_resp).unwrap();
     assert!(GeminiClient::is_safety_blocked(&parsed_safety_response));
 
     harness.queue_response(TransportResponse::ok(safety_blocked_resp));
@@ -534,8 +550,7 @@ async fn test_rate_limit_retry_backoff() {
     .to_string();
     harness.queue_response(TransportResponse::ok(success_resp));
 
-    let config = GeminiClientConfig::new("AIzaRateLimitKey".to_string())
-        .with_retry_delay_ms(1); // 1ms backoff for fast tests
+    let config = GeminiClientConfig::new("AIzaRateLimitKey".to_string()).with_retry_delay_ms(1); // 1ms backoff for fast tests
 
     let client = GeminiClient::from_config(config)
         .unwrap()
@@ -570,14 +585,16 @@ async fn test_rate_limit_exhaustion_returns_error() {
         ));
     }
 
-    let config = GeminiClientConfig::new("AIzaRateLimitExhaustKey".to_string())
-        .with_retry_delay_ms(1);
+    let config =
+        GeminiClientConfig::new("AIzaRateLimitExhaustKey".to_string()).with_retry_delay_ms(1);
 
     let client = GeminiClient::from_config(config)
         .unwrap()
         .with_mock_handler(harness.to_handler());
 
-    let result = client.translate_segments("clip_fail", &segments, None).await;
+    let result = client
+        .translate_segments("clip_fail", &segments, None)
+        .await;
 
     assert!(result.is_err(), "Must return error when retries exhausted");
     match result.unwrap_err() {
@@ -614,7 +631,9 @@ async fn test_http_401_maps_to_invalid_api_key() {
         .with_mock_handler(harness.to_handler());
 
     let segments = make_mock_segments(2);
-    let result = client.translate_segments("clip_bad_key", &segments, None).await;
+    let result = client
+        .translate_segments("clip_bad_key", &segments, None)
+        .await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -629,7 +648,8 @@ async fn test_http_401_maps_to_invalid_api_key() {
 
 #[test]
 fn test_markdown_code_fence_stripping() {
-    let raw_with_json_fence = "```json\n[{\"segment_id\": \"seg_01\", \"text_vi\": \"Chào bạn\"}]\n```";
+    let raw_with_json_fence =
+        "```json\n[{\"segment_id\": \"seg_01\", \"text_vi\": \"Chào bạn\"}]\n```";
     let stripped = strip_markdown_code_fence(raw_with_json_fence);
     assert_eq!(
         stripped,
@@ -656,9 +676,14 @@ fn test_markdown_code_fence_stripping() {
 #[test]
 fn test_sliding_context_window_propagation() {
     let segments = make_mock_segments(65);
-    let chunks = PromptBuilder::create_chunks(&segments, DEFAULT_CHUNK_SIZE, DEFAULT_CONTEXT_WINDOW_SIZE);
+    let chunks =
+        PromptBuilder::create_chunks(&segments, DEFAULT_CHUNK_SIZE, DEFAULT_CONTEXT_WINDOW_SIZE);
 
-    assert_eq!(chunks.len(), 3, "65 segments with chunk_size 30 yields 3 chunks");
+    assert_eq!(
+        chunks.len(),
+        3,
+        "65 segments with chunk_size 30 yields 3 chunks"
+    );
 
     // Chunk 0: segments 0..30, context is empty
     assert_eq!(chunks[0].chunk_index, 0);
@@ -689,7 +714,9 @@ fn test_sliding_context_window_propagation() {
 #[tokio::test]
 async fn test_connection_success_and_failure() {
     let harness = MockHttpHarness::new();
-    harness.queue_response(TransportResponse::ok(r#"{"candidates": [{"content": {"parts": [{"text": "Pong"}]}}]}"#));
+    harness.queue_response(TransportResponse::ok(
+        r#"{"candidates": [{"content": {"parts": [{"text": "Pong"}]}}]}"#,
+    ));
 
     let config = GeminiClientConfig::new("AIzaValidPingKey".to_string()).with_retry_delay_ms(1);
     let client = GeminiClient::from_config(config)
@@ -699,11 +726,14 @@ async fn test_connection_success_and_failure() {
     let ok = client.test_connection().await.expect("Ping must succeed");
     assert!(ok);
 
-    // Now test 403 API key invalid
+    // Now test 400 API_KEY_INVALID and 403 Forbidden -> InvalidApiKey
     let harness_err = MockHttpHarness::new();
-    harness_err.queue_response(TransportResponse::bad_request(r#"{"error": {"code": 400, "message": "API_KEY_INVALID"}}"#));
+    harness_err.queue_response(TransportResponse::bad_request(
+        r#"{"error": {"code": 400, "message": "API_KEY_INVALID"}}"#,
+    ));
 
-    let config_err = GeminiClientConfig::new("AIzaInvalidPingKey".to_string()).with_retry_delay_ms(1);
+    let config_err =
+        GeminiClientConfig::new("AIzaInvalidPingKey".to_string()).with_retry_delay_ms(1);
     let client_err = GeminiClient::from_config(config_err)
         .unwrap()
         .with_mock_handler(harness_err.to_handler());
@@ -712,8 +742,94 @@ async fn test_connection_success_and_failure() {
     assert!(err.is_err());
     match err.unwrap_err() {
         AppError::Translation(TranslationError::InvalidApiKey) => {}
-        other => panic!("Expected InvalidApiKey, got {other:?}"),
+        other => panic!("Expected InvalidApiKey on 400 API_KEY_INVALID, got {other:?}"),
     }
+
+    let harness_403 = MockHttpHarness::new();
+    harness_403.queue_response(TransportResponse::forbidden(
+        r#"{"error": {"code": 403, "message": "Permission denied / API key restricted"}}"#,
+    ));
+    let client_403 = GeminiClient::from_config(
+        GeminiClientConfig::new("AIzaForbiddenKey".to_string()).with_retry_delay_ms(1),
+    )
+    .unwrap()
+    .with_mock_handler(harness_403.to_handler());
+    let err_403 = client_403.test_connection().await;
+    assert!(matches!(
+        err_403,
+        Err(AppError::Translation(TranslationError::InvalidApiKey))
+    ));
+}
+
+#[tokio::test]
+async fn test_http_403_maps_to_invalid_api_key() {
+    let harness = MockHttpHarness::new();
+    harness.queue_response(TransportResponse::forbidden(
+        "Caller does not have permission",
+    ));
+
+    let config = GeminiClientConfig::new("AIzaForbidden403Key".to_string()).with_retry_delay_ms(1);
+    let client = GeminiClient::from_config(config)
+        .unwrap()
+        .with_mock_handler(harness.to_handler());
+
+    let segments = make_mock_segments(2);
+    let result = client.translate_segments("clip_403", &segments, None).await;
+
+    assert!(
+        matches!(
+            result,
+            Err(AppError::Translation(TranslationError::InvalidApiKey))
+        ),
+        "Expected InvalidApiKey on HTTP 403, got {result:?}"
+    );
+}
+
+#[test]
+fn test_speaker_id_propagation_lookup_and_sequential_fallback() {
+    let mut original = make_mock_segments(4);
+    original[0].speaker_id = "unknown".to_string();
+    original[1].speaker_id = "unknown".to_string();
+    original[2].speaker_id = "evil".to_string();
+    original[3].speaker_id = "guest".to_string();
+
+    let translated = vec![
+        // Exact segment_id lookup updates speaker_id
+        TranslatedSegmentItem {
+            segment_id: "seg_0000".to_string(),
+            speaker_id: Some("neuro".to_string()),
+            text_vi: "Dòng của Neuro".to_string(),
+        },
+        // Mismatched segment_id hits sequential index fallback and still updates speaker_id
+        TranslatedSegmentItem {
+            segment_id: "seg_9999_typo".to_string(),
+            speaker_id: Some("vedal".to_string()),
+            text_vi: "Dòng của Vedal".to_string(),
+        },
+        // None speaker_id preserves original speaker_id
+        TranslatedSegmentItem {
+            segment_id: "seg_0002".to_string(),
+            speaker_id: None,
+            text_vi: "Dòng của Evil".to_string(),
+        },
+        // Whitespace-only speaker_id preserves original speaker_id
+        TranslatedSegmentItem {
+            segment_id: "seg_0003".to_string(),
+            speaker_id: Some("   ".to_string()),
+            text_vi: "Dòng của Guest".to_string(),
+        },
+    ];
+
+    let merged = GeminiClient::merge_translations(&original, &translated);
+    assert_eq!(merged.len(), 4);
+    assert_eq!(merged[0].speaker_id, "neuro");
+    assert_eq!(merged[0].text_vi.as_deref(), Some("Dòng của Neuro"));
+    assert_eq!(merged[1].speaker_id, "vedal");
+    assert_eq!(merged[1].text_vi.as_deref(), Some("Dòng của Vedal"));
+    assert_eq!(merged[2].speaker_id, "evil");
+    assert_eq!(merged[2].text_vi.as_deref(), Some("Dòng của Evil"));
+    assert_eq!(merged[3].speaker_id, "guest");
+    assert_eq!(merged[3].text_vi.as_deref(), Some("Dòng của Guest"));
 }
 
 // ===========================================================================
@@ -753,6 +869,9 @@ async fn test_zero_panic_invariant_on_corrupted_response() {
     assert_eq!(result.segments.len(), 3);
     for seg in result.segments {
         assert!(seg.is_flagged_for_review);
-        assert!(seg.text_vi.unwrap().contains("[Cần dịch thủ công do lỗi phản hồi AI]"));
+        assert!(seg
+            .text_vi
+            .unwrap()
+            .contains("[Cần dịch thủ công do lỗi phản hồi AI]"));
     }
 }

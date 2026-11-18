@@ -133,8 +133,7 @@ impl SwarmDictionary {
     /// Construct a dictionary from a vector of emote definitions, building the lowercase index map.
     #[must_use]
     pub fn new(emotes: Vec<SwarmEmoteDefinition>) -> Self {
-        let mut lookup_map =
-            HashMap::with_capacity_and_hasher(emotes.len() * 4, BuildFastHasher);
+        let mut lookup_map = HashMap::with_capacity_and_hasher(emotes.len() * 4, BuildFastHasher);
         for (idx, def) in emotes.iter().enumerate() {
             lookup_map.insert(def.canonical_name.to_lowercase(), idx);
             for alias in &def.aliases {
@@ -150,6 +149,7 @@ impl SwarmDictionary {
 
     /// Build the standard Neuro-sama community cultural dictionary with canonical weights.
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn build_default_dictionary() -> Self {
         let emotes = vec![
             // -------------------------------------------------------------------
@@ -167,30 +167,15 @@ impl SwarmDictionary {
                 2.0,
                 &["soop", "soup"],
             ),
-            SwarmEmoteDefinition::new(
-                "Erm",
-                SwarmEmoteCategory::SwarmLore,
-                2.0,
-                &["erm", "ermm"],
-            ),
+            SwarmEmoteDefinition::new("Erm", SwarmEmoteCategory::SwarmLore, 2.0, &["erm", "ermm"]),
             SwarmEmoteDefinition::new(
                 "Heart",
                 SwarmEmoteCategory::SwarmLore,
                 2.0,
                 &["heart", "<3", "neuroheart", "evilheart"],
             ),
-            SwarmEmoteDefinition::new(
-                "Gymbag",
-                SwarmEmoteCategory::SwarmLore,
-                1.5,
-                &["gymbag"],
-            ),
-            SwarmEmoteDefinition::new(
-                "Dinking",
-                SwarmEmoteCategory::SwarmLore,
-                1.5,
-                &["dinking"],
-            ),
+            SwarmEmoteDefinition::new("Gymbag", SwarmEmoteCategory::SwarmLore, 1.5, &["gymbag"]),
+            SwarmEmoteDefinition::new("Dinking", SwarmEmoteCategory::SwarmLore, 1.5, &["dinking"]),
             SwarmEmoteDefinition::new(
                 "Filtered",
                 SwarmEmoteCategory::SwarmLore,
@@ -221,72 +206,27 @@ impl SwarmDictionary {
                 1.5,
                 &["neuro", "neurosama", "neurojam"],
             ),
-            SwarmEmoteDefinition::new(
-                "Cooked",
-                SwarmEmoteCategory::SwarmLore,
-                1.4,
-                &["cooked"],
-            ),
+            SwarmEmoteDefinition::new("Cooked", SwarmEmoteCategory::SwarmLore, 1.4, &["cooked"]),
             SwarmEmoteDefinition::new(
                 "Unhinged",
                 SwarmEmoteCategory::SwarmLore,
                 1.4,
                 &["unhinged"],
             ),
-            SwarmEmoteDefinition::new(
-                "SoCute",
-                SwarmEmoteCategory::SwarmLore,
-                1.4,
-                &["socute"],
-            ),
-            SwarmEmoteDefinition::new(
-                "AYAYA",
-                SwarmEmoteCategory::SwarmLore,
-                1.2,
-                &["ayaya"],
-            ),
-            SwarmEmoteDefinition::new(
-                "Anny",
-                SwarmEmoteCategory::SwarmLore,
-                1.4,
-                &["anny"],
-            ),
-            SwarmEmoteDefinition::new(
-                "Camila",
-                SwarmEmoteCategory::SwarmLore,
-                1.4,
-                &["camila"],
-            ),
-            SwarmEmoteDefinition::new(
-                "Bedge",
-                SwarmEmoteCategory::SwarmLore,
-                1.2,
-                &["bedge"],
-            ),
-            SwarmEmoteDefinition::new(
-                "Corpa",
-                SwarmEmoteCategory::SwarmLore,
-                1.2,
-                &["corpa"],
-            ),
+            SwarmEmoteDefinition::new("SoCute", SwarmEmoteCategory::SwarmLore, 1.4, &["socute"]),
+            SwarmEmoteDefinition::new("AYAYA", SwarmEmoteCategory::SwarmLore, 1.2, &["ayaya"]),
+            SwarmEmoteDefinition::new("Anny", SwarmEmoteCategory::SwarmLore, 1.4, &["anny"]),
+            SwarmEmoteDefinition::new("Camila", SwarmEmoteCategory::SwarmLore, 1.4, &["camila"]),
+            SwarmEmoteDefinition::new("Bedge", SwarmEmoteCategory::SwarmLore, 1.2, &["bedge"]),
+            SwarmEmoteDefinition::new("Corpa", SwarmEmoteCategory::SwarmLore, 1.2, &["corpa"]),
             SwarmEmoteDefinition::new(
                 "GIGACHAD",
                 SwarmEmoteCategory::SwarmLore,
                 1.4,
                 &["gigachad"],
             ),
-            SwarmEmoteDefinition::new(
-                "pepeJAM",
-                SwarmEmoteCategory::SwarmLore,
-                1.3,
-                &["pepejam"],
-            ),
-            SwarmEmoteDefinition::new(
-                "CatJAM",
-                SwarmEmoteCategory::SwarmLore,
-                1.3,
-                &["catjam"],
-            ),
+            SwarmEmoteDefinition::new("pepeJAM", SwarmEmoteCategory::SwarmLore, 1.3, &["pepejam"]),
+            SwarmEmoteDefinition::new("CatJAM", SwarmEmoteCategory::SwarmLore, 1.3, &["catjam"]),
             SwarmEmoteDefinition::new(
                 "SOUTHSIDE",
                 SwarmEmoteCategory::SwarmLore,
@@ -296,123 +236,38 @@ impl SwarmDictionary {
             // -------------------------------------------------------------------
             // Humor & Laughter Reactions (AC-10.2, UT-10.1)
             // -------------------------------------------------------------------
-            SwarmEmoteDefinition::new(
-                "KEKW",
-                SwarmEmoteCategory::Humor,
-                1.5,
-                &["kekw", "kek"],
-            ),
+            SwarmEmoteDefinition::new("KEKW", SwarmEmoteCategory::Humor, 1.5, &["kekw", "kek"]),
             SwarmEmoteDefinition::new(
                 "LUL",
                 SwarmEmoteCategory::Humor,
                 1.5,
                 &["lul", "lulw", "classiclul", "classic lul"],
             ),
-            SwarmEmoteDefinition::new(
-                "OMEGALUL",
-                SwarmEmoteCategory::Humor,
-                1.5,
-                &["omegalul"],
-            ),
-            SwarmEmoteDefinition::new(
-                "💀",
-                SwarmEmoteCategory::Humor,
-                1.5,
-                &["💀"],
-            ),
-            SwarmEmoteDefinition::new(
-                "ICANT",
-                SwarmEmoteCategory::Humor,
-                1.2,
-                &["icant"],
-            ),
-            SwarmEmoteDefinition::new(
-                "LOLW",
-                SwarmEmoteCategory::Humor,
-                1.1,
-                &["lolw"],
-            ),
-            SwarmEmoteDefinition::new(
-                "LMAO",
-                SwarmEmoteCategory::Humor,
-                1.0,
-                &["lmao"],
-            ),
-            SwarmEmoteDefinition::new(
-                "LOL",
-                SwarmEmoteCategory::Humor,
-                1.0,
-                &["lol"],
-            ),
-            SwarmEmoteDefinition::new(
-                "XD",
-                SwarmEmoteCategory::Humor,
-                1.0,
-                &["xd"],
-            ),
+            SwarmEmoteDefinition::new("OMEGALUL", SwarmEmoteCategory::Humor, 1.5, &["omegalul"]),
+            SwarmEmoteDefinition::new("💀", SwarmEmoteCategory::Humor, 1.5, &["💀"]),
+            SwarmEmoteDefinition::new("ICANT", SwarmEmoteCategory::Humor, 1.2, &["icant"]),
+            SwarmEmoteDefinition::new("LOLW", SwarmEmoteCategory::Humor, 1.1, &["lolw"]),
+            SwarmEmoteDefinition::new("LMAO", SwarmEmoteCategory::Humor, 1.0, &["lmao"]),
+            SwarmEmoteDefinition::new("LOL", SwarmEmoteCategory::Humor, 1.0, &["lol"]),
+            SwarmEmoteDefinition::new("XD", SwarmEmoteCategory::Humor, 1.0, &["xd"]),
             // -------------------------------------------------------------------
             // Surprise, Shock & Cringe Reactions (AC-10.2, ADR-004)
             // -------------------------------------------------------------------
-            SwarmEmoteDefinition::new(
-                "Aware",
-                SwarmEmoteCategory::Surprise,
-                1.5,
-                &["aware"],
-            ),
-            SwarmEmoteDefinition::new(
-                "Clueless",
-                SwarmEmoteCategory::Surprise,
-                1.5,
-                &["clueless"],
-            ),
+            SwarmEmoteDefinition::new("Aware", SwarmEmoteCategory::Surprise, 1.5, &["aware"]),
+            SwarmEmoteDefinition::new("Clueless", SwarmEmoteCategory::Surprise, 1.5, &["clueless"]),
             SwarmEmoteDefinition::new(
                 "Pog",
                 SwarmEmoteCategory::Surprise,
                 1.2,
                 &["pog", "pogchamp"],
             ),
-            SwarmEmoteDefinition::new(
-                "PogBones",
-                SwarmEmoteCategory::Surprise,
-                1.3,
-                &["pogbones"],
-            ),
-            SwarmEmoteDefinition::new(
-                "WTF",
-                SwarmEmoteCategory::Surprise,
-                1.2,
-                &["wtf"],
-            ),
-            SwarmEmoteDefinition::new(
-                "monkaW",
-                SwarmEmoteCategory::Surprise,
-                1.3,
-                &["monkaw"],
-            ),
-            SwarmEmoteDefinition::new(
-                "DESPAIR",
-                SwarmEmoteCategory::Surprise,
-                1.3,
-                &["despair"],
-            ),
-            SwarmEmoteDefinition::new(
-                "HUH",
-                SwarmEmoteCategory::Surprise,
-                1.2,
-                &["huh"],
-            ),
-            SwarmEmoteDefinition::new(
-                "monkaS",
-                SwarmEmoteCategory::Surprise,
-                1.2,
-                &["monkas"],
-            ),
-            SwarmEmoteDefinition::new(
-                "WutFace",
-                SwarmEmoteCategory::Surprise,
-                1.1,
-                &["wutface"],
-            ),
+            SwarmEmoteDefinition::new("PogBones", SwarmEmoteCategory::Surprise, 1.3, &["pogbones"]),
+            SwarmEmoteDefinition::new("WTF", SwarmEmoteCategory::Surprise, 1.2, &["wtf"]),
+            SwarmEmoteDefinition::new("monkaW", SwarmEmoteCategory::Surprise, 1.3, &["monkaw"]),
+            SwarmEmoteDefinition::new("DESPAIR", SwarmEmoteCategory::Surprise, 1.3, &["despair"]),
+            SwarmEmoteDefinition::new("HUH", SwarmEmoteCategory::Surprise, 1.2, &["huh"]),
+            SwarmEmoteDefinition::new("monkaS", SwarmEmoteCategory::Surprise, 1.2, &["monkas"]),
+            SwarmEmoteDefinition::new("WutFace", SwarmEmoteCategory::Surprise, 1.1, &["wutface"]),
         ];
 
         Self::new(emotes)
@@ -431,12 +286,18 @@ impl SwarmDictionary {
 
         // Direct check for Unicode skull emoji
         if token == "💀" {
-            return self.lookup_map.get("💀").and_then(|&idx| self.emotes.get(idx));
+            return self
+                .lookup_map
+                .get("💀")
+                .and_then(|&idx| self.emotes.get(idx));
         }
 
         // Direct check for heart emoticon <3
         if token == "<3" {
-            return self.lookup_map.get("<3").and_then(|&idx| self.emotes.get(idx));
+            return self
+                .lookup_map
+                .get("<3")
+                .and_then(|&idx| self.emotes.get(idx));
         }
 
         // Zero-allocation stack buffer for ASCII strings <= 64 bytes
@@ -455,7 +316,9 @@ impl SwarmDictionary {
         }
 
         let lower = token.to_lowercase();
-        self.lookup_map.get(&lower).and_then(|&idx| self.emotes.get(idx))
+        self.lookup_map
+            .get(&lower)
+            .and_then(|&idx| self.emotes.get(idx))
     }
 
     /// Check if a word token belongs to the Swarm dictionary (UT-10.2).
@@ -529,7 +392,10 @@ pub mod tests {
     #[test]
     fn test_default_dictionary_loaded() {
         let dict = default_swarm_dictionary();
-        assert!(dict.len() >= 30, "Must have comprehensive emote definitions");
+        assert!(
+            dict.len() >= 30,
+            "Must have comprehensive emote definitions"
+        );
         assert_eq!(dict.version, "1.0.0");
     }
 

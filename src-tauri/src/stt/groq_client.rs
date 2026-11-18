@@ -8,9 +8,9 @@
 //! - Zero-panic error handling mapped to Schema 5.5 [`TranscriptSegmentsContainer`] (`IT-15.1`).
 //! - Secret-redacting diagnostics (`CONVENTIONS.md` §6.3).
 
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use crate::error::{AppError, SttError};
@@ -23,6 +23,7 @@ use crate::stt::transcript_parser::{
 use crate::stt::vad::{
     detect_speech_segments, split_into_natural_pause_chunks, ChunkSplitConfig, VadConfig,
 };
+use crate::stt::whisper_sidecar::{ProgressCallback, SttProgressPayload};
 
 /// Default Groq Cloud API OpenAI-compatible base URL.
 pub const DEFAULT_GROQ_API_URL: &str = "https://api.groq.com/openai/v1";
@@ -51,6 +52,7 @@ pub struct TransportResponse {
 }
 
 impl TransportResponse {
+    #[must_use]
     pub fn ok(json_body: impl Into<String>) -> Self {
         Self {
             status_code: 200,
@@ -59,14 +61,16 @@ impl TransportResponse {
         }
     }
 
+    #[must_use]
     pub fn rate_limit(retry_after_secs: Option<&str>, body: impl Into<String>) -> Self {
         Self {
             status_code: 429,
-            retry_after: retry_after_secs.map(|s| s.to_string()),
+            retry_after: retry_after_secs.map(ToString::to_string),
             body: body.into(),
         }
     }
 
+    #[must_use]
     pub fn unauthorized(body: impl Into<String>) -> Self {
         Self {
             status_code: 401,
@@ -75,6 +79,7 @@ impl TransportResponse {
         }
     }
 
+    #[must_use]
     pub fn payload_too_large(body: impl Into<String>) -> Self {
         Self {
             status_code: 413,
@@ -85,9 +90,8 @@ impl TransportResponse {
 }
 
 /// Closure type for mock transport testing without sockets.
-pub type MockHttpHandler = Arc<
-    dyn Fn(&str, &str, &str, &[u8]) -> Result<TransportResponse, AppError> + Send + Sync,
->;
+pub type MockHttpHandler =
+    Arc<dyn Fn(&str, &str, &str, &[u8]) -> Result<TransportResponse, AppError> + Send + Sync>;
 
 /// Configuration options for [`GroqClient`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -133,12 +137,14 @@ impl GroqClientConfig {
     }
 
     /// Set an explicit base URL (useful for testing).
+    #[must_use]
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = Some(base_url.into());
         self
     }
 
     /// Enable or disable music/karaoke anti-repetition mode.
+    #[must_use]
     pub fn with_music_mode(mut self, is_music_mode: bool) -> Self {
         self.is_music_mode = is_music_mode;
         self
@@ -158,7 +164,7 @@ impl std::fmt::Debug for GroqClient {
         f.debug_struct("GroqClient")
             .field("config", &self.config)
             .field("has_mock_handler", &self.mock_handler.is_some())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -258,6 +264,7 @@ impl GroqClient {
     }
 
     /// Attach a mock HTTP transport handler for isolated testing without network sockets (`CONVENTIONS.md` §7.1).
+    #[must_use]
     pub fn with_mock_handler(mut self, handler: MockHttpHandler) -> Self {
         self.mock_handler = Some(handler);
         self
@@ -285,6 +292,7 @@ impl GroqClient {
     ///
     /// If payload exceeds 20MB, runs auto-chunking using Silero VAD pause points with 1.5s lookback overlap.
     /// Rejects payloads > 25MB before upload (`AC-15.2`, `ED-15.1`).
+    #[allow(clippy::cast_precision_loss)]
     pub async fn transcribe_audio_bytes(
         &self,
         clip_id: &str,
@@ -309,7 +317,12 @@ impl GroqClient {
         if size_bytes > SAFE_CHUNK_BYTES {
             let buffer = PreparedAudioBuffer::from_wav_bytes(wav_bytes)?;
             return self
-                .transcribe_samples(clip_id, &buffer.samples_f32, buffer.sample_rate as usize, is_music_mode)
+                .transcribe_samples(
+                    clip_id,
+                    &buffer.samples_f32,
+                    buffer.sample_rate as usize,
+                    is_music_mode,
+                )
                 .await;
         }
 
@@ -320,6 +333,9 @@ impl GroqClient {
 
     /// Transcribe 16kHz float32 audio samples, applying Silero VAD natural pause chunking
     /// and 1.5s lookback overlap when total audio exceeds 20MB (`UT-15.1`, `AC-15.2`).
+    ///
+    /// # Errors
+    /// Returns [`AppError::Stt`] if audio encoding, chunk sizing, rate limits, or API calls fail.
     pub async fn transcribe_samples(
         &self,
         clip_id: &str,
@@ -327,23 +343,79 @@ impl GroqClient {
         sample_rate: usize,
         is_music_mode: bool,
     ) -> Result<TranscriptSegmentsContainer, AppError> {
+        self.transcribe_samples_with_progress(clip_id, samples, sample_rate, is_music_mode, None)
+            .await
+    }
+
+    /// Transcribe 16kHz float32 audio samples while emitting real per-chunk [`SttProgressPayload`] updates.
+    ///
+    /// # Errors
+    /// Returns [`AppError::Stt`] if audio encoding, chunk sizing, rate limits, or API calls fail.
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation
+    )]
+    pub async fn transcribe_samples_with_progress(
+        &self,
+        clip_id: &str,
+        samples: &[f32],
+        sample_rate: usize,
+        is_music_mode: bool,
+        on_progress: Option<ProgressCallback>,
+    ) -> Result<TranscriptSegmentsContainer, AppError> {
         if samples.is_empty() {
+            if let Some(ref cb) = on_progress {
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: "completed".to_string(),
+                    percent: 100.0,
+                    eta_sec: Some(0.0),
+                    current_chunk: 1,
+                    total_chunks: 1,
+                });
+            }
             return Ok(TranscriptSegmentsContainer {
                 clip_id: clip_id.to_string(),
                 segments: Vec::new(),
             });
         }
 
-        let sr = if sample_rate == 0 { 16_000 } else { sample_rate };
+        let sr = if sample_rate == 0 {
+            16_000
+        } else {
+            sample_rate
+        };
         let estimated_wav_bytes = 44 + samples.len() * 2;
 
         // Fits in single chunk safely
         if estimated_wav_bytes <= SAFE_CHUNK_BYTES {
+            if let Some(ref cb) = on_progress {
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: "transcribing".to_string(),
+                    percent: 0.0,
+                    eta_sec: None,
+                    current_chunk: 1,
+                    total_chunks: 1,
+                });
+            }
             let buffer = PreparedAudioBuffer::from_f32(samples.to_vec(), sr as u32);
             let wav_bytes = buffer.to_wav_bytes()?;
-            return self
+            let result = self
                 .transcribe_single_chunk_with_retry(clip_id, &wav_bytes, is_music_mode, 0.0)
-                .await;
+                .await?;
+            if let Some(ref cb) = on_progress {
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: "completed".to_string(),
+                    percent: 100.0,
+                    eta_sec: Some(0.0),
+                    current_chunk: 1,
+                    total_chunks: 1,
+                });
+            }
+            return Ok(result);
         }
 
         // Multi-chunk path: run Silero VAD to detect natural pause boundaries
@@ -353,28 +425,44 @@ impl GroqClient {
         let split_config = ChunkSplitConfig {
             max_chunk_size_bytes: SAFE_CHUNK_BYTES,
             max_chunk_duration_ms: 600_000, // 10 minutes
-            overlap_ms: DEFAULT_OVERLAP_MS,  // 1.5s
+            overlap_ms: DEFAULT_OVERLAP_MS, // 1.5s
         };
 
-        let base_chunks = split_into_natural_pause_chunks(samples, &speech_segments, &split_config, sr)?;
+        let base_chunks =
+            split_into_natural_pause_chunks(samples, &speech_segments, &split_config, sr)?;
         if base_chunks.is_empty() {
+            if let Some(ref cb) = on_progress {
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: "completed".to_string(),
+                    percent: 100.0,
+                    eta_sec: Some(0.0),
+                    current_chunk: 1,
+                    total_chunks: 1,
+                });
+            }
             return Ok(TranscriptSegmentsContainer {
                 clip_id: clip_id.to_string(),
                 segments: Vec::new(),
             });
         }
 
-        let total_chunks = base_chunks.len();
+        let total_chunks_usize = base_chunks.len();
+        let total_chunks = u32::try_from(total_chunks_usize).unwrap_or(u32::MAX);
         info!(
             clip_id = %clip_id,
-            chunks_count = total_chunks,
+            chunks_count = total_chunks_usize,
             "Auto-chunking audio into {} VAD natural pause segments (< 20MB)",
-            total_chunks
+            total_chunks_usize
         );
 
         let mut all_segments: Vec<TranscriptSegment> = Vec::new();
+        let mut completed_emitted = false;
 
         for (idx, base_chunk) in base_chunks.iter().enumerate() {
+            let chunk_num = u32::try_from(idx + 1).unwrap_or(total_chunks);
+            let is_last_chunk = idx + 1 == total_chunks_usize;
+
             // Apply 1.5s lookback overlap for chunk index > 0
             let start_with_overlap_ms = if idx == 0 {
                 0u64
@@ -388,6 +476,17 @@ impl GroqClient {
 
             if start_sample >= end_sample {
                 continue;
+            }
+
+            if let Some(ref cb) = on_progress {
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: "transcribing".to_string(),
+                    percent: (idx as f64 / f64::from(total_chunks)) * 100.0,
+                    eta_sec: None,
+                    current_chunk: chunk_num,
+                    total_chunks,
+                });
             }
 
             let chunk_slice = &samples[start_sample..end_sample];
@@ -419,6 +518,36 @@ impl GroqClient {
                 }
                 all_segments.push(seg);
             }
+
+            if let Some(ref cb) = on_progress {
+                let stage = if is_last_chunk {
+                    completed_emitted = true;
+                    "completed"
+                } else {
+                    "transcribing"
+                };
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: stage.to_string(),
+                    percent: (f64::from(chunk_num) / f64::from(total_chunks)) * 100.0,
+                    eta_sec: if is_last_chunk { Some(0.0) } else { None },
+                    current_chunk: chunk_num,
+                    total_chunks,
+                });
+            }
+        }
+
+        if !completed_emitted {
+            if let Some(ref cb) = on_progress {
+                cb(SttProgressPayload {
+                    task_id: clip_id.to_string(),
+                    stage: "completed".to_string(),
+                    percent: 100.0,
+                    eta_sec: Some(0.0),
+                    current_chunk: total_chunks,
+                    total_chunks,
+                });
+            }
         }
 
         // Deduplicate boundary words and sort monotonic
@@ -431,6 +560,7 @@ impl GroqClient {
     }
 
     /// Transcribe a single audio chunk with exponential backoff on HTTP 429 (`IT-15.2`).
+    #[allow(clippy::too_many_lines, clippy::cast_precision_loss)]
     pub async fn transcribe_single_chunk_with_retry(
         &self,
         clip_id: &str,
@@ -476,7 +606,7 @@ impl GroqClient {
                             .headers()
                             .get("retry-after")
                             .and_then(|h| h.to_str().ok())
-                            .map(|s| s.to_string());
+                            .map(ToString::to_string);
                         let body = response.text().await.map_err(|e| {
                             AppError::Stt(SttError::ParserFailed(format!(
                                 "Failed reading Groq HTTP response body: {e}"
@@ -511,7 +641,11 @@ impl GroqClient {
                     )))
                 })?;
 
-                return Ok(map_verbose_json_to_container(clip_id, parsed, time_offset_sec));
+                return Ok(map_verbose_json_to_container(
+                    clip_id,
+                    parsed,
+                    time_offset_sec,
+                ));
             }
 
             if status_code == 401 {
@@ -538,13 +672,9 @@ impl GroqClient {
                 };
 
                 if attempts > MAX_RATE_LIMIT_RETRIES {
-                    warn!(
-                        attempts = attempts,
-                        "Groq API rate limit retries exhausted"
-                    );
+                    warn!(attempts = attempts, "Groq API rate limit retries exhausted");
                     return Err(AppError::Stt(SttError::RateLimitExceeded(format!(
-                        "Groq rate limit exceeded after {} retries: {}",
-                        MAX_RATE_LIMIT_RETRIES, last_error_message
+                        "Groq rate limit exceeded after {MAX_RATE_LIMIT_RETRIES} retries: {last_error_message}"
                     ))));
                 }
 
@@ -572,7 +702,7 @@ impl GroqClient {
             }
 
             return Err(AppError::Stt(SttError::SidecarExecutionFailed {
-                details: format!("Groq API returned HTTP {}: {}", status_code, text),
+                details: format!("Groq API returned HTTP {status_code}: {text}"),
             }));
         }
     }
@@ -727,7 +857,9 @@ pub fn map_verbose_json_to_container(
                     words.push(WordTiming {
                         word: clean_word,
                         start_sec: sanitize_positive(w_start).max(start_sec),
-                        end_sec: sanitize_positive(w_end).max(start_sec).min(end_sec.max(start_sec)),
+                        end_sec: sanitize_positive(w_end)
+                            .max(start_sec)
+                            .min(end_sec.max(start_sec)),
                         probability: confidence,
                     });
                 }
@@ -789,7 +921,9 @@ pub fn deduplicate_overlap_segments(
                     (prev.words.last(), seg.words.first())
                 {
                     if (last_prev_word.start_sec - first_cur_word.start_sec).abs() < 0.25
-                        && last_prev_word.word.eq_ignore_ascii_case(&first_cur_word.word)
+                        && last_prev_word
+                            .word
+                            .eq_ignore_ascii_case(&first_cur_word.word)
                     {
                         // Duplicate token on boundary; skip from current segment
                         let mut trimmed_words = seg.words.clone();

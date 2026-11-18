@@ -2,12 +2,12 @@
 
 //! Unit tests for quantized model management and SHA-256 integrity verification (TASK-M4-08).
 
-use std::fs::File;
-use std::io::Write;
 use neuroclip_lib::stt::{
-    compute_file_sha256, find_catalog_entry, resolve_models_dir, verify_model,
+    compute_file_sha256, find_catalog_entry, resolve_models_dir, verify_model, MODEL_CATALOG,
     SHA256_CHUNK_SIZE,
 };
+use std::fs::File;
+use std::io::Write;
 
 #[test]
 fn test_ut_08_6_missing_model_triggers_err_stt_model_not_found() {
@@ -102,4 +102,64 @@ fn test_catalog_and_path_resolution() {
     // Resolve models dir
     let dir = resolve_models_dir();
     assert!(!dir.to_string_lossy().is_empty());
+}
+
+#[test]
+fn test_m4_16_no_placeholder_hashes_and_empty_model_rejection() {
+    // Verify placeholder SHA-256 hashes (empty string & "test\n") were removed
+    const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    const TEST_LF_SHA256: &str = "f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2";
+
+    for entry in MODEL_CATALOG {
+        if let Some(hash) = entry.expected_sha256 {
+            assert_ne!(
+                hash, EMPTY_SHA256,
+                "Placeholder empty SHA-256 found on {}",
+                entry.model_name
+            );
+            assert_ne!(
+                hash, TEST_LF_SHA256,
+                "Placeholder test-newline SHA-256 found on {}",
+                entry.model_name
+            );
+        }
+    }
+
+    // 0-byte single-file model must fail with ERR_STT_MODEL_INTEGRITY_FAILED
+    let empty_file = std::env::temp_dir().join(format!("empty_model_{}.bin", std::process::id()));
+    File::create(&empty_file).unwrap();
+    let res_file = verify_model("custom-empty-model", Some(&empty_file));
+    let _ = std::fs::remove_file(&empty_file);
+    assert!(res_file.is_err());
+    assert_eq!(
+        res_file.unwrap_err().code(),
+        "ERR_STT_MODEL_INTEGRITY_FAILED"
+    );
+
+    // 0-byte directory model.bin must fail with ERR_STT_MODEL_INTEGRITY_FAILED
+    let empty_dir = std::env::temp_dir().join(format!("empty_fw_dir_{}", std::process::id()));
+    std::fs::create_dir_all(&empty_dir).unwrap();
+    let empty_bin = empty_dir.join("model.bin");
+    File::create(&empty_bin).unwrap();
+    let res_dir = verify_model("faster-whisper-medium-int8", Some(&empty_dir));
+    assert!(res_dir.is_err());
+    assert_eq!(
+        res_dir.unwrap_err().code(),
+        "ERR_STT_MODEL_INTEGRITY_FAILED"
+    );
+
+    // Non-empty faster-whisper-medium-int8 directory must verify cleanly
+    {
+        let mut f = File::create(&empty_bin).unwrap();
+        f.write_all(b"real ctranslate2 weights payload").unwrap();
+    }
+    let res_ok = verify_model("faster-whisper-medium-int8", Some(&empty_dir));
+    let _ = std::fs::remove_dir_all(&empty_dir);
+    assert!(
+        res_ok.is_ok(),
+        "Expected non-empty faster-whisper-medium-int8 to verify: {res_ok:?}"
+    );
+    let info = res_ok.unwrap();
+    assert!(info.is_verified);
+    assert!(info.size_bytes > 0);
 }

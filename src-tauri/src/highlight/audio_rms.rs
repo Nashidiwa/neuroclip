@@ -3,6 +3,12 @@
 //! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>),
 //! `docs/ARCHITECTURE.md` §4.3 & §5.4, and `docs/TASK_BOARD.md` TASK-M4-11.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use crate::error::{AppError, HighlightError};
 use serde::{Deserialize, Serialize};
 
@@ -202,9 +208,7 @@ pub fn chunk_samples_to_blocks(
         return Ok(Vec::new());
     }
 
-    let block_size = ((sample_rate as f64) * block_duration_sec)
-        .round()
-        .max(1.0) as usize;
+    let block_size = ((sample_rate as f64) * block_duration_sec).round().max(1.0) as usize;
 
     let num_blocks = samples.len().div_ceil(block_size);
     let mut blocks = Vec::with_capacity(num_blocks);

@@ -168,10 +168,11 @@ fn test_it_10_1_alignment_with_chat_velocity_series() {
     }
 
     let vod_duration_sec = Some(200.0);
-    let velocity_series = compute_chat_velocity_series_from_events(&events, 5.0, 60.0, vod_duration_sec)
-        .expect("Velocity computation must succeed");
-    let emote_series =
-        compute_emote_density_series(&events, None, 5.0, vod_duration_sec).expect("Emote series must succeed");
+    let velocity_series =
+        compute_chat_velocity_series_from_events(&events, 5.0, 60.0, vod_duration_sec)
+            .expect("Velocity computation must succeed");
+    let emote_series = compute_emote_density_series(&events, None, 5.0, vod_duration_sec)
+        .expect("Emote series must succeed");
 
     // Must have identical length
     assert_eq!(
@@ -225,8 +226,9 @@ fn test_ed_10_1_performance_benchmark_500k_messages() {
     }
 
     let start = Instant::now();
-    let series = compute_emote_density_series(&events, None, DEFAULT_BUCKET_WIDTH_SEC, Some(28800.0))
-        .expect("500k benchmark must succeed");
+    let series =
+        compute_emote_density_series(&events, None, DEFAULT_BUCKET_WIDTH_SEC, Some(28800.0))
+            .expect("500k benchmark must succeed");
     let elapsed = start.elapsed();
     let elapsed_sec = elapsed.as_secs_f64();
 
@@ -313,8 +315,8 @@ fn test_cultural_weights_quantification_and_top_emotes() {
         create_event(2.0, "user2", "lol lmao xd"),
     ];
 
-    let generic_series =
-        compute_emote_density_series(&generic_events, Some(&dict), 5.0, None).expect("Must succeed");
+    let generic_series = compute_emote_density_series(&generic_events, Some(&dict), 5.0, None)
+        .expect("Must succeed");
     assert_eq!(generic_series.len(), 1);
 
     // Total tokens: 6 (all emotes). Weights: 1.0*6 = 6.0. Weighted score = 6.0 / 6 = 1.0
@@ -390,7 +392,8 @@ fn test_file_loading_ndjson_and_json() {
 #[test]
 fn test_adversarial_edge_cases() {
     // 1. Empty chat events with VOD duration padding
-    let empty_series = compute_emote_density_series(&[], None, 5.0, Some(20.0)).expect("Must succeed");
+    let empty_series =
+        compute_emote_density_series(&[], None, 5.0, Some(20.0)).expect("Must succeed");
     assert_eq!(empty_series.len(), 4); // 0s, 5s, 10s, 15s
     for p in &empty_series {
         assert_eq!(p.e_ratio, 0.0);
@@ -418,7 +421,8 @@ fn test_adversarial_edge_cases() {
         create_event(f64::INFINITY, "bad", "SOOP"),
         create_event(1.0, "good", "KEKW tutel"),
     ];
-    let dirty_series = compute_emote_density_series(&dirty_events, None, 5.0, None).expect("Must succeed");
+    let dirty_series =
+        compute_emote_density_series(&dirty_events, None, 5.0, None).expect("Must succeed");
     assert_eq!(dirty_series.len(), 1);
     assert_eq!(dirty_series[0].emote_count, 2);
 

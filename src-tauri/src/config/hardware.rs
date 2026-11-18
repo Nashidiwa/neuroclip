@@ -3,9 +3,9 @@
 //! Conforms 100% to JSON Schema 5.1 in `docs/ARCHITECTURE.md`.
 //! Strictly adheres to zero-panic invariants (#![deny(clippy::unwrap_used)]).
 
+use crate::error::HardwareError;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use crate::error::HardwareError;
 
 /// GPU vendor enumeration conforming strictly to Schema 5.1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -77,6 +77,7 @@ pub struct HardwareProfile {
 /// - NVIDIA CUDA with >= 8000 MB VRAM but < 16384 MB RAM -> `Hybrid` (bottleneck)
 /// - Mid-range GPU (3000 MB - 7999 MB VRAM) -> `Hybrid`
 #[must_use]
+#[allow(clippy::cast_precision_loss)]
 pub fn evaluate_recommended_mode(
     _cpu: &CpuInfo,
     ram: &RamInfo,
@@ -108,7 +109,8 @@ pub fn evaluate_recommended_mode(
     if gpu.vendor == GpuVendor::Intel {
         return (
             RecommendedMode::CloudByok,
-            "Cấu hình iGPU Intel: Đề xuất dùng Cloud BYOK để xử lý siêu tốc và không nóng máy.".to_string(),
+            "Cấu hình iGPU Intel: Đề xuất dùng Cloud BYOK để xử lý siêu tốc và không nóng máy."
+                .to_string(),
         );
     }
 
@@ -167,14 +169,15 @@ pub fn probe_system_hardware() -> Result<HardwareProfile, HardwareError> {
 }
 
 fn probe_cpu_info() -> CpuInfo {
-    let threads = std::thread::available_parallelism()
-        .map(|p| p.get())
-        .unwrap_or_else(|_| {
+    let threads = std::thread::available_parallelism().map_or_else(
+        |_| {
             std::env::var("NUMBER_OF_PROCESSORS")
                 .ok()
                 .and_then(|v| v.parse::<usize>().ok())
                 .unwrap_or(4)
-        });
+        },
+        std::num::NonZeroUsize::get,
+    );
 
     let cores = if threads > 1 {
         // Safe heuristic: physical cores is usually threads / 2 for hyperthreaded CPUs
@@ -215,7 +218,7 @@ fn probe_ram_info() -> RamInfo {
         }
 
         let mut status = MemoryStatusEx {
-            dw_length: size_of::<MemoryStatusEx>() as u32,
+            dw_length: u32::try_from(size_of::<MemoryStatusEx>()).unwrap_or(0),
             dw_memory_load: 0,
             ull_total_phys: 0,
             ull_avail_phys: 0,
@@ -227,7 +230,7 @@ fn probe_ram_info() -> RamInfo {
         };
 
         // SAFETY: Calling Win32 GlobalMemoryStatusEx with valid sized struct pointer
-        let success = unsafe { GlobalMemoryStatusEx(&mut status as *mut MemoryStatusEx) };
+        let success = unsafe { GlobalMemoryStatusEx(&raw mut status) };
         if success != 0 && status.ull_total_phys > 0 {
             let total_mb = status.ull_total_phys / (1024 * 1024);
             let available_mb = status.ull_avail_phys / (1024 * 1024);
@@ -284,6 +287,7 @@ pub fn select_optimal_gpu(candidates: Vec<GpuInfo>) -> Option<GpuInfo> {
 }
 
 #[cfg(windows)]
+#[allow(clippy::too_many_lines)]
 fn probe_windows_registry_gpu() -> Option<GpuInfo> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
@@ -315,7 +319,8 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
         fn RegCloseKey(h_key: usize) -> u32;
     }
 
-    let class_path = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    let class_path =
+        "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";
     let mut candidates: Vec<GpuInfo> = Vec::new();
 
     // Scan display adapter subkeys 0000 through 0008 (covers multi-GPU setups such as Optimus laptops)
@@ -331,7 +336,7 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
                 wide_subkey.as_ptr(),
                 0,
                 KEY_READ,
-                &mut h_key,
+                &raw mut h_key,
             )
         };
 
@@ -341,7 +346,7 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
             desc_name.push(0);
 
             let mut data_buf = [0u8; 512];
-            let mut data_len = data_buf.len() as u32;
+            let mut data_len = u32::try_from(data_buf.len()).unwrap_or(u32::MAX);
             let mut val_type = 0u32;
 
             let query_res = unsafe {
@@ -349,9 +354,9 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
                     h_key,
                     desc_name.as_ptr(),
                     std::ptr::null_mut(),
-                    &mut val_type,
+                    &raw mut val_type,
                     data_buf.as_mut_ptr(),
-                    &mut data_len,
+                    &raw mut data_len,
                 )
             };
 
@@ -374,11 +379,13 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
             // Modern WDDM drivers cap 32-bit memory metrics at 4095 MB for GPUs > 4GB.
             // The 64-bit QWORD qwMemorySize contains the true physical VRAM.
             // Tier 1: Try reading 64-bit HardwareInformation.qwMemorySize first.
-            let mut qw_mem_name: Vec<u16> = OsStr::new("HardwareInformation.qwMemorySize").encode_wide().collect();
+            let mut qw_mem_name: Vec<u16> = OsStr::new("HardwareInformation.qwMemorySize")
+                .encode_wide()
+                .collect();
             qw_mem_name.push(0);
 
             let mut qw_buf = [0u8; 8];
-            let mut qw_len = qw_buf.len() as u32;
+            let mut qw_len = u32::try_from(qw_buf.len()).unwrap_or(u32::MAX);
             let mut qw_type = 0u32;
 
             let qw_res = unsafe {
@@ -386,9 +393,9 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
                     h_key,
                     qw_mem_name.as_ptr(),
                     std::ptr::null_mut(),
-                    &mut qw_type,
+                    &raw mut qw_type,
                     qw_buf.as_mut_ptr(),
-                    &mut qw_len,
+                    &raw mut qw_len,
                 )
             };
 
@@ -401,11 +408,13 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
 
             // Tier 2: If qwMemorySize was absent or 0, fallback to HardwareInformation.MemorySize (4 or 8 bytes).
             if vram_mb == 0 {
-                let mut mem_name: Vec<u16> = OsStr::new("HardwareInformation.MemorySize").encode_wide().collect();
+                let mut mem_name: Vec<u16> = OsStr::new("HardwareInformation.MemorySize")
+                    .encode_wide()
+                    .collect();
                 mem_name.push(0);
 
                 let mut mem_buf = [0u8; 8];
-                let mut mem_len = mem_buf.len() as u32;
+                let mut mem_len = u32::try_from(mem_buf.len()).unwrap_or(u32::MAX);
                 let mut mem_type = 0u32;
 
                 let mem_res = unsafe {
@@ -413,16 +422,16 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
                         h_key,
                         mem_name.as_ptr(),
                         std::ptr::null_mut(),
-                        &mut mem_type,
+                        &raw mut mem_type,
                         mem_buf.as_mut_ptr(),
-                        &mut mem_len,
+                        &raw mut mem_len,
                     )
                 };
 
                 if mem_res == ERROR_SUCCESS {
                     let vram_bytes = if mem_len == 4 {
                         let bytes: [u8; 4] = [mem_buf[0], mem_buf[1], mem_buf[2], mem_buf[3]];
-                        u32::from_ne_bytes(bytes) as u64
+                        u64::from(u32::from_ne_bytes(bytes))
                     } else if mem_len == 8 {
                         u64::from_ne_bytes(mem_buf)
                     } else {
@@ -436,15 +445,16 @@ fn probe_windows_registry_gpu() -> Option<GpuInfo> {
 
             if !model_str.is_empty() {
                 let upper = model_str.to_uppercase();
-                let (vendor, cuda_supported) = if upper.contains("NVIDIA") || upper.contains("GEFORCE") {
-                    (GpuVendor::Nvidia, true)
-                } else if upper.contains("AMD") || upper.contains("RADEON") {
-                    (GpuVendor::Amd, false)
-                } else if upper.contains("INTEL") {
-                    (GpuVendor::Intel, false)
-                } else {
-                    (GpuVendor::Unknown, false)
-                };
+                let (vendor, cuda_supported) =
+                    if upper.contains("NVIDIA") || upper.contains("GEFORCE") {
+                        (GpuVendor::Nvidia, true)
+                    } else if upper.contains("AMD") || upper.contains("RADEON") {
+                        (GpuVendor::Amd, false)
+                    } else if upper.contains("INTEL") {
+                        (GpuVendor::Intel, false)
+                    } else {
+                        (GpuVendor::Unknown, false)
+                    };
 
                 candidates.push(GpuInfo {
                     vendor,
@@ -505,6 +515,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn test_heuristic_recommendations_matrix() {
         let dummy_cpu = CpuInfo {
             model: "Test CPU".to_string(),
@@ -515,8 +526,16 @@ mod tests {
         // TC-HW-01: RTX 4090 24GB VRAM + 32GB RAM -> offline_local
         let (mode, reason) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 32768, available_mb: 24000 },
-            &GpuInfo { vendor: GpuVendor::Nvidia, model: "RTX 4090".to_string(), vram_mb: 24576, cuda_supported: true },
+            &RamInfo {
+                total_mb: 32768,
+                available_mb: 24000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Nvidia,
+                model: "RTX 4090".to_string(),
+                vram_mb: 24576,
+                cuda_supported: true,
+            },
         );
         assert_eq!(mode, RecommendedMode::OfflineLocal);
         assert!(reason.contains("NVIDIA"));
@@ -524,16 +543,32 @@ mod tests {
         // TC-HW-03: RTX 3060 Ti 8GB VRAM + 16GB RAM -> offline_local
         let (mode, _) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 16384, available_mb: 10000 },
-            &GpuInfo { vendor: GpuVendor::Nvidia, model: "RTX 3060 Ti".to_string(), vram_mb: 8192, cuda_supported: true },
+            &RamInfo {
+                total_mb: 16384,
+                available_mb: 10000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Nvidia,
+                model: "RTX 3060 Ti".to_string(),
+                vram_mb: 8192,
+                cuda_supported: true,
+            },
         );
         assert_eq!(mode, RecommendedMode::OfflineLocal);
 
         // TC-HW-04: RTX 3050 4GB VRAM + 16GB RAM -> hybrid
         let (mode, reason) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 16384, available_mb: 11000 },
-            &GpuInfo { vendor: GpuVendor::Nvidia, model: "RTX 3050".to_string(), vram_mb: 4096, cuda_supported: true },
+            &RamInfo {
+                total_mb: 16384,
+                available_mb: 11000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Nvidia,
+                model: "RTX 3050".to_string(),
+                vram_mb: 4096,
+                cuda_supported: true,
+            },
         );
         assert_eq!(mode, RecommendedMode::Hybrid);
         assert!(reason.contains("Hybrid"));
@@ -541,8 +576,16 @@ mod tests {
         // TC-HW-06: GTX 1050 2GB VRAM -> cloud_byok (VRAM cliff < 3GB)
         let (mode, reason) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 16384, available_mb: 10000 },
-            &GpuInfo { vendor: GpuVendor::Nvidia, model: "GTX 1050".to_string(), vram_mb: 2048, cuda_supported: true },
+            &RamInfo {
+                total_mb: 16384,
+                available_mb: 10000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Nvidia,
+                model: "GTX 1050".to_string(),
+                vram_mb: 2048,
+                cuda_supported: true,
+            },
         );
         assert_eq!(mode, RecommendedMode::CloudByok);
         assert!(reason.contains("< 3GB"));
@@ -550,8 +593,16 @@ mod tests {
         // TC-HW-07: Intel Iris Xe -> cloud_byok
         let (mode, reason) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 8192, available_mb: 4000 },
-            &GpuInfo { vendor: GpuVendor::Intel, model: "Iris Xe".to_string(), vram_mb: 0, cuda_supported: false },
+            &RamInfo {
+                total_mb: 8192,
+                available_mb: 4000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Intel,
+                model: "Iris Xe".to_string(),
+                vram_mb: 0,
+                cuda_supported: false,
+            },
         );
         assert_eq!(mode, RecommendedMode::CloudByok);
         assert!(reason.contains("Cloud"));
@@ -559,8 +610,16 @@ mod tests {
         // TC-HW-08: AMD Radeon RX 7900 XTX 24GB -> cloud_byok (non-CUDA)
         let (mode, reason) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 32768, available_mb: 22000 },
-            &GpuInfo { vendor: GpuVendor::Amd, model: "RX 7900 XTX".to_string(), vram_mb: 24576, cuda_supported: false },
+            &RamInfo {
+                total_mb: 32768,
+                available_mb: 22000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Amd,
+                model: "RX 7900 XTX".to_string(),
+                vram_mb: 24576,
+                cuda_supported: false,
+            },
         );
         assert_eq!(mode, RecommendedMode::CloudByok);
         assert!(reason.contains("AMD"));
@@ -568,8 +627,16 @@ mod tests {
         // TC-HW-09: RTX 4090 with low system RAM (8GB) -> hybrid
         let (mode, reason) = evaluate_recommended_mode(
             &dummy_cpu,
-            &RamInfo { total_mb: 8192, available_mb: 3000 },
-            &GpuInfo { vendor: GpuVendor::Nvidia, model: "RTX 4090".to_string(), vram_mb: 24576, cuda_supported: true },
+            &RamInfo {
+                total_mb: 8192,
+                available_mb: 3000,
+            },
+            &GpuInfo {
+                vendor: GpuVendor::Nvidia,
+                model: "RTX 4090".to_string(),
+                vram_mb: 24576,
+                cuda_supported: true,
+            },
         );
         assert_eq!(mode, RecommendedMode::Hybrid);
         assert!(reason.contains("< 16GB"));
@@ -580,11 +647,11 @@ mod tests {
         let profile_res = probe_system_hardware();
         assert!(profile_res.is_ok());
         if let Ok(profile) = profile_res {
-            assert!(!profile.cpu_info.model.is_empty());
+            assert_ne!(profile.cpu_info.model, "");
             assert!(profile.cpu_info.cores > 0);
             assert!(profile.cpu_info.threads > 0);
             assert!(profile.ram_info.total_mb > 0);
-            assert!(!profile.timestamp.is_empty());
+            assert_ne!(profile.timestamp, "");
         }
     }
 

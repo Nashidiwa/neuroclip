@@ -55,6 +55,7 @@ impl AudioChunk {
 
     /// Calculate RMS (Root Mean Square) energy of the samples in this chunk.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn calculate_rms(&self) -> f64 {
         if self.samples.is_empty() {
             return 0.0;

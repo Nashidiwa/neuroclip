@@ -7,6 +7,7 @@
 #![deny(clippy::unimplemented)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::doc_markdown, clippy::missing_errors_doc)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 pub mod commands;
@@ -36,31 +37,31 @@ pub use error::{
 pub use highlight::{
     analyze_audio_samples, analyze_audio_samples_default, analyze_wav_file, apply_silence_clamp,
     bin_chat_events, bin_chat_events_default, bin_chat_events_from_file, bucket_chat_events,
-    calculate_adjusted_zscore, calculate_emote_ratio, calculate_normalized_pcm_rms,
-    calculate_pcm_rms, calculate_raw_rms, calculate_sine_normalized_rms,
-    chunk_samples_to_blocks, chunk_samples_to_blocks_default, clamp_silence_floor,
-    clean_word_token, compute_chat_velocity_series, compute_chat_velocity_series_default,
+    calculate_adjusted_zscore, calculate_clip_bounds, calculate_emote_ratio,
+    calculate_normalized_pcm_rms, calculate_pcm_rms, calculate_raw_rms,
+    calculate_sine_normalized_rms, chunk_samples_to_blocks, chunk_samples_to_blocks_default,
+    clamp_silence_floor, clean_word_token, cluster_and_deduplicate, compute_audio_only_score,
+    compute_chat_velocity_series, compute_chat_velocity_series_default,
     compute_chat_velocity_series_from_events, compute_chat_velocity_series_from_file,
     compute_emote_density_series, compute_emote_density_series_default,
-    compute_emote_density_series_from_file, compute_zscore, dbfs_to_normalized_scale,
-    dbfs_to_rms, default_swarm_dictionary, detect_energy_peaks, detect_energy_peaks_default,
-    extract_message_tokens, extract_swarm_emotes, is_swarm_emote, process_pcm_reader,
+    compute_emote_density_series_from_file, compute_multimodal_score, compute_overlap_ratio,
+    compute_zscore, dbfs_to_normalized_scale, dbfs_to_rms, default_swarm_dictionary,
+    detect_energy_peaks, detect_energy_peaks_default, determine_primary_reason,
+    extract_message_tokens, extract_swarm_emotes, fuse_multimodal_series,
+    generate_clusters_from_fused_series, is_swarm_emote, normalize_z_score, process_pcm_reader,
     rms_to_dbfs, AudioBlockMetrics, AudioRmsPoint, AudioRmsSeriesResponse, ChatBucket,
     ChatVelocityPoint, EmoteDensityPoint, EnergyAnalyzerConfig, EnergyBaselineStats,
-    SwarmDictionary, SwarmEmoteCategory, SwarmEmoteDefinition, DEFAULT_AUDIO_BASELINE_WINDOW_SEC,
-    DEFAULT_BASELINE_WINDOW_SEC, DEFAULT_BLOCK_DURATION_SEC, DEFAULT_BLOCK_SAMPLES,
-    DEFAULT_BUCKET_WIDTH_SEC, DEFAULT_PEAK_DB_SPIKE_THRESHOLD, DEFAULT_PEAK_SIGMA_THRESHOLD,
-    DEFAULT_SAMPLE_RATE, EPSILON_RMS, I16_MAX_F64, MAX_TOP_EMOTES_PER_BUCKET,
-    MESSAGE_FLOOR_THRESHOLD, MIN_RMS_THRESHOLD, PEAK_DB_THRESHOLD, PEAK_SIGMA_THRESHOLD,
-    SILENCE_FLOOR_AMPLITUDE, SILENCE_FLOOR_DBFS, SINE_1KHZ_EXPECTED_RMS,
+    FusedScorePoint, HighlightCluster, HighlightClustersContainer, SwarmDictionary,
+    SwarmEmoteCategory, SwarmEmoteDefinition, CLUSTER_MERGE_DISTANCE_SEC,
+    DEFAULT_AUDIO_BASELINE_WINDOW_SEC, DEFAULT_BASELINE_WINDOW_SEC, DEFAULT_BLOCK_DURATION_SEC,
+    DEFAULT_BLOCK_SAMPLES, DEFAULT_BUCKET_WIDTH_SEC, DEFAULT_MAX_CLUSTERS,
+    DEFAULT_PEAK_DB_SPIKE_THRESHOLD, DEFAULT_PEAK_SIGMA_THRESHOLD, DEFAULT_POST_ROLL_SEC,
+    DEFAULT_PRE_ROLL_SEC, DEFAULT_SAMPLE_RATE, DEFAULT_TOTAL_PRE_OFFSET_SEC, EPSILON_RMS,
+    I16_MAX_F64, MAX_OVERLAP_RATIO, MAX_PRE_ROLL_SEC, MAX_TOP_EMOTES_PER_BUCKET,
+    MESSAGE_FLOOR_THRESHOLD, MIN_CLIP_DURATION_SEC, MIN_RMS_THRESHOLD, PEAK_DB_THRESHOLD,
+    PEAK_SIGMA_THRESHOLD, SILENCE_FLOOR_AMPLITUDE, SILENCE_FLOOR_DBFS, SINE_1KHZ_EXPECTED_RMS,
     SINE_1KHZ_RMS_TOLERANCE, SINE_1KHZ_THEORETICAL_RMS, SMOOTHING_EPSILON,
-    SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, calculate_clip_bounds, cluster_and_deduplicate,
-    compute_audio_only_score, compute_multimodal_score, compute_overlap_ratio,
-    determine_primary_reason, fuse_multimodal_series, generate_clusters_from_fused_series,
-    normalize_z_score, FusedScorePoint, HighlightCluster, HighlightClustersContainer,
-    CLUSTER_MERGE_DISTANCE_SEC, DEFAULT_MAX_CLUSTERS, DEFAULT_POST_ROLL_SEC,
-    DEFAULT_PRE_ROLL_SEC, DEFAULT_TOTAL_PRE_OFFSET_SEC, MAX_OVERLAP_RATIO, MAX_PRE_ROLL_SEC,
-    MIN_CLIP_DURATION_SEC, STREAM_LATENCY_COMPENSATION_SEC, WEIGHT_AUDIO_ONLY_RMS,
+    SPAM_BOT_MAX_MESSAGES_PER_AUTHOR, STREAM_LATENCY_COMPENSATION_SEC, WEIGHT_AUDIO_ONLY_RMS,
     WEIGHT_AUDIO_RMS, WEIGHT_CHAT_Z, WEIGHT_EMOTE_RATIO,
 };
 pub use ingestion::{
@@ -93,12 +94,12 @@ pub use stt::{
 pub use translation::{
     strip_markdown_code_fence, DialogueChunk, GeminiCandidate, GeminiClient, GeminiClientConfig,
     GeminiContent, GeminiGenerationConfig, GeminiPart, GeminiRequest, GeminiResponse,
-    GeminiSafetySetting, MockHttpHandler, PromptBuilder, TranslationProgressPayload,
-    TransportResponse, BLOCK_NONE_THRESHOLD, CONTEXT_WINDOW_HEADER, DEFAULT_CHUNK_SIZE,
-    DEFAULT_CONTEXT_WINDOW_SIZE, DEFAULT_GEMINI_API_URL, DEFAULT_GEMINI_MODEL,
+    GeminiSafetySetting, MockHttpHandler, PromptBuilder, TranslatedSegmentItem,
+    TranslationProgressPayload, TransportResponse, BLOCK_NONE_THRESHOLD, CONTEXT_WINDOW_HEADER,
+    DEFAULT_CHUNK_SIZE, DEFAULT_CONTEXT_WINDOW_SIZE, DEFAULT_GEMINI_API_URL, DEFAULT_GEMINI_MODEL,
     DEFAULT_RETRY_BASE_DELAY_MS, DIALOGUE_TARGET_HEADER, FORMAT_FALLBACK_PREFIX,
     MAX_RATE_LIMIT_RETRIES, SAFETY_CATEGORIES, SAFETY_FALLBACK_PREFIX, SUBTITLE_GUIDELINES,
-    THEATRICAL_FRAMING_INSTRUCTION, TranslatedSegmentItem,
+    THEATRICAL_FRAMING_INSTRUCTION,
 };
 
 /// Health check ping/pong command adhering to Result<T, AppError> contract
@@ -148,6 +149,7 @@ pub fn run() {
             commands::get_chat_events,
             commands::get_chat_velocity_heatmap,
             commands::start_whisper_transcription,
+            commands::start_faster_whisper_transcription,
             commands::transcribe_highlight_clip,
             commands::verify_stt_model,
             commands::export_subtitles_ass,

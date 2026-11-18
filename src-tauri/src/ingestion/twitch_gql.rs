@@ -3,11 +3,11 @@
 //! Complies with docs/CONVENTIONS.md (zero-panic invariant, Result<T, AppError>)
 //! and docs/ARCHITECTURE.md §4.2, §5.3, §6 (ERR-05).
 
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::Stdio;
-use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
@@ -36,7 +36,10 @@ pub struct ChatProgressPayload {
 struct GqlVariables<'a> {
     #[serde(rename = "videoID")]
     video_id: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "contentOffsetSeconds")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "contentOffsetSeconds"
+    )]
     content_offset_seconds: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cursor: Option<&'a str>,
@@ -67,6 +70,7 @@ struct GqlRequestPayload<'a> {
 ///
 /// If chat is missing, deleted, or expired, returns `ERR_INGEST_CHAT_UNAVAILABLE`
 /// within <= 200ms to allow soft fallback (ERR-05).
+#[allow(clippy::too_many_lines)]
 pub async fn fetch_twitch_vod_chat_gql<F>(
     vod_id: &str,
     output_ndjson_path: &Path,
@@ -167,9 +171,9 @@ where
         ]);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-        let child = cmd.spawn().map_err(|e| {
-            AppError::Internal(format!("Failed to spawn curl for Twitch GQL: {e}"))
-        })?;
+        let child = cmd
+            .spawn()
+            .map_err(|e| AppError::Internal(format!("Failed to spawn curl for Twitch GQL: {e}")))?;
         assign_child_to_job_guard(&child);
 
         let output = child
@@ -192,14 +196,11 @@ where
             break;
         }
 
-        let resp_json: serde_json::Value = match serde_json::from_str(&response_str) {
-            Ok(j) => j,
-            Err(_) => {
-                if page_index == 0 {
-                    return Err(AppError::Ingestion(IngestError::ChatReplayUnavailable));
-                }
-                break;
+        let Ok(resp_json) = serde_json::from_str::<serde_json::Value>(&response_str) else {
+            if page_index == 0 {
+                return Err(AppError::Ingestion(IngestError::ChatReplayUnavailable));
             }
+            break;
         };
 
         // Check if root array element has video comments
@@ -240,7 +241,10 @@ where
                     let _ = writer.write_all(b"\n");
                     messages_count = messages_count.saturating_add(1);
 
-                    if let Some(offset) = node.get("contentOffsetSeconds").and_then(|o| o.as_f64()) {
+                    if let Some(offset) = node
+                        .get("contentOffsetSeconds")
+                        .and_then(serde_json::Value::as_f64)
+                    {
                         current_offset = offset;
                     }
                 }
@@ -251,14 +255,14 @@ where
         let page_info = comments.and_then(|c| c.get("pageInfo"));
         has_next_page = page_info
             .and_then(|p| p.get("hasNextPage"))
-            .and_then(|h| h.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         cursor = edge_array
             .last()
             .and_then(|last_edge| last_edge.get("cursor"))
             .and_then(|c| c.as_str())
-            .map(|s| s.to_string());
+            .map(str::to_string);
 
         page_index = page_index.saturating_add(1);
 

@@ -2,8 +2,8 @@
 //!
 //! Complies with AC-06.4, ED-06.3, and docs/CONVENTIONS.md (zero-panic invariant).
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Supported desktop browsers for extracting session cookies via yt-dlp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn test_build_cookie_args_none() {
         let args = build_cookie_args(&CookieSource::None);
-        assert!(args.is_empty());
+        assert_eq!(args, Vec::<String>::new());
     }
 
     #[test]

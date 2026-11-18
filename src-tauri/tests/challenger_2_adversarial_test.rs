@@ -7,9 +7,6 @@
 //! 2. Dual Subtitle Export Correctness & Injection Immunity (IT-08.2 / AC-08.5)
 //! 3. Bounded Memory Streaming SHA-256 (ED-08.4)
 
-use std::fs::File;
-use std::io::Write;
-use std::time::Duration;
 use neuroclip_lib::ingestion::streamer::assign_child_to_job_guard;
 use neuroclip_lib::stt::{
     compute_file_sha256, escape_ass_text, format_ass_timecode, format_srt_timecode,
@@ -17,6 +14,9 @@ use neuroclip_lib::stt::{
     TranscriptSegmentsContainer,
 };
 use sha2::{Digest, Sha256};
+use std::fs::File;
+use std::io::Write;
+use std::time::Duration;
 
 // ===========================================================================
 // CHALLENGE 1: Windows Job Object & Subprocess Lifecycle (ED-08.2)
@@ -27,7 +27,12 @@ use sha2::{Digest, Sha256};
 async fn test_challenger_kill_on_drop_and_job_object_termination() {
     // Spawn a long-running process with kill_on_drop(true) and register to Job Object
     let mut cmd = tokio::process::Command::new("powershell.exe");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 60"]);
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Start-Sleep -Seconds 60",
+    ]);
     cmd.stdout(std::process::Stdio::null());
     cmd.stderr(std::process::Stdio::null());
     cmd.kill_on_drop(true);
@@ -44,7 +49,10 @@ async fn test_challenger_kill_on_drop_and_job_object_termination() {
 
     // Verify child is initially running
     let status_before = child.try_wait().unwrap();
-    assert!(status_before.is_none(), "Child should be running before drop");
+    assert!(
+        status_before.is_none(),
+        "Child should be running before drop"
+    );
 
     // Drop child process handle: kill_on_drop(true) MUST immediately terminate child
     drop(child);
@@ -187,13 +195,31 @@ fn test_challenger_ass_exact_color_codes_and_styles() {
 
     let ass = generate_ass_script(&container);
 
-    // Verify exact &HAABBGGRR color specifications
-    assert!(ass.contains("Style: Neuro,Arial,54,&H00B6B6FF"), "Neuro color must be &H00B6B6FF");
-    assert!(ass.contains("Style: Evil,Arial,54,&H000000DC"), "Evil color must be &H000000DC");
-    assert!(ass.contains("Style: Vedal,Arial,54,&H0066CC66"), "Vedal color must be &H0066CC66");
-    assert!(ass.contains("Style: Guest,Arial,54,&H00FFCC33"), "Guest color must be &H00FFCC33");
-    assert!(ass.contains("Style: Chat,Arial,48,&H00CCCCCC"), "Chat color must be &H00CCCCCC");
-    assert!(ass.contains("Style: Default,Arial,52,&H00FFFFFF"), "Default color must be &H00FFFFFF");
+    // Verify exact &HAABBGGRR color specifications (PO Option 1 Palette)
+    assert!(
+        ass.contains("Style: Neuro,Arial,54,&H00C1B6FF"),
+        "Neuro color must be &H00C1B6FF"
+    );
+    assert!(
+        ass.contains("Style: Evil,Arial,54,&H005500FF"),
+        "Evil color must be &H005500FF"
+    );
+    assert!(
+        ass.contains("Style: Vedal,Arial,54,&H0098FB98"),
+        "Vedal color must be &H0098FB98"
+    );
+    assert!(
+        ass.contains("Style: Guest,Arial,54,&H0000D7FF"),
+        "Guest color must be &H0000D7FF"
+    );
+    assert!(
+        ass.contains("Style: Chat,Arial,48,&H00EBCE87"),
+        "Chat color must be &H00EBCE87"
+    );
+    assert!(
+        ass.contains("Style: Default,Arial,52,&H00FFFFFF"),
+        "Default color must be &H00FFFFFF"
+    );
 
     // Verify each speaker segment uses their specific style
     assert!(ass.contains(",Neuro,Neuro,0,0,0,,Neuro text"));
@@ -207,21 +233,48 @@ fn test_challenger_ass_exact_color_codes_and_styles() {
 #[test]
 fn test_challenger_ass_tag_injection_and_multiline_escaping() {
     let adversarial_inputs = [
-        ("{\\pos(960,540)\\c&H0000FF&}Injected tag", "(\\pos(960,540)\\c&H0000FF&)Injected tag"),
-        ("Nested {{brackets}} and unclosed {", "Nested ((brackets)) and unclosed ("),
-        ("Line 1\r\nLine 2\nLine 3\rLine 4", "Line 1\\NLine 2\\NLine 3Line 4"),
-        ("Special symbols: & < > \" ' , ; :", "Special symbols: & < > \" ' , ; :"),
-        ("Vietnamese: Đậu phộng, bánh tráng nướng, cà phê sữa đá", "Vietnamese: Đậu phộng, bánh tráng nướng, cà phê sữa đá"),
+        (
+            "{\\pos(960,540)\\c&H0000FF&}Injected tag",
+            "(\\pos(960,540)\\c&H0000FF&)Injected tag",
+        ),
+        (
+            "Nested {{brackets}} and unclosed {",
+            "Nested ((brackets)) and unclosed (",
+        ),
+        (
+            "Line 1\r\nLine 2\nLine 3\rLine 4",
+            "Line 1\\NLine 2\\NLine 3Line 4",
+        ),
+        (
+            "Special symbols: & < > \" ' , ; :",
+            "Special symbols: & < > \" ' , ; :",
+        ),
+        (
+            "Vietnamese: Đậu phộng, bánh tráng nướng, cà phê sữa đá",
+            "Vietnamese: Đậu phộng, bánh tráng nướng, cà phê sữa đá",
+        ),
     ];
 
     for (raw, expected) in adversarial_inputs {
         let escaped = escape_ass_text(raw);
         assert_eq!(escaped, expected);
         // CRITICAL INVARIANT: No literal curly braces must survive
-        assert!(!escaped.contains('{'), "Escaped text must not contain '{{': {escaped}");
-        assert!(!escaped.contains('}'), "Escaped text must not contain '}}': {escaped}");
-        assert!(!escaped.contains('\r'), "Escaped text must not contain carriage return: {escaped}");
-        assert!(!escaped.contains('\n'), "Escaped text must not contain raw newline: {escaped}");
+        assert!(
+            !escaped.contains('{'),
+            "Escaped text must not contain '{{': {escaped}"
+        );
+        assert!(
+            !escaped.contains('}'),
+            "Escaped text must not contain '}}': {escaped}"
+        );
+        assert!(
+            !escaped.contains('\r'),
+            "Escaped text must not contain carriage return: {escaped}"
+        );
+        assert!(
+            !escaped.contains('\n'),
+            "Escaped text must not contain raw newline: {escaped}"
+        );
     }
 }
 
@@ -254,7 +307,10 @@ fn test_challenger_srt_sequential_numbering_and_timestamp_syntax() {
     // Verify 1-based sequential index presence
     for i in 1..=120 {
         let expected_index = format!("{i}\n");
-        assert!(srt.contains(&expected_index), "SRT missing sequence number {i}");
+        assert!(
+            srt.contains(&expected_index),
+            "SRT missing sequence number {i}"
+        );
     }
 
     // Verify timecode format: HH:MM:SS,mmm --> HH:MM:SS,mmm
@@ -344,7 +400,10 @@ fn test_challenger_streaming_sha256_large_payload() {
     let actual_sha256 = compute_file_sha256(&temp_file);
     let _ = std::fs::remove_file(&temp_file);
 
-    assert!(actual_sha256.is_ok(), "compute_file_sha256 failed on 5MB file");
+    assert!(
+        actual_sha256.is_ok(),
+        "compute_file_sha256 failed on 5MB file"
+    );
     assert_eq!(actual_sha256.unwrap(), expected_sha256);
 }
 

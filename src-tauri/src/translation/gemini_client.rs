@@ -9,12 +9,12 @@
 //! - Exponential backoff retry for HTTP 429 rate limiting (`IT-15.2` / `TASK-M4-17`).
 //! - In-memory mock transport for hermetic offline tests (`CONVENTIONS.md` §7.1).
 //! - Panic-free error handling with zero unwrap or expect calls (`CONVENTIONS.md` §2.1).
-//! - Clean error propagation using Result and AppError.
+//! - Clean error propagation using `Result` and `AppError`.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use crate::error::{AppError, TranslationError};
@@ -62,6 +62,7 @@ pub struct TransportResponse {
 }
 
 impl TransportResponse {
+    #[must_use]
     pub fn ok(json_body: impl Into<String>) -> Self {
         Self {
             status_code: 200,
@@ -70,6 +71,7 @@ impl TransportResponse {
         }
     }
 
+    #[must_use]
     pub fn rate_limit(retry_after_secs: Option<&str>, body: impl Into<String>) -> Self {
         Self {
             status_code: 429,
@@ -78,6 +80,7 @@ impl TransportResponse {
         }
     }
 
+    #[must_use]
     pub fn unauthorized(body: impl Into<String>) -> Self {
         Self {
             status_code: 401,
@@ -86,6 +89,16 @@ impl TransportResponse {
         }
     }
 
+    #[must_use]
+    pub fn forbidden(body: impl Into<String>) -> Self {
+        Self {
+            status_code: 403,
+            retry_after: None,
+            body: body.into(),
+        }
+    }
+
+    #[must_use]
     pub fn bad_request(body: impl Into<String>) -> Self {
         Self {
             status_code: 400,
@@ -96,9 +109,8 @@ impl TransportResponse {
 }
 
 /// Closure type for mock transport testing.
-pub type MockHttpHandler = Arc<
-    dyn Fn(&str, &str, &str, &[u8]) -> Result<TransportResponse, AppError> + Send + Sync,
->;
+pub type MockHttpHandler =
+    Arc<dyn Fn(&str, &str, &str, &[u8]) -> Result<TransportResponse, AppError> + Send + Sync>;
 
 /// Configuration options for [`GeminiClient`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -132,6 +144,8 @@ fn default_model() -> String {
     DEFAULT_GEMINI_MODEL.to_string()
 }
 
+// Serde default callback for `Option<f32>` field `GeminiClientConfig::temperature`.
+#[allow(clippy::unnecessary_wraps)]
 fn default_temperature() -> Option<f32> {
     Some(0.3)
 }
@@ -153,6 +167,7 @@ const fn default_retry_delay_ms() -> u64 {
 }
 
 impl GeminiClientConfig {
+    #[must_use]
     pub fn new(api_key: String) -> Self {
         Self {
             api_key,
@@ -166,26 +181,31 @@ impl GeminiClientConfig {
         }
     }
 
+    #[must_use]
     pub fn with_base_url(mut self, base_url: String) -> Self {
         self.base_url = Some(base_url);
         self
     }
 
+    #[must_use]
     pub fn with_model(mut self, model: String) -> Self {
         self.model = model;
         self
     }
 
+    #[must_use]
     pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
         self.chunk_size = chunk_size;
         self
     }
 
+    #[must_use]
     pub fn with_context_window_size(mut self, context_size: usize) -> Self {
         self.context_window_size = context_size;
         self
     }
 
+    #[must_use]
     pub fn with_retry_delay_ms(mut self, delay_ms: u64) -> Self {
         self.retry_base_delay_ms = delay_ms;
         self
@@ -325,17 +345,23 @@ impl std::fmt::Debug for GeminiClient {
         f.debug_struct("GeminiClient")
             .field("config", &self.config)
             .field("has_mock_handler", &self.mock_handler.is_some())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
 impl GeminiClient {
     /// Initialize a new Gemini client with an API key.
+    ///
+    /// # Errors
+    /// Returns [`AppError::Translation`] if the API key is empty or HTTP client initialization fails.
     pub fn new(api_key: String) -> Result<Self, AppError> {
         Self::from_config(GeminiClientConfig::new(api_key))
     }
 
     /// Initialize a new Gemini client from full configuration.
+    ///
+    /// # Errors
+    /// Returns [`AppError::Translation`] if the API key is empty or HTTP client initialization fails.
     pub fn from_config(config: GeminiClientConfig) -> Result<Self, AppError> {
         if config.api_key.trim().is_empty() {
             return Err(AppError::Translation(TranslationError::InvalidApiKey));
@@ -360,6 +386,7 @@ impl GeminiClient {
     }
 
     /// Attach an in-memory mock HTTP transport handler for hermetic testing (`CONVENTIONS.md` §7.1).
+    #[must_use]
     pub fn with_mock_handler(mut self, handler: MockHttpHandler) -> Self {
         self.mock_handler = Some(handler);
         self
@@ -402,6 +429,9 @@ impl GeminiClient {
     }
 
     /// Test API key validity with a lightweight 1-token request.
+    ///
+    /// # Errors
+    /// Returns [`AppError::Translation`] if authentication or network transport fails.
     pub async fn test_connection(&self) -> Result<bool, AppError> {
         let endpoint = self.endpoint_url();
         let payload = GeminiRequest {
@@ -426,7 +456,8 @@ impl GeminiClient {
             })
         })?;
 
-        let (status, _retry_after, body_str) = self.send_http_with_retry(&endpoint, &body_bytes).await?;
+        let (status, _retry_after, body_str) =
+            self.send_http_with_retry(&endpoint, &body_bytes).await?;
 
         if (200..300).contains(&status) {
             Ok(true)
@@ -449,6 +480,9 @@ impl GeminiClient {
     ///
     /// Manages dialogue chunking (25–35 lines, default 30), 5-line sliding context window,
     /// defensive safety fallback (`ERR-07`), rate-limiting exponential backoff, and progress emission.
+    ///
+    /// # Errors
+    /// Returns [`AppError::Translation`] if any chunk fails authentication, transport, or retry limits.
     pub async fn translate_segments(
         &self,
         clip_id: &str,
@@ -494,6 +528,9 @@ impl GeminiClient {
     }
 
     /// Translate a single dialogue chunk with sliding context.
+    ///
+    /// # Errors
+    /// Returns [`AppError::Translation`] if serialization, authentication, or HTTP transport fails.
     pub async fn translate_chunk(
         &self,
         chunk: &DialogueChunk,
@@ -542,7 +579,13 @@ impl GeminiClient {
         let (status, _retry_after, body_str) =
             self.send_http_with_retry(&endpoint, &body_bytes).await?;
 
-        if status == 401 || (status == 400 && body_str.contains("API_KEY_INVALID")) {
+        if status == 401 || status == 403 || (status == 400 && body_str.contains("API_KEY_INVALID"))
+        {
+            warn!(
+                status = status,
+                key = %redact_secret(&self.config.api_key),
+                "Gemini API authentication failed during chunk translation"
+            );
             return Err(AppError::Translation(TranslationError::InvalidApiKey));
         }
 
@@ -570,21 +613,18 @@ impl GeminiClient {
         }
 
         // Extract raw JSON content from first candidate
-        let candidate_text = match response
+        let Some(candidate_text) = response
             .candidates
             .first()
             .and_then(|c| c.content.as_ref())
             .and_then(|content| content.parts.first())
             .map(|p| p.text.as_str())
-        {
-            Some(t) => t,
-            None => {
-                warn!(
-                    chunk_index = chunk.chunk_index,
-                    "Gemini candidate returned empty text without safety reason. Activating fallback."
-                );
-                return Ok(Self::apply_safety_fallback(&chunk.items));
-            }
+        else {
+            warn!(
+                chunk_index = chunk.chunk_index,
+                "Gemini candidate returned empty text without safety reason. Activating fallback."
+            );
+            return Ok(Self::apply_safety_fallback(&chunk.items));
         };
 
         // Strip markdown code fences if present (```json ... ```)
@@ -651,11 +691,8 @@ impl GeminiClient {
             .iter()
             .map(|seg| {
                 let mut fallback = seg.clone();
-                fallback.text_vi = Some(format!(
-                    "{} {}",
-                    SAFETY_FALLBACK_PREFIX,
-                    seg.text_en.trim()
-                ));
+                fallback.text_vi =
+                    Some(format!("{} {}", SAFETY_FALLBACK_PREFIX, seg.text_en.trim()));
                 fallback.is_flagged_for_review = true;
                 fallback
             })
@@ -669,15 +706,37 @@ impl GeminiClient {
             .iter()
             .map(|seg| {
                 let mut fallback = seg.clone();
-                fallback.text_vi = Some(format!(
-                    "{} {}",
-                    FORMAT_FALLBACK_PREFIX,
-                    seg.text_en.trim()
-                ));
+                fallback.text_vi =
+                    Some(format!("{} {}", FORMAT_FALLBACK_PREFIX, seg.text_en.trim()));
                 fallback.is_flagged_for_review = true;
                 fallback
             })
             .collect()
+    }
+
+    fn apply_translated_item(
+        updated: &mut TranscriptSegment,
+        original: &TranscriptSegment,
+        item: &TranslatedSegmentItem,
+    ) {
+        if let Some(ref raw_speaker) = item.speaker_id {
+            let speaker = raw_speaker.trim();
+            if !speaker.is_empty() {
+                updated.speaker_id = speaker.to_string();
+            }
+        }
+
+        let text = item.text_vi.trim().to_string();
+        if text.is_empty() {
+            updated.text_vi = Some(format!(
+                "{} {}",
+                SAFETY_FALLBACK_PREFIX,
+                original.text_en.trim()
+            ));
+            updated.is_flagged_for_review = true;
+        } else {
+            updated.text_vi = Some(text);
+        }
     }
 
     /// Merge translated items back into the original transcript segments.
@@ -686,7 +745,8 @@ impl GeminiClient {
         original: &[TranscriptSegment],
         translated: &[TranslatedSegmentItem],
     ) -> Vec<TranscriptSegment> {
-        let mut lookup: HashMap<&str, &TranslatedSegmentItem> = HashMap::with_capacity(translated.len());
+        let mut lookup: HashMap<&str, &TranslatedSegmentItem> =
+            HashMap::with_capacity(translated.len());
         for item in translated {
             lookup.insert(item.segment_id.as_str(), item);
         }
@@ -697,37 +757,14 @@ impl GeminiClient {
             .map(|(idx, seg)| {
                 let mut updated = seg.clone();
                 if let Some(item) = lookup.get(seg.segment_id.as_str()) {
-                    let text = item.text_vi.trim().to_string();
-                    if text.is_empty() {
-                        updated.text_vi = Some(format!(
-                            "{} {}",
-                            SAFETY_FALLBACK_PREFIX,
-                            seg.text_en.trim()
-                        ));
-                        updated.is_flagged_for_review = true;
-                    } else {
-                        updated.text_vi = Some(text);
-                    }
+                    Self::apply_translated_item(&mut updated, seg, item);
                 } else if let Some(item) = translated.get(idx) {
                     // Fallback to sequential index if segment_id was slightly mutated
-                    let text = item.text_vi.trim().to_string();
-                    if text.is_empty() {
-                        updated.text_vi = Some(format!(
-                            "{} {}",
-                            SAFETY_FALLBACK_PREFIX,
-                            seg.text_en.trim()
-                        ));
-                        updated.is_flagged_for_review = true;
-                    } else {
-                        updated.text_vi = Some(text);
-                    }
+                    Self::apply_translated_item(&mut updated, seg, item);
                 } else {
                     // Segment missing from response
-                    updated.text_vi = Some(format!(
-                        "{} {}",
-                        SAFETY_FALLBACK_PREFIX,
-                        seg.text_en.trim()
-                    ));
+                    updated.text_vi =
+                        Some(format!("{} {}", SAFETY_FALLBACK_PREFIX, seg.text_en.trim()));
                     updated.is_flagged_for_review = true;
                 }
                 updated

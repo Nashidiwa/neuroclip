@@ -32,8 +32,8 @@ struct ProcessMemoryCounters {
 }
 
 extern "system" {
-    fn LoadLibraryA(lpLibFileName: *const u8) -> isize;
-    fn GetProcAddress(hModule: isize, lpProcName: *const u8) -> *const ();
+    fn LoadLibraryA(lpLibFileName: *const std::ffi::c_char) -> isize;
+    fn GetProcAddress(hModule: isize, lpProcName: *const std::ffi::c_char) -> *const ();
     fn GetCurrentProcess() -> isize;
     fn GetLastError() -> u32;
 }
@@ -46,9 +46,9 @@ type GetProcessMemoryCountersFn = unsafe extern "system" fn(
 
 fn get_process_memory_mb() -> (f64, f64) {
     unsafe {
-        let psapi = LoadLibraryA(b"psapi.dll\0".as_ptr());
+        let psapi = LoadLibraryA(c"psapi.dll".as_ptr());
         let fn_ptr = if psapi != 0 {
-            GetProcAddress(psapi, b"GetProcessMemoryCounters\0".as_ptr())
+            GetProcAddress(psapi, c"GetProcessMemoryCounters".as_ptr())
         } else {
             std::ptr::null()
         };
@@ -175,7 +175,10 @@ fn test_500k_stream_memory_and_peak_heap_constraint() {
         "[TEST] normalize_file completed: total_msgs = {total_msgs} in {norm_elapsed:.2}s. Private Commit = {priv_after_norm:.2} MB (Delta: {delta_norm_mb:.2} MB)"
     );
 
-    assert_eq!(total_msgs, 500_000, "All 500k messages must be parsed and retained");
+    assert_eq!(
+        total_msgs, 500_000,
+        "All 500k messages must be parsed and retained"
+    );
     assert!(
         delta_norm_mb < 80.0,
         "Pass 1 & 2 peak memory delta ({delta_norm_mb:.2} MB) must be <= 80MB"
@@ -195,7 +198,10 @@ fn test_500k_stream_memory_and_peak_heap_constraint() {
         heatmap.total_buckets
     );
 
-    assert!(heatmap.total_buckets > 0, "Heatmap must contain non-zero buckets");
+    assert!(
+        heatmap.total_buckets > 0,
+        "Heatmap must contain non-zero buckets"
+    );
     assert!(
         delta_heat_mb < 80.0,
         "compute_density_heatmap memory delta ({delta_heat_mb:.2} MB) must be <= 80MB"
@@ -218,21 +224,21 @@ fn test_corrupted_lines_missing_fields_and_malformed_json_stress() {
     let json_path = dir.path().join("chat_events.json");
 
     let corrupted_inputs = [
-        "",                                                  // empty line
-        "   \t  \r  ",                                       // whitespace line
-        "Not a JSON at all! Just raw stream gibberish.",     // non-JSON
-        r#"{"unclosed": "brace"#,                           // syntax error
+        "",                                                   // empty line
+        "   \t  \r  ",                                        // whitespace line
+        "Not a JSON at all! Just raw stream gibberish.",      // non-JSON
+        r#"{"unclosed": "brace"#,                             // syntax error
         r#"{"timestamp_sec": "not_a_float", "author": 123}"#, // type errors
-        r#"{"author": "Vedal"}"#,                            // missing timestamp
-        r#"{"timestamp_sec": 10.0}"#,                       // missing author
-        r#"{"timestamp_sec": -5.0, "author": "Evil"}"#,     // negative timestamp
-        r#"{"timestamp_sec": 12.0, "author": ""}"#,         // empty author string
-        r#"{"replayChatItemAction": null}"#,                 // null youtube action
-        r#"{"replayChatItemAction": {"actions": []}}"#,      // empty youtube actions
-        r#"{"cursor": "c1", "node": null}"#,                 // null twitch node
-        r#"{"node": {"contentOffsetSeconds": null}}"#,       // null offset
-        r#"{"node": {"contentOffsetSeconds": -1.0}}"#,       // negative twitch offset
-        r#"{"null_byte": "hello\u0000world"}"#,              // null byte in string
+        r#"{"author": "Vedal"}"#,                             // missing timestamp
+        r#"{"timestamp_sec": 10.0}"#,                         // missing author
+        r#"{"timestamp_sec": -5.0, "author": "Evil"}"#,       // negative timestamp
+        r#"{"timestamp_sec": 12.0, "author": ""}"#,           // empty author string
+        r#"{"replayChatItemAction": null}"#,                  // null youtube action
+        r#"{"replayChatItemAction": {"actions": []}}"#,       // empty youtube actions
+        r#"{"cursor": "c1", "node": null}"#,                  // null twitch node
+        r#"{"node": {"contentOffsetSeconds": null}}"#,        // null offset
+        r#"{"node": {"contentOffsetSeconds": -1.0}}"#,        // negative twitch offset
+        r#"{"null_byte": "hello\u0000world"}"#,               // null byte in string
         r#"{"a":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"#, // deep nesting
     ];
 
@@ -374,7 +380,10 @@ fn test_extreme_and_pathological_timestamps() {
     let heat_res = normalizer.compute_density_heatmap(&ndjson_path, 10.0, 10.0);
     assert!(heat_res.is_ok());
     let hm = heat_res.unwrap();
-    println!("[TEST] total_buckets for 10M timestamp: {}", hm.total_buckets);
+    println!(
+        "[TEST] total_buckets for 10M timestamp: {}",
+        hm.total_buckets
+    );
     assert_eq!(hm.total_buckets, 1_000_001);
 
     // Subtest 4.4: Epoch milliseconds timestamp (> MAX_CHAT_TIMESTAMP_SEC) rejected
@@ -484,7 +493,10 @@ fn test_mathematical_invariants_rigorous_oracle() {
     // --- WINDOW 2 ---
     // Count = 15 >= 15 => Z-score calculation is ACTIVE
     assert_eq!(heatmap.points[2].message_count, 15);
-    println!("[TEST] Window 2 (count=15) Z-score: {}", heatmap.points[2].z_score);
+    println!(
+        "[TEST] Window 2 (count=15) Z-score: {}",
+        heatmap.points[2].z_score
+    );
     // Since count=15 is higher than previous baseline (14, 8), Z must be positive
     assert!(
         heatmap.points[2].z_score > 0.0,
@@ -499,7 +511,10 @@ fn test_mathematical_invariants_rigorous_oracle() {
     // --- WINDOW 4 ---
     assert_eq!(heatmap.points[4].message_count, 45);
     assert!((heatmap.points[4].velocity_mps - 4.5).abs() < 1e-6);
-    println!("[TEST] Window 4 computed Z-score: {}", heatmap.points[4].z_score);
+    println!(
+        "[TEST] Window 4 computed Z-score: {}",
+        heatmap.points[4].z_score
+    );
     let expected_z = (45.0 - 16.4) / (233.04_f64.sqrt() + 0.5);
     println!("[TEST] Window 4 mathematical oracle expected Z: {expected_z}");
     assert!(
@@ -543,7 +558,10 @@ fn test_heatmap_from_chat_events_json_assembled_document() {
     let res = normalizer.compute_density_heatmap(&json_path, 10.0, 10.0);
     assert!(res.is_ok());
     let hm = res.unwrap();
-    println!("[TEST] Total buckets from chat_events.json: {}", hm.total_buckets);
+    println!(
+        "[TEST] Total buckets from chat_events.json: {}",
+        hm.total_buckets
+    );
     assert_eq!(
         hm.total_buckets, 3,
         "compute_density_heatmap must yield 3 buckets when passed chat_events.json"

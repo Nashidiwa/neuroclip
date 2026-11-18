@@ -3,8 +3,8 @@
 //! Tests for Advanced SubStation Alpha (.ass) and SubRip (.srt) subtitle generators (TASK-M4-08).
 
 use neuroclip_lib::stt::{
-    create_subtitle_project, escape_ass_text, format_ass_timecode, format_srt_timecode,
-    generate_ass_script, generate_srt_script, map_speaker_to_ass_style,
+    create_subtitle_project, default_speaker_styles, escape_ass_text, format_ass_timecode,
+    format_srt_timecode, generate_ass_script, generate_srt_script, map_speaker_to_ass_style,
     TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
 };
 
@@ -76,20 +76,23 @@ fn test_ut_08_10_ass_script_generation_and_speaker_styles() {
     assert!(ass.contains("PlayResX: 1920"));
     assert!(ass.contains("PlayResY: 1080"));
 
-    // Verify V4+ Styles table with VTuber personas
+    // Verify V4+ Styles table with VTuber personas (PO Option 1 Palette in &HAABBGGRR)
     assert!(ass.contains("[V4+ Styles]"));
-    assert!(ass.contains("Style: Neuro,Arial,54,&H00B6B6FF")); // Pastel Pink
-    assert!(ass.contains("Style: Vedal,Arial,54,&H0066CC66")); // Turtle Green
-    assert!(ass.contains("Style: Evil,Arial,54,&H000000DC"));  // Crimson
-    assert!(ass.contains("Style: Guest,Arial,54,&H00FFCC33")); // Sky Blue
-    assert!(ass.contains("Style: Chat,Arial,48,&H00CCCCCC"));  // Light Grey
-    assert!(ass.contains("Style: Default,Arial,52,&H00FFFFFF"));// White
+    assert!(ass.contains("Style: Neuro,Arial,54,&H00C1B6FF")); // Pastel Pink (#FFB6C1)
+    assert!(ass.contains("Style: Vedal,Arial,54,&H0098FB98")); // Mint Green (#98FB98)
+    assert!(ass.contains("Style: Evil,Arial,54,&H005500FF")); // Neon Crimson (#FF0055)
+    assert!(ass.contains("Style: Guest,Arial,54,&H0000D7FF")); // Gold (#FFD700)
+    assert!(ass.contains("Style: Chat,Arial,48,&H00EBCE87")); // Sky Blue (#87CEEB)
+    assert!(ass.contains("Style: Default,Arial,52,&H00FFFFFF")); // White
 
     // Verify Events dialogue entries
     assert!(ass.contains("[Events]"));
     assert!(ass.contains("Dialogue: 0,0:00:01.25,0:00:03.80,Neuro,Neuro,0,0,0,,Chào chat! Mình thích tutel (trái tim)."));
-    assert!(ass.contains("Dialogue: 0,0:00:04.10,0:00:06.50,Vedal,Vedal,0,0,0,,Vedal: Stop saying that."));
-    assert!(ass.contains("Dialogue: 0,0:00:07.00,0:00:09.20,Evil,Evil,0,0,0,,Evil: Ta sẽ tiêu diệt thế giới."));
+    assert!(ass
+        .contains("Dialogue: 0,0:00:04.10,0:00:06.50,Vedal,Vedal,0,0,0,,Vedal: Stop saying that."));
+    assert!(ass.contains(
+        "Dialogue: 0,0:00:07.00,0:00:09.20,Evil,Evil,0,0,0,,Evil: Ta sẽ tiêu diệt thế giới."
+    ));
 }
 
 #[test]
@@ -98,7 +101,9 @@ fn test_ut_08_11_srt_script_generation_sequential_numbering() {
     let srt = generate_srt_script(&container);
 
     // Block 1
-    assert!(srt.contains("1\n00:00:01,250 --> 00:00:03,800\nChào chat! Mình thích tutel (trái tim)."));
+    assert!(
+        srt.contains("1\n00:00:01,250 --> 00:00:03,800\nChào chat! Mình thích tutel (trái tim).")
+    );
 
     // Block 2
     assert!(srt.contains("2\n00:00:04,100 --> 00:00:06,500\nVedal: Stop saying that."));
@@ -110,7 +115,10 @@ fn test_ut_08_11_srt_script_generation_sequential_numbering() {
 #[test]
 fn test_ut_08_12_vietnamese_diacritics_and_special_character_escaping() {
     assert_eq!(escape_ass_text("Normal text"), "Normal text");
-    assert_eq!(escape_ass_text("Text with {tag} here"), "Text with (tag) here");
+    assert_eq!(
+        escape_ass_text("Text with {tag} here"),
+        "Text with (tag) here"
+    );
     assert_eq!(escape_ass_text("Line 1\nLine 2"), "Line 1\\NLine 2");
 
     let vietnamese_sample = "Đồng hồ sinh học của Neuro-sama: tiếng Việt có dấu 100%";
@@ -165,4 +173,15 @@ fn test_schema_5_6_subtitle_project_creation() {
     assert!(project.speaker_styles.contains_key("neuro"));
     assert!(project.speaker_styles.contains_key("vedal"));
     assert!(project.speaker_styles.contains_key("evil"));
+}
+
+#[test]
+fn test_default_speaker_styles_po_option_1_palette() {
+    let styles = default_speaker_styles();
+    assert_eq!(styles["neuro"].color_hex, "#FFB6C1");
+    assert_eq!(styles["vedal"].color_hex, "#98FB98");
+    assert_eq!(styles["evil"].color_hex, "#FF0055");
+    assert_eq!(styles["guest"].color_hex, "#FFD700");
+    assert_eq!(styles["chat"].color_hex, "#87CEEB");
+    assert_eq!(styles["unknown"].color_hex, "#FFFFFF");
 }

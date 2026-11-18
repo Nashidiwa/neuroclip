@@ -3,8 +3,10 @@
 //! Parses Whisper.cpp `--output-json-full` output and streaming stdout lines into
 //! strongly typed, monotonic, validated [`TranscriptSegmentsContainer`] models.
 
-use serde::{Deserialize, Serialize};
+#![allow(clippy::cast_precision_loss)]
+
 use crate::error::{AppError, SttError};
+use serde::{Deserialize, Serialize};
 
 /// Speaker identifier for VTuber highlight streams.
 pub const DEFAULT_SPEAKER_ID: &str = "unknown";
@@ -180,6 +182,7 @@ pub fn is_special_token(token: &str) -> bool {
 ///
 /// Handles missing fields, NaN timestamps, subword token aggregation, and flags lines
 /// with high CPS (> 20.0) or low confidence (< 0.6).
+#[allow(clippy::too_many_lines)]
 pub fn parse_whisper_json_full(
     json_str: &str,
     clip_id: &str,
@@ -204,10 +207,10 @@ pub fn parse_whisper_json_full(
         )))
     })?;
 
-    let items = if !parsed.transcription.is_empty() {
-        parsed.transcription
-    } else {
+    let items = if parsed.transcription.is_empty() {
         parsed.segments
+    } else {
+        parsed.transcription
     };
 
     let mut segments = Vec::new();
@@ -229,8 +232,16 @@ pub fn parse_whisper_json_full(
                 (s, e)
             }
             (_, Some(ts)) => {
-                let s = ts.from.as_deref().and_then(parse_timestamp_to_seconds).unwrap_or(0.0);
-                let e = ts.to.as_deref().and_then(parse_timestamp_to_seconds).unwrap_or(s);
+                let s = ts
+                    .from
+                    .as_deref()
+                    .and_then(parse_timestamp_to_seconds)
+                    .unwrap_or(0.0);
+                let e = ts
+                    .to
+                    .as_deref()
+                    .and_then(parse_timestamp_to_seconds)
+                    .unwrap_or(s);
                 (s, e)
             }
             _ => (0.0, 0.0),
@@ -259,15 +270,25 @@ pub fn parse_whisper_json_full(
                     (s, e)
                 }
                 (_, Some(ts)) => {
-                    let s = ts.from.as_deref().and_then(parse_timestamp_to_seconds).unwrap_or(start_sec);
-                    let e = ts.to.as_deref().and_then(parse_timestamp_to_seconds).unwrap_or(s);
+                    let s = ts
+                        .from
+                        .as_deref()
+                        .and_then(parse_timestamp_to_seconds)
+                        .unwrap_or(start_sec);
+                    let e = ts
+                        .to
+                        .as_deref()
+                        .and_then(parse_timestamp_to_seconds)
+                        .unwrap_or(s);
                     (s, e)
                 }
                 _ => (start_sec, end_sec),
             };
 
             let safe_token_start = sanitize_float(t_start).max(start_sec);
-            let safe_token_end = sanitize_float(t_end).max(safe_token_start).min(end_sec.max(safe_token_start));
+            let safe_token_end = sanitize_float(t_end)
+                .max(safe_token_start)
+                .min(end_sec.max(safe_token_start));
 
             // Token aggregation into words: if token has leading whitespace or words is empty, start new word
             if token_text.starts_with(' ') || words.is_empty() {
@@ -281,7 +302,7 @@ pub fn parse_whisper_json_full(
                 // Subword continuation
                 last_word.word.push_str(token_text.trim());
                 last_word.end_sec = safe_token_end.max(last_word.end_sec);
-                last_word.probability = (last_word.probability + prob.clamp(0.0, 1.0)) / 2.0;
+                last_word.probability = f64::midpoint(last_word.probability, prob.clamp(0.0, 1.0));
             }
         }
 
@@ -310,15 +331,16 @@ pub fn parse_whisper_json_full(
         }
 
         // Compute overall segment confidence
-        let confidence = if !token_probabilities.is_empty() {
+        let confidence = if token_probabilities.is_empty() {
+            1.0
+        } else {
             let sum: f64 = token_probabilities.iter().sum();
             (sum / token_probabilities.len() as f64).clamp(0.0, 1.0)
-        } else {
-            1.0
         };
 
         let cps_score = calculate_cps(&clean_text, start_sec, end_sec);
-        let is_flagged_for_review = confidence < CONFIDENCE_FLAG_THRESHOLD || cps_score > CPS_FLAG_THRESHOLD;
+        let is_flagged_for_review =
+            confidence < CONFIDENCE_FLAG_THRESHOLD || cps_score > CPS_FLAG_THRESHOLD;
 
         segments.push(TranscriptSegment {
             segment_id: format!("seg_{segment_counter:04}"),

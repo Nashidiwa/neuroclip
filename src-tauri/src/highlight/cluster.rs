@@ -182,7 +182,9 @@ pub fn calculate_clip_bounds(
         let actual_post_roll = (end_sec - latest_peak_sec).max(0.0);
         let missing_post_roll = (target_post_roll - actual_post_roll).max(0.0);
         let needed_extension = MIN_CLIP_DURATION_SEC - (end_sec - start_sec);
-        let extension = missing_post_roll.max(needed_extension).min(MAX_PRE_ROLL_SEC - initial_pre_roll);
+        let extension = missing_post_roll
+            .max(needed_extension)
+            .min(MAX_PRE_ROLL_SEC - initial_pre_roll);
         start_sec = (earliest_peak_sec - latency - (initial_pre_roll + extension)).max(0.0);
 
         if end_sec - start_sec < MIN_CLIP_DURATION_SEC {
@@ -275,6 +277,7 @@ pub fn determine_primary_reason(
 /// Cluster candidate fused points within 30s distance, apply deduplication (> 50% overlap),
 /// rank by composite score descending, and extract top 15–20 clusters.
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn cluster_and_deduplicate(
     fused_points: &[FusedScorePoint],
     vod_duration_sec: f64,
@@ -341,16 +344,23 @@ pub fn cluster_and_deduplicate(
         }
 
         // Focal peak is point with maximum score (earliest if tied)
-        let focal = group.iter().fold(group[0], |best, item| {
-            if item.score > best.score {
-                item
-            } else {
-                best
-            }
-        });
+        let focal = group.iter().fold(
+            group[0],
+            |best, item| {
+                if item.score > best.score {
+                    item
+                } else {
+                    best
+                }
+            },
+        );
 
-        let earliest_sec = group.first().map_or(focal.timestamp_sec, |p| p.timestamp_sec);
-        let latest_sec = group.last().map_or(focal.timestamp_sec, |p| p.timestamp_sec);
+        let earliest_sec = group
+            .first()
+            .map_or(focal.timestamp_sec, |p| p.timestamp_sec);
+        let latest_sec = group
+            .last()
+            .map_or(focal.timestamp_sec, |p| p.timestamp_sec);
 
         let is_audio_only = group.iter().all(|p| p.is_audio_only);
 
@@ -367,18 +377,11 @@ pub fn cluster_and_deduplicate(
             }
         }
 
-        let max_rms = group
-            .iter()
-            .filter_map(|p| p.audio_rms)
-            .fold(0.0, f64::max);
+        let max_rms = group.iter().filter_map(|p| p.audio_rms).fold(0.0, f64::max);
         let rms_opt = if max_rms > 0.0 { Some(max_rms) } else { None };
 
-        let primary_reason = determine_primary_reason(
-            &emotes_set,
-            focal.chat_z_score,
-            rms_opt,
-            is_audio_only,
-        );
+        let primary_reason =
+            determine_primary_reason(&emotes_set, focal.chat_z_score, rms_opt, is_audio_only);
 
         provisional_clusters.push(HighlightCluster::new(
             String::new(), // cluster_id will be assigned after NMS ranking
@@ -501,10 +504,7 @@ mod tests {
         let (start, end) = calculate_clip_bounds(peak_sec, peak_sec, duration, false);
 
         assert_eq!(start, 0.0, "Start must be clamped to 0.0s");
-        assert!(
-            (end - 23.0).abs() < 1e-4,
-            "Expected end 23.0, got {end}"
-        );
+        assert!((end - 23.0).abs() < 1e-4, "Expected end 23.0, got {end}");
         assert!(start >= 0.0);
         assert!(start < end);
     }
@@ -525,10 +525,7 @@ mod tests {
             "Expected start 9977.5, got {start}"
         );
         let len = end - start;
-        assert!(
-            len >= 15.0,
-            "Clip duration {len} must be >= 15.0s"
-        );
+        assert!(len >= 15.0, "Clip duration {len} must be >= 15.0s");
         assert!(
             (len - 22.5).abs() < 1e-4,
             "Expected clip length 22.5s, got {len}"

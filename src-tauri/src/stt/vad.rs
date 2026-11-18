@@ -4,6 +4,12 @@
 //! silence/music pruning for $> 1.5$s non-speech segments (`AC-14.2`), and natural pause chunk splitting
 //! for Groq cloud API payload constraints (`AC-14.3`).
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -13,7 +19,8 @@ use crate::error::{AppError, SttError};
 use crate::stt::vad_bridge::SpeechInterval;
 
 /// Embedded static 16kHz Silero VAD ONNX model bytes (~1.28MB).
-pub const EMBEDDED_SILERO_VAD_MODEL: &[u8] = include_bytes!("../../resources/models/silero_vad_16k.onnx");
+pub const EMBEDDED_SILERO_VAD_MODEL: &[u8] =
+    include_bytes!("../../resources/models/silero_vad_16k.onnx");
 
 /// Default VAD audio sampling rate in Hz (16,000 Hz standard for Silero & Whisper).
 pub const DEFAULT_VAD_SAMPLE_RATE: usize = 16_000;
@@ -174,8 +181,8 @@ impl Default for ChunkSplitConfig {
     fn default() -> Self {
         Self {
             max_chunk_size_bytes: 20 * 1024 * 1024, // 20MB
-            max_chunk_duration_ms: 600_000,          // 10 minutes
-            overlap_ms: 1_500,                       // 1.5 seconds
+            max_chunk_duration_ms: 600_000,         // 10 minutes
+            overlap_ms: 1_500,                      // 1.5 seconds
         }
     }
 }
@@ -246,7 +253,10 @@ impl SileroVadEngine {
                     )))
                 })?;
             model
-                .set_input_fact(1, InferenceFact::dt_shape(f32::datum_type(), tvec!(2, 1, 128)))
+                .set_input_fact(
+                    1,
+                    InferenceFact::dt_shape(f32::datum_type(), tvec!(2, 1, 128)),
+                )
                 .map_err(|e| {
                     AppError::Stt(SttError::VadProcessingFailed(format!(
                         "Silero VAD v5 input1 fact failed: {e}"
@@ -309,8 +319,9 @@ pub struct SileroVadSession<'a> {
     input_buf: Vec<f32>,
 }
 
-impl<'a> SileroVadSession<'a> {
+impl SileroVadSession<'_> {
     /// Perform forward inference step on a 512-sample audio frame (16kHz).
+    #[allow(clippy::too_many_lines)]
     pub fn step(&mut self, frame: &[f32]) -> Result<f32, AppError> {
         if self.engine.num_inputs == 2 {
             let needed = self.context.len() + frame.len();
@@ -320,12 +331,11 @@ impl<'a> SileroVadSession<'a> {
             self.input_buf[..self.context.len()].copy_from_slice(&self.context);
             self.input_buf[self.context.len()..].copy_from_slice(frame);
 
-            let audio_tensor =
-                Tensor::from_shape(&[1, needed], &self.input_buf).map_err(|e| {
-                    AppError::Stt(SttError::VadProcessingFailed(format!(
-                        "Failed to build v5 input audio tensor: {e}"
-                    )))
-                })?;
+            let audio_tensor = Tensor::from_shape(&[1, needed], &self.input_buf).map_err(|e| {
+                AppError::Stt(SttError::VadProcessingFailed(format!(
+                    "Failed to build v5 input audio tensor: {e}"
+                )))
+            })?;
 
             let state_tensor = Tensor::from_shape(&[2, 1, 128], &self.h_state).map_err(|e| {
                 AppError::Stt(SttError::VadProcessingFailed(format!(
@@ -534,13 +544,7 @@ pub fn detect_speech_segments(
         };
         state_prob = prob;
 
-        if !triggered {
-            if prob >= config.threshold {
-                triggered = true;
-                speech_start_frame = Some(w);
-                speech_end_frame = None;
-            }
-        } else {
+        if triggered {
             // Currently in speech
             if prob < config.neg_threshold {
                 if speech_end_frame.is_none() {
@@ -559,7 +563,8 @@ pub fn detect_speech_segments(
                         let padded_start = s_ms.saturating_sub(config.speech_pad_ms);
                         let padded_end = (e_ms + config.speech_pad_ms).min(total_duration_ms);
 
-                        if padded_end.saturating_sub(padded_start) >= config.min_speech_duration_ms {
+                        if padded_end.saturating_sub(padded_start) >= config.min_speech_duration_ms
+                        {
                             raw_segments.push((padded_start, padded_end));
                         }
 
@@ -572,6 +577,10 @@ pub fn detect_speech_segments(
                 // Speech resumed above neg_threshold; reset pending silence release
                 speech_end_frame = None;
             }
+        } else if prob >= config.threshold {
+            triggered = true;
+            speech_start_frame = Some(w);
+            speech_end_frame = None;
         }
     }
 
@@ -609,9 +618,11 @@ pub fn compute_frame_speech_prob_fallback(frame: &[f32], prev_prob: f32) -> f32 
     let mut zcr_count = 0usize;
 
     for i in 0..n {
-        let s = frame[i] as f64;
+        let s = f64::from(frame[i]);
         sum_sq += s * s;
-        if i > 0 && ((frame[i] >= 0.0 && frame[i - 1] < 0.0) || (frame[i] < 0.0 && frame[i - 1] >= 0.0)) {
+        if i > 0
+            && ((frame[i] >= 0.0 && frame[i - 1] < 0.0) || (frame[i] < 0.0 && frame[i - 1] >= 0.0))
+        {
             zcr_count += 1;
         }
     }
@@ -635,7 +646,7 @@ pub fn compute_frame_speech_prob_fallback(frame: &[f32], prev_prob: f32) -> f32 
     // Lowpass moving average filter y[n] = (x[n] + x[n-1]) / 2
     let mut lp_sum_sq = 0.0f64;
     for i in 1..n {
-        let lp = (frame[i] as f64 + frame[i - 1] as f64) * 0.5;
+        let lp = f64::midpoint(f64::from(frame[i]), f64::from(frame[i - 1]));
         lp_sum_sq += lp * lp;
     }
     let lp_ratio = if sum_sq > 1e-9 {
@@ -692,10 +703,8 @@ fn merge_speech_segments(raw: &[(u64, u64)], min_silence_ms: u64) -> Vec<SpeechS
 /// Prune silence and non-speech intervals exceeding 1.5 seconds (`AC-14.2`, `UT-14.2`).
 ///
 /// Strips out long gaps while preserving natural cadence (short pauses <= 1.5s are retained).
-pub fn prune_silence(
-    samples: &[f32],
-    config: &VadConfig,
-) -> Result<VadPruneResult, AppError> {
+#[allow(clippy::too_many_lines)]
+pub fn prune_silence(samples: &[f32], config: &VadConfig) -> Result<VadPruneResult, AppError> {
     if samples.is_empty() {
         return Ok(VadPruneResult {
             original_duration_ms: 0,
@@ -716,7 +725,8 @@ pub fn prune_silence(
         let pruned_samples = samples[..minimal_samples].to_vec();
         let pruned_duration_ms = ((pruned_samples.len() as u64) * 1000) / (sample_rate as u64);
         let reduction_ratio = if total_duration_ms > 0 {
-            (total_duration_ms.saturating_sub(pruned_duration_ms) as f64) / (total_duration_ms as f64)
+            (total_duration_ms.saturating_sub(pruned_duration_ms) as f64)
+                / (total_duration_ms as f64)
         } else {
             0.0
         };
@@ -767,7 +777,9 @@ pub fn prune_silence(
                     let post_cushion_end = (gap_start + transition_cushion_ms).min(gap_end);
                     retained_intervals.push((gap_start, post_cushion_end));
 
-                    let pre_cushion_start = gap_end.saturating_sub(transition_cushion_ms).max(post_cushion_end);
+                    let pre_cushion_start = gap_end
+                        .saturating_sub(transition_cushion_ms)
+                        .max(post_cushion_end);
                     retained_intervals.push((pre_cushion_start, gap_end));
                 }
             }
@@ -843,13 +855,19 @@ pub fn split_into_natural_pause_chunks(
         return Ok(Vec::new());
     }
 
-    let sr = if sample_rate == 0 { DEFAULT_VAD_SAMPLE_RATE } else { sample_rate };
+    let sr = if sample_rate == 0 {
+        DEFAULT_VAD_SAMPLE_RATE
+    } else {
+        sample_rate
+    };
     let total_duration_ms = ((samples.len() as u64) * 1000) / (sr as u64);
 
     // 16-bit PCM equivalent size (2 bytes per sample)
     let bytes_per_ms = (sr * 2) as f64 / 1000.0;
     let max_duration_by_size_ms = (split_config.max_chunk_size_bytes as f64 / bytes_per_ms) as u64;
-    let max_chunk_duration_ms = split_config.max_chunk_duration_ms.min(max_duration_by_size_ms);
+    let max_chunk_duration_ms = split_config
+        .max_chunk_duration_ms
+        .min(max_duration_by_size_ms);
 
     if total_duration_ms <= max_chunk_duration_ms {
         // Fits in a single chunk
@@ -870,7 +888,7 @@ pub fn split_into_natural_pause_chunks(
         let seg_next = &speech_segments[i + 1];
 
         if seg_next.start_ms > seg_cur.end_ms {
-            let midpoint = (seg_cur.end_ms + seg_next.start_ms) / 2;
+            let midpoint = u64::midpoint(seg_cur.end_ms, seg_next.start_ms);
             pause_midpoints.push(midpoint);
         }
     }
@@ -956,13 +974,13 @@ pub async fn process_vad_pipeline_async(
     samples: Vec<f32>,
     vad_config: VadConfig,
 ) -> Result<VadPruneResult, AppError> {
-    tokio::task::spawn_blocking(move || {
-        prune_silence(&samples, &vad_config)
-    })
-    .await
-    .map_err(|e| AppError::Stt(SttError::VadProcessingFailed(format!(
-        "Tokio task execution failed during VAD processing: {e}"
-    ))))?
+    tokio::task::spawn_blocking(move || prune_silence(&samples, &vad_config))
+        .await
+        .map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Tokio task execution failed during VAD processing: {e}"
+            )))
+        })?
 }
 
 /// Generate a synthetic multi-harmonic voiced audio buffer for deterministic testing.
@@ -1009,11 +1027,19 @@ mod tests {
     fn test_silero_onnx_engine_initializes_and_runs_without_fallback() {
         let engine = SileroVadEngine::from_embedded()
             .expect("Real Silero VAD 16kHz ONNX model must load and optimize in tract-onnx");
-        assert_eq!(engine.num_inputs, 2, "Silero v5 16kHz static graph expects 2 inputs");
-        assert_eq!(engine.num_outputs, 2, "Silero v5 16kHz static graph expects 2 outputs");
+        assert_eq!(
+            engine.num_inputs, 2,
+            "Silero v5 16kHz static graph expects 2 inputs"
+        );
+        assert_eq!(
+            engine.num_outputs, 2,
+            "Silero v5 16kHz static graph expects 2 outputs"
+        );
         let mut session = engine.create_session();
         let silence_frame = vec![0.0f32; DEFAULT_WINDOW_SIZE_SAMPLES];
-        let prob = session.step(&silence_frame).expect("ONNX step on silence must succeed");
+        let prob = session
+            .step(&silence_frame)
+            .expect("ONNX step on silence must succeed");
         assert!(prob < 0.2, "Silence probability should be low, got {prob}");
     }
 
@@ -1065,13 +1091,29 @@ mod tests {
 
         // First segment should span ~10s to ~20s
         let seg1 = &segments[0];
-        assert!(seg1.start_ms >= 9_700 && seg1.start_ms <= 10_500, "seg1 start: {}", seg1.start_ms);
-        assert!(seg1.end_ms >= 19_500 && seg1.end_ms <= 20_300, "seg1 end: {}", seg1.end_ms);
+        assert!(
+            seg1.start_ms >= 9_700 && seg1.start_ms <= 10_500,
+            "seg1 start: {}",
+            seg1.start_ms
+        );
+        assert!(
+            seg1.end_ms >= 19_500 && seg1.end_ms <= 20_300,
+            "seg1 end: {}",
+            seg1.end_ms
+        );
 
         // Second segment should span ~40s to ~50s
         let seg2 = &segments[1];
-        assert!(seg2.start_ms >= 39_700 && seg2.start_ms <= 40_500, "seg2 start: {}", seg2.start_ms);
-        assert!(seg2.end_ms >= 49_500 && seg2.end_ms <= 50_300, "seg2 end: {}", seg2.end_ms);
+        assert!(
+            seg2.start_ms >= 39_700 && seg2.start_ms <= 40_500,
+            "seg2 start: {}",
+            seg2.start_ms
+        );
+        assert!(
+            seg2.end_ms >= 49_500 && seg2.end_ms <= 50_300,
+            "seg2 end: {}",
+            seg2.end_ms
+        );
     }
 
     #[test]
@@ -1133,7 +1175,11 @@ mod tests {
 
         let config = VadConfig::default();
         let segments = detect_speech_segments(&audio, &config).expect("VAD detection must pass");
-        assert!(segments.len() >= 3, "Expected >= 3 speech segments, got {}", segments.len());
+        assert!(
+            segments.len() >= 3,
+            "Expected >= 3 speech segments, got {}",
+            segments.len()
+        );
 
         // Request max chunk duration 10s to trigger pause splits
         let split_config = ChunkSplitConfig {
@@ -1145,7 +1191,11 @@ mod tests {
         let chunks = split_into_natural_pause_chunks(&audio, &segments, &split_config, sample_rate)
             .expect("Splitting must pass");
 
-        assert!(chunks.len() >= 2, "Must produce multiple chunks, found {}", chunks.len());
+        assert!(
+            chunks.len() >= 2,
+            "Must produce multiple chunks, found {}",
+            chunks.len()
+        );
 
         // Verify that every cut point lies outside all speech segments
         for chunk in &chunks {
@@ -1155,7 +1205,8 @@ mod tests {
                     assert!(
                         cut_ms <= seg.start_ms || cut_ms >= seg.end_ms,
                         "Cut point {cut_ms}ms must not cut within speech segment [{}ms, {}ms]",
-                        seg.start_ms, seg.end_ms
+                        seg.start_ms,
+                        seg.end_ms
                     );
                 }
             }
@@ -1176,7 +1227,7 @@ mod tests {
         let segments = detect_speech_segments(&buf.samples_f32, &config).expect("VAD must succeed");
         let elapsed = start.elapsed();
 
-        assert!(!segments.is_empty());
+        assert_ne!(segments, []);
         assert!(
             elapsed.as_secs_f64() <= 1.5,
             "VAD 1-minute audio processing took {:.4}s (SLA limit: <= 1.5s)",

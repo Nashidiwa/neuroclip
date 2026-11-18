@@ -1,11 +1,11 @@
 //! Tauri IPC commands for Multimodal Highlight Detection, Clustering & Bookmark Management.
 //!
-//! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, Result<T, AppError>),
+//! Complies with `docs/CONVENTIONS.md` (zero-panic invariant, `Result<T, AppError>`),
 //! `docs/ARCHITECTURE.md` §4.3 & §5.4 Schema 5.4, and `docs/TASK_BOARD.md` TASK-M4-12.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::core::storage::{resolve_cache_dir, resolve_projects_dir};
+use crate::core::storage::resolve_vod_project_dir;
 use crate::error::{AppError, HighlightError, StorageError};
 use crate::highlight::cluster::{
     generate_clusters_from_fused_series, HighlightCluster, HighlightClustersContainer,
@@ -16,15 +16,68 @@ use crate::highlight::fusion::fuse_multimodal_series;
 use crate::highlight::zscore::compute_chat_velocity_series_from_file;
 use crate::ingestion::streamer::VodManifest;
 
-/// Helper function to resolve the target project directory for a VOD.
-fn resolve_vod_project_dir(vod_id: &str) -> PathBuf {
-    let projects_dir = resolve_projects_dir();
-    let candidate = projects_dir.join(vod_id);
-    if candidate.exists() {
-        candidate
+fn run_highlight_detection_blocking(
+    vod_id: &str,
+    duration_seconds: f64,
+    project_dir: &Path,
+    resolved_chat_path: Option<&Path>,
+    resolved_audio_path: Option<&Path>,
+) -> Result<HighlightClustersContainer, AppError> {
+    let duration = if duration_seconds.is_finite() && duration_seconds > 0.0 {
+        duration_seconds
     } else {
-        resolve_cache_dir().join(vod_id)
+        0.0
+    };
+
+    // 1. Chat Velocity Series (TASK-M4-09)
+    let velocity_series = if let Some(chat_path) = resolved_chat_path {
+        compute_chat_velocity_series_from_file(chat_path, 5.0, 60.0, Some(duration))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // 2. Swarm Emote Density Series (TASK-M4-10)
+    let emote_series = if let Some(chat_path) = resolved_chat_path {
+        compute_emote_density_series_from_file(chat_path, None, 5.0, Some(duration))
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // 3. Audio RMS Series (TASK-M4-11)
+    let audio_series = if let Some(audio_path) = resolved_audio_path {
+        analyze_wav_file(audio_path).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // 4. Defensive check: If all inputs are empty, return NoHighlightsFound error
+    if velocity_series.is_empty() && emote_series.is_empty() && audio_series.is_empty() {
+        return Err(AppError::Highlight(HighlightError::NoHighlightsFound));
     }
+
+    // 5. Multimodal Fusion (TASK-M4-12)
+    let fused_points =
+        fuse_multimodal_series(&velocity_series, &emote_series, &audio_series, duration)?;
+
+    // 6. Highlight Clustering & Deduplication
+    let clusters_container = generate_clusters_from_fused_series(vod_id, &fused_points, duration)?;
+
+    // 7. Write to highlight_clusters.json adhering 100% to Schema 5.4
+    let output_json_path = project_dir.join("highlight_clusters.json");
+    let serialized = serde_json::to_vec_pretty(&clusters_container).map_err(|e| {
+        AppError::Internal(format!("Failed to serialize highlight_clusters.json: {e}"))
+    })?;
+
+    std::fs::write(&output_json_path, serialized).map_err(|e| {
+        AppError::Internal(format!(
+            "Failed to write highlight_clusters.json at '{}': {e}",
+            output_json_path.display()
+        ))
+    })?;
+
+    Ok(clusters_container)
 }
 
 /// Detect and cluster highlights for a VOD using multimodal fusion.
@@ -34,7 +87,7 @@ fn resolve_vod_project_dir(vod_id: &str) -> PathBuf {
 /// merges peaks within 30s, suppresses overlaps > 50%, and writes `highlight_clusters.json`.
 ///
 /// # Errors
-/// Returns `AppError` if file reading, audio analysis, fusion processing, or serialization fails.
+/// Returns `AppError` if `vod_id` is invalid, file reading, audio analysis, fusion processing, or serialization fails.
 #[tauri::command]
 pub async fn detect_highlights(
     vod_id: String,
@@ -42,7 +95,7 @@ pub async fn detect_highlights(
     chat_events_path: Option<String>,
     audio_path: Option<String>,
 ) -> Result<HighlightClustersContainer, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id);
+    let project_dir = resolve_vod_project_dir(&vod_id)?;
     std::fs::create_dir_all(&project_dir).map_err(|e| {
         AppError::Storage(StorageError::DirectoryCreationFailed {
             path: project_dir.display().to_string(),
@@ -51,116 +104,49 @@ pub async fn detect_highlights(
     })?;
 
     // Determine paths for chat and audio
-    let resolved_chat_path: Option<PathBuf> = chat_events_path
-        .map(PathBuf::from)
-        .or_else(|| {
-            let p_json = project_dir.join("chat_events.json");
-            if p_json.exists() {
-                Some(p_json)
+    let resolved_chat_path: Option<PathBuf> = chat_events_path.map(PathBuf::from).or_else(|| {
+        let p_json = project_dir.join("chat_events.json");
+        if p_json.exists() {
+            Some(p_json)
+        } else {
+            let p_ndjson = project_dir.join("chat_events.ndjson");
+            if p_ndjson.exists() {
+                Some(p_ndjson)
             } else {
-                let p_ndjson = project_dir.join("chat_events.ndjson");
-                if p_ndjson.exists() {
-                    Some(p_ndjson)
-                } else {
-                    None
-                }
+                None
             }
-        });
+        }
+    });
 
-    let resolved_audio_path: Option<PathBuf> = audio_path
-        .map(PathBuf::from)
-        .or_else(|| {
-            let p_wav = project_dir.join(format!("{vod_id}.audio.wav"));
-            if p_wav.exists() {
-                Some(p_wav)
-            } else {
-                let manifest_path = project_dir.join("vod_manifest.json");
-                if manifest_path.exists() {
-                    if let Ok(bytes) = std::fs::read(&manifest_path) {
-                        if let Ok(manifest) = serde_json::from_slice::<VodManifest>(&bytes) {
-                            let p = PathBuf::from(manifest.audio_path);
-                            if p.exists() {
-                                return Some(p);
-                            }
+    let resolved_audio_path: Option<PathBuf> = audio_path.map(PathBuf::from).or_else(|| {
+        let p_wav = project_dir.join(format!("{vod_id}.audio.wav"));
+        if p_wav.exists() {
+            Some(p_wav)
+        } else {
+            let manifest_path = project_dir.join("vod_manifest.json");
+            if manifest_path.exists() {
+                if let Ok(bytes) = std::fs::read(&manifest_path) {
+                    if let Ok(manifest) = serde_json::from_slice::<VodManifest>(&bytes) {
+                        let p = PathBuf::from(manifest.audio_path);
+                        if p.exists() {
+                            return Some(p);
                         }
                     }
                 }
-                None
             }
-        });
+            None
+        }
+    });
 
     let vod_id_clone = vod_id.clone();
-    let container = tokio::task::spawn_blocking(move || -> Result<HighlightClustersContainer, AppError> {
-        let duration = if duration_seconds.is_finite() && duration_seconds > 0.0 {
-            duration_seconds
-        } else {
-            0.0
-        };
-
-        // 1. Chat Velocity Series (TASK-M4-09)
-        let velocity_series = if let Some(ref chat_path) = resolved_chat_path {
-            compute_chat_velocity_series_from_file(
-                chat_path,
-                5.0,
-                60.0,
-                Some(duration),
-            )
-            .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        // 2. Swarm Emote Density Series (TASK-M4-10)
-        let emote_series = if let Some(ref chat_path) = resolved_chat_path {
-            compute_emote_density_series_from_file(
-                chat_path,
-                None,
-                5.0,
-                Some(duration),
-            )
-            .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        // 3. Audio RMS Series (TASK-M4-11)
-        let audio_series = if let Some(ref audio_path) = resolved_audio_path {
-            analyze_wav_file(audio_path)
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        // 4. Defensive check: If all inputs are empty, return NoHighlightsFound error
-        if velocity_series.is_empty() && emote_series.is_empty() && audio_series.is_empty() {
-            return Err(AppError::Highlight(HighlightError::NoHighlightsFound));
-        }
-
-        // 5. Multimodal Fusion (TASK-M4-12)
-        let fused_points = fuse_multimodal_series(
-            &velocity_series,
-            &emote_series,
-            &audio_series,
-            duration,
-        )?;
-
-        // 6. Highlight Clustering & Deduplication
-        let clusters_container =
-            generate_clusters_from_fused_series(&vod_id_clone, &fused_points, duration)?;
-
-        // 7. Write to highlight_clusters.json adhering 100% to Schema 5.4
-        let output_json_path = project_dir.join("highlight_clusters.json");
-        let serialized = serde_json::to_vec_pretty(&clusters_container).map_err(|e| {
-            AppError::Internal(format!("Failed to serialize highlight_clusters.json: {e}"))
-        })?;
-
-        std::fs::write(&output_json_path, serialized).map_err(|e| {
-            AppError::Storage(StorageError::CacheCleanupFailed(format!(
-                "Failed to write highlight_clusters.json: {e}"
-            )))
-        })?;
-
-        Ok(clusters_container)
+    let container = tokio::task::spawn_blocking(move || {
+        run_highlight_detection_blocking(
+            &vod_id_clone,
+            duration_seconds,
+            &project_dir,
+            resolved_chat_path.as_deref(),
+            resolved_audio_path.as_deref(),
+        )
     })
     .await
     .map_err(|e| AppError::Highlight(HighlightError::WorkerPanicked(e.to_string())))??;
@@ -171,12 +157,12 @@ pub async fn detect_highlights(
 /// Retrieve saved highlight clusters from `highlight_clusters.json` for a VOD.
 ///
 /// # Errors
-/// Returns `AppError::Storage` if file is missing or `AppError::Highlight` if JSON parsing fails.
+/// Returns `AppError::Storage` if `vod_id` is invalid or file is missing, or `AppError::Highlight` if JSON parsing fails.
 #[tauri::command]
 pub async fn get_highlight_clusters(
     vod_id: String,
 ) -> Result<HighlightClustersContainer, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id);
+    let project_dir = resolve_vod_project_dir(&vod_id)?;
     let output_json_path = project_dir.join("highlight_clusters.json");
 
     if !output_json_path.exists() {
@@ -210,7 +196,7 @@ pub async fn toggle_highlight_bookmark(
     cluster_id: String,
     bookmarked: Option<bool>,
 ) -> Result<HighlightCluster, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id);
+    let project_dir = resolve_vod_project_dir(&vod_id)?;
     let output_json_path = project_dir.join("highlight_clusters.json");
 
     if !output_json_path.exists() {
@@ -225,11 +211,12 @@ pub async fn toggle_highlight_bookmark(
         )))
     })?;
 
-    let mut container: HighlightClustersContainer = serde_json::from_slice(&bytes).map_err(|e| {
-        AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-            "Failed to parse highlight_clusters.json: {e}"
-        )))
-    })?;
+    let mut container: HighlightClustersContainer =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+                "Failed to parse highlight_clusters.json: {e}"
+            )))
+        })?;
 
     let mut updated_cluster: Option<HighlightCluster> = None;
 
@@ -254,9 +241,10 @@ pub async fn toggle_highlight_bookmark(
     })?;
 
     std::fs::write(&output_json_path, serialized).map_err(|e| {
-        AppError::Storage(StorageError::CacheCleanupFailed(format!(
-            "Failed to write updated highlight_clusters.json: {e}"
-        )))
+        AppError::Internal(format!(
+            "Failed to write updated highlight_clusters.json at '{}': {e}",
+            output_json_path.display()
+        ))
     })?;
 
     Ok(result)
@@ -273,4 +261,48 @@ pub async fn toggle_cluster_bookmark(
     bookmarked: Option<bool>,
 ) -> Result<HighlightCluster, AppError> {
     toggle_highlight_bookmark(vod_id, cluster_id, bookmarked).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_highlight_commands_reject_invalid_vod_id() {
+        for bad in ["../escape", "C:\\escape", "vod/sub", "vod\0id", ""] {
+            let detect_res = detect_highlights(bad.to_string(), 60.0, None, None).await;
+            assert!(
+                matches!(
+                    detect_res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "detect_highlights must reject {bad:?}, got {detect_res:?}"
+            );
+
+            let get_res = get_highlight_clusters(bad.to_string()).await;
+            assert!(
+                matches!(
+                    get_res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "get_highlight_clusters must reject {bad:?}, got {get_res:?}"
+            );
+
+            let toggle_res =
+                toggle_highlight_bookmark(bad.to_string(), "c1".to_string(), None).await;
+            assert!(
+                matches!(
+                    toggle_res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "toggle_highlight_bookmark must reject {bad:?}, got {toggle_res:?}"
+            );
+        }
+    }
 }

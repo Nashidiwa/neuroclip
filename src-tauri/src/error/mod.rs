@@ -204,7 +204,9 @@ pub enum HardwareError {
     #[error("Không tìm thấy GPU tương thích hoặc không hỗ trợ CUDA: {0}")]
     UnsupportedGpu(String),
 
-    #[error("Dung lượng RAM hệ thống không đủ (cần tối thiểu {required_mb}MB, hiện có {total_mb}MB)")]
+    #[error(
+        "Dung lượng RAM hệ thống không đủ (cần tối thiểu {required_mb}MB, hiện có {total_mb}MB)"
+    )]
     InsufficientMemory { total_mb: u64, required_mb: u64 },
 }
 
@@ -284,7 +286,9 @@ impl AppError {
             },
             AppError::Highlight(err) => match err {
                 HighlightError::ChatParsingFailed(_) => codes::ERR_HIGHLIGHT_CHAT_PARSING_FAILED,
-                HighlightError::AudioAnalysisFailed(_) => codes::ERR_HIGHLIGHT_AUDIO_ANALYSIS_FAILED,
+                HighlightError::AudioAnalysisFailed(_) => {
+                    codes::ERR_HIGHLIGHT_AUDIO_ANALYSIS_FAILED
+                }
                 HighlightError::NoHighlightsFound => codes::ERR_HIGHLIGHT_NO_HIGHLIGHTS,
                 HighlightError::WorkerPanicked(_) => codes::ERR_HIGHLIGHT_WORKER_PANICKED,
             },
@@ -391,13 +395,6 @@ impl AppError {
     #[must_use]
     pub fn details(&self) -> Option<String> {
         match self {
-            AppError::Ingestion(
-                IngestError::BotBlocked(details)
-                | IngestError::ExtractionFailed(details)
-                | IngestError::InvalidUrl(details)
-                | IngestError::SliceFailed(details),
-            ) => Some(details.clone()),
-
             AppError::Ingestion(IngestError::KeyframeAlignmentFailed { drift_ms }) => {
                 Some(format!("drift: {drift_ms:.2}ms"))
             }
@@ -406,47 +403,49 @@ impl AppError {
                 Some(format!("start: {start_sec:.2}s, end: {end_sec:.2}s"))
             }
 
-            AppError::Stt(
+            AppError::Ingestion(
+                IngestError::BotBlocked(details)
+                | IngestError::ExtractionFailed(details)
+                | IngestError::InvalidUrl(details)
+                | IngestError::SliceFailed(details),
+            )
+            | AppError::Stt(
                 SttError::RateLimitExceeded(details)
                 | SttError::CudaOom(details)
                 | SttError::VadProcessingFailed(details),
-            ) => Some(details.clone()),
-
-            AppError::Translation(TranslationError::SafetyFilterTriggered(details)) => {
-                Some(details.clone())
-            }
-            AppError::Translation(TranslationError::ApiRequestFailed { message, .. }) => {
-                Some(message.clone())
-            }
-
-            AppError::Export(ExportError::FileWriteFailed { details, .. }) => {
-                Some(details.clone())
-            }
-
-            AppError::Highlight(HighlightError::ChatParsingFailed(details))
-            | AppError::Highlight(HighlightError::AudioAnalysisFailed(details))
-            | AppError::Highlight(HighlightError::WorkerPanicked(details)) => Some(details.clone()),
-
-            AppError::Sidecar(SidecarError::ExecutionFailed { details, .. }) => {
-                Some(details.clone())
-            }
-            AppError::Sidecar(SidecarError::UpdateFailed { reason, .. }) => Some(reason.clone()),
-            AppError::Sidecar(SidecarError::BinaryNotFound { path, .. }) => Some(path.clone()),
-
-            AppError::Hardware(HardwareError::ProbeFailed(details))
-            | AppError::Hardware(HardwareError::UnsupportedGpu(details)) => Some(details.clone()),
-
-            AppError::Storage(StorageError::DiskCheckFailed { message, .. }) => {
-                Some(message.clone())
-            }
-            AppError::Storage(StorageError::DirectoryCreationFailed { details, .. }) => {
-                Some(details.clone())
-            }
-
-            AppError::Config(ConfigError::InvalidFormat(details))
-            | AppError::Config(ConfigError::SaveFailed { details, .. }) => Some(details.clone()),
-
-            AppError::Internal(details) => Some(details.clone()),
+            )
+            | AppError::Translation(
+                TranslationError::SafetyFilterTriggered(details)
+                | TranslationError::ApiRequestFailed {
+                    message: details, ..
+                },
+            )
+            | AppError::Export(ExportError::FileWriteFailed { details, .. })
+            | AppError::Highlight(
+                HighlightError::ChatParsingFailed(details)
+                | HighlightError::AudioAnalysisFailed(details)
+                | HighlightError::WorkerPanicked(details),
+            )
+            | AppError::Sidecar(
+                SidecarError::ExecutionFailed { details, .. }
+                | SidecarError::UpdateFailed {
+                    reason: details, ..
+                }
+                | SidecarError::BinaryNotFound { path: details, .. },
+            )
+            | AppError::Hardware(
+                HardwareError::ProbeFailed(details) | HardwareError::UnsupportedGpu(details),
+            )
+            | AppError::Storage(
+                StorageError::DiskCheckFailed {
+                    message: details, ..
+                }
+                | StorageError::DirectoryCreationFailed { details, .. },
+            )
+            | AppError::Config(
+                ConfigError::InvalidFormat(details) | ConfigError::SaveFailed { details, .. },
+            )
+            | AppError::Internal(details) => Some(details.clone()),
 
             _ => None,
         }
@@ -526,7 +525,10 @@ mod tests {
         let response = internal_err.to_ipc_response();
         assert_eq!(response.code, "ERR_INTERNAL_ERROR");
         assert!(!response.recoverable);
-        assert_eq!(response.details, Some("Database connection lost".to_string()));
+        assert_eq!(
+            response.details,
+            Some("Database connection lost".to_string())
+        );
     }
 
     #[test]

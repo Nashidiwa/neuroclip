@@ -4,6 +4,12 @@
 //! and token hallucination during streamer scream moments (Vedal/Evil screaming),
 //! downmixing to 16kHz mono PCM for Silero VAD and Whisper STT.
 
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -103,13 +109,17 @@ impl PreparedAudioBuffer {
     /// Construct a buffer from 16-bit PCM integer samples.
     #[must_use]
     pub fn from_i16(samples: Vec<i16>, sample_rate: u32) -> Self {
-        let sr = if sample_rate == 0 { TARGET_SAMPLE_RATE } else { sample_rate };
-        let duration_sec = samples.len() as f64 / sr as f64;
+        let sr = if sample_rate == 0 {
+            TARGET_SAMPLE_RATE
+        } else {
+            sample_rate
+        };
+        let duration_sec = samples.len() as f64 / f64::from(sr);
         let peak_dbfs = calculate_peak_dbfs_i16(&samples);
 
         let mut samples_f32 = Vec::with_capacity(samples.len());
         for &s in &samples {
-            let f = (s as f32) / (I16_MAX_F64 as f32);
+            let f = f32::from(s) / (I16_MAX_F64 as f32);
             samples_f32.push(f.clamp(-1.0, 1.0));
         }
 
@@ -125,15 +135,19 @@ impl PreparedAudioBuffer {
     /// Construct a buffer from 32-bit floating point samples in `[-1.0, 1.0]`.
     #[must_use]
     pub fn from_f32(samples: Vec<f32>, sample_rate: u32) -> Self {
-        let sr = if sample_rate == 0 { TARGET_SAMPLE_RATE } else { sample_rate };
-        let duration_sec = samples.len() as f64 / sr as f64;
+        let sr = if sample_rate == 0 {
+            TARGET_SAMPLE_RATE
+        } else {
+            sample_rate
+        };
+        let duration_sec = samples.len() as f64 / f64::from(sr);
         let peak_dbfs = calculate_peak_dbfs_f32(&samples);
 
         let mut samples_i16 = Vec::with_capacity(samples.len());
         for &s in &samples {
             let clamped = s.clamp(-1.0, 1.0);
             let scaled = (clamped * (I16_MAX_F64 as f32 - 1.0)).round();
-            let i = scaled.clamp(i16::MIN as f32, i16::MAX as f32) as i16;
+            let i = scaled.clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
             samples_i16.push(i);
         }
 
@@ -205,13 +219,10 @@ impl PreparedAudioBuffer {
             }
         }
 
-        let raw_data = match audio_data_slice {
-            Some(d) => d,
-            None => {
-                return Err(AppError::Stt(SttError::VadProcessingFailed(
-                    "Missing 'data' chunk in WAV payload".to_string(),
-                )))
-            }
+        let Some(raw_data) = audio_data_slice else {
+            return Err(AppError::Stt(SttError::VadProcessingFailed(
+                "Missing 'data' chunk in WAV payload".to_string(),
+            )));
         };
 
         if audio_format != 1 || bits_per_sample != 16 {
@@ -221,7 +232,11 @@ impl PreparedAudioBuffer {
         }
 
         let total_samples = raw_data.len() / 2;
-        let num_frames = if channels == 0 { 0 } else { total_samples / channels as usize };
+        let num_frames = if channels == 0 {
+            0
+        } else {
+            total_samples / channels as usize
+        };
 
         let mut mono_samples_i16 = Vec::with_capacity(num_frames);
 
@@ -236,9 +251,15 @@ impl PreparedAudioBuffer {
             for i in 0..num_frames {
                 let left_idx = i * 4;
                 let right_idx = left_idx + 2;
-                let left = i16::from_le_bytes([raw_data[left_idx], raw_data[left_idx + 1]]) as i32;
-                let right = i16::from_le_bytes([raw_data[right_idx], raw_data[right_idx + 1]]) as i32;
-                let mono = ((left + right) / 2) as i16;
+                let left = i32::from(i16::from_le_bytes([
+                    raw_data[left_idx],
+                    raw_data[left_idx + 1],
+                ]));
+                let right = i32::from(i16::from_le_bytes([
+                    raw_data[right_idx],
+                    raw_data[right_idx + 1],
+                ]));
+                let mono = i32::midpoint(left, right) as i16;
                 mono_samples_i16.push(mono);
             }
         } else {
@@ -271,7 +292,7 @@ impl PreparedAudioBuffer {
         // "fmt " subchunk
         bytes.extend_from_slice(b"fmt ");
         bytes.extend_from_slice(&16u32.to_le_bytes()); // Subchunk1Size (16 for PCM)
-        bytes.extend_from_slice(&1u16.to_le_bytes());  // AudioFormat (1 = PCM)
+        bytes.extend_from_slice(&1u16.to_le_bytes()); // AudioFormat (1 = PCM)
         bytes.extend_from_slice(&num_channels.to_le_bytes());
         bytes.extend_from_slice(&sample_rate.to_le_bytes());
         bytes.extend_from_slice(&byte_rate.to_le_bytes());
@@ -329,7 +350,7 @@ pub fn calculate_peak_dbfs_i16(samples: &[i16]) -> f64 {
 
     let mut max_abs = 0.0f64;
     for &s in samples {
-        let abs_val = (s as f64).abs();
+        let abs_val = f64::from(s).abs();
         if abs_val > max_abs {
             max_abs = abs_val;
         }
@@ -379,7 +400,7 @@ pub fn compute_true_peak_dbfs(samples: &[i16]) -> f64 {
     let n = samples.len();
 
     for i in 0..n {
-        let s_i = samples[i] as f64;
+        let s_i = f64::from(samples[i]);
         let abs_s = s_i.abs();
         if abs_s > max_continuous_peak {
             max_continuous_peak = abs_s;
@@ -387,21 +408,20 @@ pub fn compute_true_peak_dbfs(samples: &[i16]) -> f64 {
 
         // Evaluate 4x oversampling points between s[i] and s[i+1] when sample is significant
         if i > 0 && i + 2 < n && abs_s > max_continuous_peak * 0.5 {
-            let p0 = samples[i - 1] as f64;
+            let p0 = f64::from(samples[i - 1]);
             let p1 = s_i;
-            let p2 = samples[i + 1] as f64;
-            let p3 = samples[i + 2] as f64;
+            let p2 = f64::from(samples[i + 1]);
+            let p3 = f64::from(samples[i + 2]);
 
             // Check t = 0.25, 0.5, 0.75 via Catmull-Rom / Hermite cubic interpolation
             for &t in &[0.25f64, 0.5f64, 0.75f64] {
                 let t2 = t * t;
                 let t3 = t2 * t;
-                let v = 0.5 * (
-                    (2.0 * p1)
-                    + (-p0 + p2) * t
-                    + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
-                    + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
-                );
+                let v = 0.5
+                    * ((2.0 * p1)
+                        + (-p0 + p2) * t
+                        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                        + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
                 let abs_v = v.abs();
                 if abs_v > max_continuous_peak {
                     max_continuous_peak = abs_v;
@@ -446,12 +466,11 @@ pub fn compute_true_peak_f32(samples: &[f32]) -> f64 {
             for &t in &[0.25f64, 0.5f64, 0.75f64] {
                 let t2 = t * t;
                 let t3 = t2 * t;
-                let v = 0.5 * (
-                    (2.0 * p1)
-                    + (-p0 + p2) * t
-                    + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
-                    + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
-                );
+                let v = 0.5
+                    * ((2.0 * p1)
+                        + (-p0 + p2) * t
+                        + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                        + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
                 let abs_v = v.abs();
                 if abs_v > max_continuous_peak {
                     max_continuous_peak = abs_v;
@@ -555,10 +574,7 @@ pub fn build_loudnorm_ffmpeg_args(
 
 /// Build FFmpeg CLI arguments for real-time stdout streaming (s16le pipe).
 #[must_use]
-pub fn build_loudnorm_pipe_args(
-    input_path: &Path,
-    config: &AudioPrepConfig,
-) -> Vec<String> {
+pub fn build_loudnorm_pipe_args(input_path: &Path, config: &AudioPrepConfig) -> Vec<String> {
     vec![
         "-hide_banner".to_string(),
         "-loglevel".to_string(),
@@ -610,6 +626,7 @@ pub fn is_mock_audio_prep_enabled() -> bool {
 ///
 /// Features Windows Job Object assignment, `kill_on_drop(true)` lifetime guarantee,
 /// and support for cancellation tokens.
+#[allow(clippy::too_many_lines)]
 pub async fn prepare_audio_file(
     input_path: &Path,
     output_path: &Path,
@@ -682,13 +699,10 @@ pub async fn prepare_audio_file(
     assign_child_to_job_guard(&child);
     let mut guard = ChildProcessGuard::new(child);
 
-    let child_ref = match guard.child_mut() {
-        Some(c) => c,
-        None => {
-            return Err(AppError::Stt(SttError::VadProcessingFailed(
-                "Internal error: Child process unavailable in guard".to_string(),
-            )))
-        }
+    let Some(child_ref) = guard.child_mut() else {
+        return Err(AppError::Stt(SttError::VadProcessingFailed(
+            "Internal error: Child process unavailable in guard".to_string(),
+        )));
     };
 
     let status = if let Some(token) = cancel_token {
@@ -798,13 +812,10 @@ pub async fn prepare_audio_to_buffer(
 
     assign_child_to_job_guard(&child);
 
-    let stdout = match child.stdout.take() {
-        Some(s) => s,
-        None => {
-            return Err(AppError::Stt(SttError::VadProcessingFailed(
-                "Failed to capture stdout pipe from FFmpeg".to_string(),
-            )))
-        }
+    let Some(stdout) = child.stdout.take() else {
+        return Err(AppError::Stt(SttError::VadProcessingFailed(
+            "Failed to capture stdout pipe from FFmpeg".to_string(),
+        )));
     };
 
     let mut reader = tokio::io::BufReader::new(stdout);
@@ -848,14 +859,24 @@ pub async fn prepare_audio_to_buffer(
         samples_i16.push(s);
     }
 
-    Ok(PreparedAudioBuffer::from_i16(samples_i16, config.sample_rate))
+    Ok(PreparedAudioBuffer::from_i16(
+        samples_i16,
+        config.sample_rate,
+    ))
 }
 
 /// Helper to generate a clean synthetic sine wave buffer normalized to -1.5 dBFS for tests and mocks.
 #[must_use]
-pub fn generate_synthetic_normalized_buffer(sample_rate: u32, duration_sec: f64) -> PreparedAudioBuffer {
-    let sr = if sample_rate == 0 { TARGET_SAMPLE_RATE } else { sample_rate };
-    let total_samples = (sr as f64 * duration_sec).round() as usize;
+pub fn generate_synthetic_normalized_buffer(
+    sample_rate: u32,
+    duration_sec: f64,
+) -> PreparedAudioBuffer {
+    let sr = if sample_rate == 0 {
+        TARGET_SAMPLE_RATE
+    } else {
+        sample_rate
+    };
+    let total_samples = (f64::from(sr) * duration_sec).round() as usize;
     let mut samples_f32 = Vec::with_capacity(total_samples);
 
     // Peak amplitude for -1.5 dBFS: 10^(-1.5 / 20) ≈ 0.841395
@@ -864,7 +885,7 @@ pub fn generate_synthetic_normalized_buffer(sample_rate: u32, duration_sec: f64)
     let two_pi = 2.0 * std::f64::consts::PI;
 
     for i in 0..total_samples {
-        let t = i as f64 / sr as f64;
+        let t = i as f64 / f64::from(sr);
         let val = (two_pi * freq * t).sin() as f32 * peak_linear;
         samples_f32.push(val);
     }
@@ -909,7 +930,8 @@ mod tests {
         let wav_bytes = buffer.to_wav_bytes().expect("Serialization must succeed");
         assert!(wav_bytes.len() >= 44);
 
-        let parsed = PreparedAudioBuffer::from_wav_bytes(&wav_bytes).expect("Deserialization must succeed");
+        let parsed =
+            PreparedAudioBuffer::from_wav_bytes(&wav_bytes).expect("Deserialization must succeed");
         assert_eq!(parsed.sample_rate, 16_000);
         assert_eq!(parsed.samples_i16.len(), buffer.samples_i16.len());
         assert!((parsed.duration_sec - 1.0).abs() < 0.01);
@@ -952,8 +974,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_audio_prep_file_workflow() {
-        std::env::set_var("NEUROCLIP_MOCK_AUDIO_PREP", "1");
-        let temp_dir = std::env::temp_dir().join("neuroclip_test_audio_prep");
+        let _env_guard = crate::core::storage::test_env::ENV_LOCK.lock().await;
+        let _mock_env =
+            crate::core::storage::test_env::ScopedEnvVar::set("NEUROCLIP_MOCK_AUDIO_PREP", "1");
+        let temp_dir =
+            std::env::temp_dir().join(format!("neuroclip_test_audio_prep_{}", std::process::id()));
         let input_path = temp_dir.join("mock_input.wav");
         let output_path = temp_dir.join("mock_output.wav");
 
@@ -967,6 +992,5 @@ mod tests {
         assert!(output_path.exists());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
-        std::env::remove_var("NEUROCLIP_MOCK_AUDIO_PREP");
     }
 }
