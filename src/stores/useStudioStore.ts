@@ -10,7 +10,11 @@
  */
 
 import { createStore, type StoreHook } from './createStore.ts';
-import type { TranscriptSegment, SpeakerRole } from '../types/transcript.ts';
+import {
+  isSpeakerRole,
+  type TranscriptSegment,
+  type SpeakerRole,
+} from '../types/transcript.ts';
 import { calculateCps } from '../utils/text_wrap.ts';
 
 export type Preset916 = 'center-crop' | 'two-stack';
@@ -197,6 +201,7 @@ export interface StudioState {
   readonly activeSegmentIds: readonly string[];
   readonly activeSegments: readonly TranscriptSegment[];
   readonly selectedSegmentId: string | null;
+  readonly selectedSegmentIds: readonly string[];
 
   // Actions
   readonly setVideoSrc: (src: string | null, videoPath?: string | null) => void;
@@ -213,6 +218,11 @@ export interface StudioState {
   readonly setSegments: (segments: readonly TranscriptSegment[]) => void;
   readonly selectSegment: (segmentId: string | null) => void;
   readonly setSelectedSegmentId: (segmentId: string | null) => void;
+  readonly setSelectedSegmentIds: (ids: readonly string[]) => void;
+  readonly toggleSegmentSelection: (segmentId: string, isMulti?: boolean) => void;
+  readonly selectSegmentRange: (targetSegmentId: string) => void;
+  readonly selectAllSegments: () => void;
+  readonly clearSegmentSelection: () => void;
   readonly updateSegmentText: (
     segmentId: string,
     updates: {
@@ -228,7 +238,11 @@ export interface StudioState {
     boundary: 'start' | 'end',
     deltaSec: number,
   ) => void;
-  readonly updateSegmentSpeaker: (segmentId: string, speakerId: SpeakerRole) => void;
+  readonly updateSegmentSpeaker: (segmentId: string, speakerId: SpeakerRole | string) => void;
+  readonly updateSegmentsSpeaker: (
+    segmentIds: readonly string[],
+    speakerId: SpeakerRole | string,
+  ) => void;
   readonly seekTo: (time: number) => void;
   readonly clearSeekTarget: () => void;
   readonly setIsScrubbing: (isScrubbing: boolean) => void;
@@ -255,6 +269,7 @@ const INITIAL_STATE = {
   activeSegmentIds: [] as readonly string[],
   activeSegments: [] as readonly TranscriptSegment[],
   selectedSegmentId: null as string | null,
+  selectedSegmentIds: [] as readonly string[],
 };
 
 export const useStudioStore = createStore<StudioState>((set, get) => ({
@@ -341,11 +356,101 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
   },
 
   selectSegment: (segmentId) => {
-    set({ selectedSegmentId: segmentId });
+    set({
+      selectedSegmentId: segmentId,
+      selectedSegmentIds: segmentId !== null ? [segmentId] : [],
+    });
   },
 
   setSelectedSegmentId: (segmentId) => {
-    set({ selectedSegmentId: segmentId });
+    set({
+      selectedSegmentId: segmentId,
+      selectedSegmentIds: segmentId !== null ? [segmentId] : [],
+    });
+  },
+
+  setSelectedSegmentIds: (ids) => {
+    set((state) => ({
+      selectedSegmentIds: ids,
+      selectedSegmentId:
+        ids.length > 0
+          ? ids.includes(state.selectedSegmentId ?? '')
+            ? state.selectedSegmentId
+            : (ids[ids.length - 1] ?? null)
+          : null,
+    }));
+  },
+
+  toggleSegmentSelection: (segmentId, isMulti = false) => {
+    set((state) => {
+      if (!isMulti) {
+        return {
+          selectedSegmentId: segmentId,
+          selectedSegmentIds: [segmentId],
+        };
+      }
+
+      const exists = state.selectedSegmentIds.includes(segmentId);
+      const nextIds = exists
+        ? state.selectedSegmentIds.filter((id) => id !== segmentId)
+        : [...state.selectedSegmentIds, segmentId];
+
+      const nextSelectedId =
+        state.selectedSegmentId === segmentId
+          ? (nextIds[nextIds.length - 1] ?? null)
+          : (state.selectedSegmentId ?? nextIds[0] ?? null);
+
+      return {
+        selectedSegmentIds: nextIds,
+        selectedSegmentId: nextSelectedId,
+      };
+    });
+  },
+
+  selectSegmentRange: (targetSegmentId) => {
+    set((state) => {
+      const segments = state.segments;
+      if (segments.length === 0) return {};
+
+      const targetIdx = segments.findIndex(
+        (s) => (s.segmentId ?? s.segment_id) === targetSegmentId,
+      );
+      if (targetIdx < 0) return {};
+
+      const anchorId = state.selectedSegmentId ?? state.selectedSegmentIds[0];
+      const anchorIdx = anchorId
+        ? segments.findIndex((s) => (s.segmentId ?? s.segment_id) === anchorId)
+        : 0;
+
+      const validAnchorIdx = anchorIdx >= 0 ? anchorIdx : 0;
+      const startIdx = Math.min(validAnchorIdx, targetIdx);
+      const endIdx = Math.max(validAnchorIdx, targetIdx);
+
+      const rangeIds = segments
+        .slice(startIdx, endIdx + 1)
+        .map((s) => s.segmentId ?? s.segment_id);
+
+      return {
+        selectedSegmentIds: rangeIds,
+        selectedSegmentId: state.selectedSegmentId ?? anchorId ?? targetSegmentId,
+      };
+    });
+  },
+
+  selectAllSegments: () => {
+    set((state) => ({
+      selectedSegmentIds: state.segments.map((s) => s.segmentId ?? s.segment_id),
+      selectedSegmentId: state.segments[0]
+        ? (state.segments[0].segmentId ?? state.segments[0].segment_id)
+        : null,
+    }));
+  },
+
+  clearSegmentSelection: () => {
+    set({
+      selectedSegmentIds: [],
+      selectedSegmentId: null,
+    });
   },
 
   updateSegmentText: (segmentId, updates) => {
@@ -466,17 +571,26 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
     });
   },
 
-  updateSegmentSpeaker: (segmentId, speakerId) => {
+  updateSegmentsSpeaker: (segmentIds, speakerId) => {
+    if (segmentIds.length === 0) return;
+    const validRole: SpeakerRole = isSpeakerRole(speakerId) ? speakerId : 'unknown';
+    const targetIdSet = new Set(segmentIds);
+
     set((state) => {
+      let modified = false;
       const nextSegments = state.segments.map((seg) => {
         const id = seg.segmentId ?? seg.segment_id;
-        if (id !== segmentId) return seg;
+        if (!targetIdSet.has(id)) return seg;
+        if ((seg.speakerId ?? seg.speaker_id) === validRole) return seg;
+        modified = true;
         return {
           ...seg,
-          speakerId,
-          speaker_id: speakerId,
+          speakerId: validRole,
+          speaker_id: validRole,
         };
       });
+
+      if (!modified) return {};
 
       const active = findActiveSegments(nextSegments, state.currentTime);
       const activeIds = active.map((s) => s.segmentId ?? s.segment_id);
@@ -487,6 +601,10 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
         activeSegmentIds: activeIds,
       };
     });
+  },
+
+  updateSegmentSpeaker: (segmentId, speakerId) => {
+    get().updateSegmentsSpeaker([segmentId], speakerId);
   },
 
   seekTo: (time) => {

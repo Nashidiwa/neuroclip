@@ -220,8 +220,7 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
   const storeSegments = useStudioStore((state) => state.segments);
   const activeSegmentIds = useStudioStore((state) => state.activeSegmentIds);
   const selectedSegmentId = useStudioStore((state) => state.selectedSegmentId);
-  const selectSegment = useStudioStore((state) => state.selectSegment);
-  const seekTo = useStudioStore((state) => state.seekTo);
+  const selectedSegmentIds = useStudioStore((state) => state.selectedSegmentIds);
 
   const effectiveSegments = propSegments !== undefined ? propSegments : storeSegments;
 
@@ -273,17 +272,11 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
 
   const handleRowClick = useCallback(
     (segment: TranscriptSegment) => {
-      const segId = segment.segmentId ?? segment.segment_id;
-      const start = segment.startSec ?? segment.start_sec;
-
-      selectSegment(segId);
-      seekTo(start);
-
       if (onSegmentSelect) {
         onSegmentSelect(segment);
       }
     },
-    [onSegmentSelect, seekTo, selectSegment],
+    [onSegmentSelect],
   );
 
   return (
@@ -359,7 +352,10 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
 
               const segId = segment.segmentId ?? segment.segment_id;
               const isActive = activeSegmentIds.includes(segId);
-              const isSelected = selectedSegmentId === segId;
+              const isSelected =
+                selectedSegmentIds.length > 0
+                  ? selectedSegmentIds.includes(segId)
+                  : selectedSegmentId === segId;
 
               return (
                 <div

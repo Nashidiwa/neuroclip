@@ -14,6 +14,8 @@ import { ErrorBoundary } from '../common/ErrorBoundary.tsx';
 import { VideoCanvas } from './VideoCanvas.tsx';
 import { TimelineScrubber } from './TimelineScrubber.tsx';
 import { VirtualizedSegmentList } from './VirtualizedSegmentList.tsx';
+import { CharacterHotkeyBar } from './CharacterHotkeyBar.tsx';
+import { useStudioHotkeys } from '../../hooks/useStudioHotkeys.ts';
 import { useStudioStore } from '../../stores/useStudioStore.ts';
 import type { TranscriptSegment } from '../../types/transcript.ts';
 
@@ -30,6 +32,9 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
   onSegmentSelect,
   className = '',
 }) => {
+  // Global character hotkeys (1-5, Numpad 1-5)
+  useStudioHotkeys();
+
   // Store bindings
   const storeSegments = useStudioStore((s) => s.segments);
   const activeSegmentIds = useStudioStore((s) => s.activeSegmentIds);
@@ -37,8 +42,6 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
   const duration = useStudioStore((s) => s.duration);
   const setVideoSrcInStore = useStudioStore((s) => s.setVideoSrc);
   const setSegmentsInStore = useStudioStore((s) => s.setSegments);
-  const seekTo = useStudioStore((s) => s.seekTo);
-  const selectSegmentInStore = useStudioStore((s) => s.selectSegment);
 
   // Synchronize incoming props to store if provided
   useEffect(() => {
@@ -57,17 +60,11 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
 
   const handleSegmentClick = useCallback(
     (seg: TranscriptSegment) => {
-      const segId = seg.segmentId ?? seg.segment_id;
-      const start = seg.startSec ?? seg.start_sec;
-
-      selectSegmentInStore(segId);
-      seekTo(start);
-
       if (onSegmentSelect) {
         onSegmentSelect(seg);
       }
     },
-    [onSegmentSelect, seekTo, selectSegmentInStore],
+    [onSegmentSelect],
   );
 
   return (
@@ -103,6 +100,9 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Character Hotkeys (1-5) & Multi-Selection Toolbar */}
+        <CharacterHotkeyBar />
 
         {/* Virtualized Subtitle Segment List */}
         <VirtualizedSegmentList

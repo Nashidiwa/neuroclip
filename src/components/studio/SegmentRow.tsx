@@ -134,12 +134,18 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
     e.stopPropagation();
   };
 
-  const handleClick = () => {
-    if (onSelect) {
-      onSelect(segment);
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.shiftKey) {
+      useStudioStore.getState().selectSegmentRange(segId);
+    } else if (e.ctrlKey || e.metaKey) {
+      useStudioStore.getState().toggleSegmentSelection(segId, true);
     } else {
       useStudioStore.getState().selectSegment(segId);
       useStudioStore.getState().seekTo(start);
+    }
+
+    if (onSelect) {
+      onSelect(segment);
     }
   };
 
@@ -161,10 +167,12 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={`group relative flex flex-col space-y-2 rounded-lg border p-3 transition-colors outline-none cursor-pointer ${
-        isActive
+        isSelected
+          ? isActive
+            ? 'border-accent-neuro bg-accent-neuro/20 ring-2 ring-accent-neuro/70 shadow-md'
+            : 'border-slate-300 bg-bg-tertiary/90 ring-1 ring-slate-300/60 shadow-sm'
+          : isActive
           ? 'border-accent-neuro bg-accent-neuro/15 shadow-md shadow-accent-neuro/10'
-          : isSelected
-          ? 'border-slate-400 bg-bg-tertiary/90 ring-1 ring-slate-400/50'
           : 'border-border-dark bg-bg-secondary/50 hover:border-slate-600 hover:bg-bg-tertiary/40'
       } ${className}`}
     >
