@@ -22,13 +22,14 @@ import { ErrorBanner } from './components/common/ErrorBanner.tsx';
 import { IngestionDashboard } from './components/dashboard/IngestionDashboard.tsx';
 import { DropZone } from './components/dashboard/DropZone.tsx';
 import { HighlightViewer } from './components/highlight/HighlightViewer.tsx';
+import { SubtitleStudio } from './components/studio/SubtitleStudio.tsx';
 import { useProjectStore } from './stores/useProjectStore.ts';
 import { useIngestionStore } from './stores/useIngestionStore.ts';
 import { useChatStore } from './stores/useChatStore.ts';
 import { useHighlightStore } from './stores/useHighlightStore.ts';
 import type { VodManifest } from './services/ipc/ingestion.ts';
 
-type AppTab = 'overview' | 'ingestion' | 'highlights';
+type AppTab = 'overview' | 'ingestion' | 'highlights' | 'studio';
 
 export const App: React.FC = () => {
   const theme = loadTheme();
@@ -265,6 +266,20 @@ export const App: React.FC = () => {
             }`}
           >
             Highlight
+          </button>
+          <button
+            type="button"
+            role="tab"
+            data-testid="tab-studio"
+            aria-selected={activeTab === 'studio'}
+            onClick={() => setActiveTab('studio')}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              activeTab === 'studio'
+                ? 'border border-accent-neuro/40 bg-accent-neuro/20 text-accent-neuro'
+                : 'text-slate-400 hover:bg-bg-tertiary/60 hover:text-slate-200'
+            }`}
+          >
+            Subtitle Studio
           </button>
         </div>
 
@@ -552,6 +567,12 @@ export const App: React.FC = () => {
               />
             </div>
           </ErrorBoundary>
+        )}
+
+        {activeTab === 'studio' && (
+          <div className="flex-1 min-h-[600px] -m-6 flex flex-col overflow-hidden">
+            <SubtitleStudio />
+          </div>
         )}
       </main>
 
