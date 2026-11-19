@@ -16,6 +16,7 @@ import {
   type SpeakerRole,
 } from '../types/transcript.ts';
 import { calculateCps } from '../utils/text_wrap.ts';
+import { calculateBorrowDuration } from '../utils/cps.ts';
 
 export type Preset916 = 'center-crop' | 'two-stack';
 export type AspectRatioMode = '9:16' | '16:9';
@@ -238,6 +239,7 @@ export interface StudioState {
     boundary: 'start' | 'end',
     deltaSec: number,
   ) => void;
+  readonly borrowSilence: (segmentId: string) => boolean;
   readonly updateSegmentSpeaker: (segmentId: string, speakerId: SpeakerRole | string) => void;
   readonly updateSegmentsSpeaker: (
     segmentIds: readonly string[],
@@ -569,6 +571,23 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
         activeSegmentIds: activeIds,
       };
     });
+  },
+
+  borrowSilence: (segmentId) => {
+    const state = get();
+    const segIdx = state.segments.findIndex(
+      (s) => (s.segmentId ?? s.segment_id) === segmentId,
+    );
+    if (segIdx < 0) return false;
+    const currentSeg = state.segments[segIdx];
+    if (!currentSeg) return false;
+    const nextSeg = state.segments[segIdx + 1];
+
+    const deltaSec = calculateBorrowDuration(currentSeg, nextSeg, state.duration);
+    if (deltaSec <= 0) return false;
+
+    get().nudgeSegmentTime(segmentId, 'end', deltaSec);
+    return true;
   },
 
   updateSegmentsSpeaker: (segmentIds, speakerId) => {

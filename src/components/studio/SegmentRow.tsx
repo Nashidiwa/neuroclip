@@ -19,9 +19,11 @@ import {
   getSpeakerColor,
 } from '../../stores/useStudioStore.ts';
 import { TimecodeNudge } from './TimecodeNudge.tsx';
+import { CPSIndicator } from './CPSIndicator.tsx';
 
 export interface SegmentRowProps {
   readonly segment: TranscriptSegment;
+  readonly nextSegment?: TranscriptSegment | undefined;
   readonly isActive: boolean;
   readonly isSelected: boolean;
   readonly onSelect?: ((segment: TranscriptSegment) => void) | undefined;
@@ -40,16 +42,21 @@ export interface SegmentRowProps {
   readonly onNudgeTime?:
     | ((segmentId: string, boundary: 'start' | 'end', deltaSec: number) => void)
     | undefined;
+  readonly onBorrowSilence?:
+    | ((segmentId: string, deltaSec: number) => void)
+    | undefined;
   readonly className?: string | undefined;
 }
 
 const SegmentRowInner: React.FC<SegmentRowProps> = ({
   segment,
+  nextSegment,
   isActive,
   isSelected,
   onSelect,
   onUpdateText,
   onNudgeTime,
+  onBorrowSilence,
   className = '',
 }) => {
   const viTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -62,7 +69,6 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
   const speakerColor = getSpeakerColor(speaker);
   const textVi = segment.textVi ?? segment.text_vi ?? '';
   const textEn = segment.textEn ?? segment.text_en ?? '';
-  const cps = segment.cpsScore ?? segment.cps_score ?? 0;
 
   // Auto-resize textarea to fit content without scrollbars
   const adjustHeight = (el: HTMLTextAreaElement | null) => {
@@ -149,14 +155,6 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
     }
   };
 
-  // CPS reading speed color categorization
-  const cpsBadgeClass =
-    cps < 17
-      ? 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30'
-      : cps <= 20
-      ? 'text-amber-400 bg-amber-950/40 border-amber-500/30'
-      : 'text-rose-400 bg-rose-950/40 border-rose-500/30';
-
   return (
     <div
       tabIndex={0}
@@ -215,12 +213,14 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
 
         {/* CPS Indicator & Active Checkmark */}
         <div className="flex items-center space-x-1.5">
-          <span
-            className={`rounded-sm border px-1.5 py-0.2 font-mono text-[10px] ${cpsBadgeClass}`}
-            title={`Tốc độ đọc: ${cps.toFixed(1)} ký tự/giây`}
-          >
-            {cps.toFixed(1)} CPS
-          </span>
+          <CPSIndicator
+            segment={segment}
+            nextSegment={nextSegment}
+            onBorrowSilence={
+              onBorrowSilence ??
+              ((id, delta) => useStudioStore.getState().nudgeSegmentTime(id, 'end', delta))
+            }
+          />
           {isActive && <CheckCircle2 className="h-3.5 w-3.5 text-accent-neuro shrink-0" />}
         </div>
       </div>
@@ -271,6 +271,12 @@ export const SegmentRow = React.memo(SegmentRowInner, (prev, next) => {
   const nextStart = next.segment.startSec ?? next.segment.start_sec;
   const prevEnd = prev.segment.endSec ?? prev.segment.end_sec;
   const nextEnd = next.segment.endSec ?? next.segment.end_sec;
+  const prevNextStart = prev.nextSegment
+    ? (prev.nextSegment.startSec ?? prev.nextSegment.start_sec)
+    : null;
+  const nextNextStart = next.nextSegment
+    ? (next.nextSegment.startSec ?? next.nextSegment.start_sec)
+    : null;
   const prevTextVi = prev.segment.textVi ?? prev.segment.text_vi ?? '';
   const nextTextVi = next.segment.textVi ?? next.segment.text_vi ?? '';
   const prevTextEn = prev.segment.textEn ?? prev.segment.text_en ?? '';
@@ -284,6 +290,7 @@ export const SegmentRow = React.memo(SegmentRowInner, (prev, next) => {
     prevId === nextId &&
     prevStart === nextStart &&
     prevEnd === nextEnd &&
+    prevNextStart === nextNextStart &&
     prevTextVi === nextTextVi &&
     prevTextEn === nextTextEn &&
     prevSpeaker === nextSpeaker &&

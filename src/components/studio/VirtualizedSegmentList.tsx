@@ -350,6 +350,7 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
               const segment = effectiveSegments[virtualRow.index];
               if (!segment) return null;
 
+              const nextSegment = effectiveSegments[virtualRow.index + 1];
               const segId = segment.segmentId ?? segment.segment_id;
               const isActive = activeSegmentIds.includes(segId);
               const isSelected =
@@ -371,6 +372,7 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
                 >
                   <SegmentRow
                     segment={segment}
+                    nextSegment={nextSegment}
                     isActive={isActive}
                     isSelected={isSelected}
                     onSelect={handleRowClick}

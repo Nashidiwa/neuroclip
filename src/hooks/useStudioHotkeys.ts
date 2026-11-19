@@ -140,7 +140,18 @@ export function useStudioHotkeys(options: UseStudioHotkeysOptions = {}): {
         return;
       }
 
-      // 5. Hotkey lookup (matches top-row digits or numpad digits)
+      // 5. Shift+E: 1-Touch Silence Borrowing (PRD US5.2 Scenario 2 & TASK-M4-23)
+      if (keyEvent.shiftKey && (keyEvent.key === 'E' || keyEvent.key === 'e')) {
+        const state = useStudioStore.getState();
+        const targetId = state.selectedSegmentId ?? state.selectedSegmentIds[0];
+        if (targetId) {
+          keyEvent.preventDefault();
+          state.borrowSilence(targetId);
+        }
+        return;
+      }
+
+      // 6. Hotkey lookup (matches top-row digits or numpad digits)
       const targetRole = HOTKEY_SPEAKER_MAP[keyEvent.key] ?? NUMPAD_CODE_MAP[keyEvent.code];
       if (!targetRole) {
         return;
