@@ -1,15 +1,26 @@
-//! Translation and Subtitle Localization Subsystem (`TASK-M4-17`, `TASK-M4-18`, `M4.5`).
+//! Translation and Subtitle Localization Subsystem (`TASK-M4-17`, `TASK-M4-18`, `TASK-M4-19`, `M4.5`).
 //!
 //! Provides Google Gemini 1.5 Flash translation client with Theatrical Framing,
 //! `BLOCK_NONE` safety settings, defensive safety fallback (`ERR-07`), chunking with
 //! sliding context windows, Community Lore Dictionary (12 terms per PRD §6.2),
-//! Unified Pronoun Matrix & Style Presets (PRD §6.1, ADR-006), and Hybrid Speaker Diarization.
+//! Unified Pronoun Matrix & Style Presets (PRD §6.1, ADR-006), Hybrid Speaker Diarization,
+//! Vietnamese Smart Line Wrapping (compound word protection), and CPS Time Borrowing Optimization.
 
+pub mod cps_optimizer;
 pub mod diarization;
 pub mod gemini_client;
+pub mod line_wrapper;
 pub mod lore_dictionary;
 pub mod prompt_builder;
 pub mod pronoun_matrix;
+
+pub use cps_optimizer::{
+    calculate_borrow_duration, calculate_cps, calculate_segment_cps, effective_segment_text,
+    optimize_container_cps, optimize_cps_time_borrowing, optimize_cps_time_borrowing_default,
+    optimize_cps_with_config, rate_cps, round_to_millis, serialize_transcript_segments_json,
+    CpsRating, TimeBorrowingConfig, TimeBorrowingReport, CPS_GREEN_THRESHOLD, CPS_RED_THRESHOLD,
+    DEFAULT_MAX_BORROW_MS, DEFAULT_MIN_GAP_MS, DEFAULT_TARGET_CPS,
+};
 
 pub use diarization::{
     infer_speaker_heuristic, normalize_speaker_id, resolve_speaker_id, HybridDiarizer,
@@ -22,6 +33,14 @@ pub use gemini_client::{
     MockHttpHandler, TranslatedSegmentItem, TransportResponse, BLOCK_NONE_THRESHOLD,
     DEFAULT_GEMINI_API_URL, DEFAULT_GEMINI_MODEL, DEFAULT_RETRY_BASE_DELAY_MS,
     FORMAT_FALLBACK_PREFIX, MAX_RATE_LIMIT_RETRIES, SAFETY_CATEGORIES, SAFETY_FALLBACK_PREFIX,
+};
+
+pub use line_wrapper::{
+    is_compound_word, is_honorific, starts_with_uppercase, strip_punctuation,
+    tokenize_vietnamese_compounds, wrap_vietnamese_subtitle, wrap_vietnamese_text,
+    wrap_vietnamese_text_to_string, DEFAULT_MAX_CHARS_PER_LINE, DEFAULT_MAX_LINES,
+    MIN_LINE_WRAP_TARGET_CHARS, VERTICAL_9_16_MAX_CHARS_PER_LINE, VIETNAMESE_COMPOUND_WORDS,
+    VIETNAMESE_HONORIFICS,
 };
 
 pub use lore_dictionary::{

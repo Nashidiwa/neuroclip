@@ -541,6 +541,40 @@ impl GeminiClient {
             }
         }
 
+        // Apply smart Vietnamese line wrapping to translated segments
+        for seg in &mut translated_segments {
+            if let Some(ref vi) = seg.text_vi {
+                // Do not line-wrap defensive fallback notices (safety filter or formatting errors)
+                // because they contain verbatim original English dialogue awaiting manual review.
+                if !vi.trim().is_empty()
+                    && !vi.starts_with(SAFETY_FALLBACK_PREFIX)
+                    && !vi.starts_with(FORMAT_FALLBACK_PREFIX)
+                {
+                    let wrapped = crate::translation::line_wrapper::wrap_vietnamese_text_to_string(
+                        vi,
+                        crate::translation::line_wrapper::DEFAULT_MAX_CHARS_PER_LINE,
+                        crate::translation::line_wrapper::DEFAULT_MAX_LINES,
+                    );
+                    seg.text_vi = Some(wrapped);
+                }
+            }
+        }
+
+        // Run CPS time borrowing optimization
+        crate::translation::cps_optimizer::optimize_cps_time_borrowing_default(
+            &mut translated_segments,
+        );
+
+        // Defensive Invariant (ERR-07): segments with safety or format fallback notices
+        // MUST remain flagged for manual human review, regardless of CPS duration borrowing.
+        for seg in &mut translated_segments {
+            if let Some(ref vi) = seg.text_vi {
+                if vi.starts_with(SAFETY_FALLBACK_PREFIX) || vi.starts_with(FORMAT_FALLBACK_PREFIX) {
+                    seg.is_flagged_for_review = true;
+                }
+            }
+        }
+
         Ok(TranscriptSegmentsContainer {
             clip_id: clip_id.to_string(),
             segments: translated_segments,

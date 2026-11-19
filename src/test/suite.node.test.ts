@@ -157,13 +157,25 @@ import {
   translateVietsub,
   testGeminiConnection,
   updateSpeakerRole,
+  wrapVietnameseSubtitles,
+  optimizeTranscriptCps,
   listenTranslationProgress,
   normalizeTranslationProgressPayload,
   type StylePreset,
   type TranslateVietsubOptions,
   type TranslationProgressPayload,
   type TranslationProgressPayloadJson,
+  type WrapVietnameseSubtitlesOptions,
+  type OptimizeTranscriptCpsOptions,
 } from '../services/ipc/translation.ts';
+import {
+  wrapVietnameseText,
+  calculateCps,
+  optimizeCpsTimeBorrowing,
+  getUnicodeCharCount,
+  RED_FLAG_CPS_THRESHOLD,
+} from '../utils/text_wrap.ts';
+import { normalizeTranscriptSegment, type TranscriptSegment } from '../types/transcript.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -3698,6 +3710,119 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       };
       assert.strictEqual(options.stylePreset, 'TikTok Gen Z Trend');
       assert.deepStrictEqual(options.castMembers, ['Anny', 'Camila']);
+    });
+  });
+
+  describe('TASK-M4-19: Vietnamese Smart Line Wrapping & CPS Reading Speed Optimization', () => {
+    it('should assert Rust line_wrapper and cps_optimizer modules and tests exist in backend', () => {
+      const lineWrapperPath = path.resolve('src-tauri/src/translation/line_wrapper.rs');
+      const cpsOptimizerPath = path.resolve('src-tauri/src/translation/cps_optimizer.rs');
+      const integrationTestPath = path.resolve('src-tauri/tests/line_wrapper_cps_test.rs');
+
+      assert.strictEqual(fs.existsSync(lineWrapperPath), true, 'line_wrapper.rs must exist');
+      assert.strictEqual(fs.existsSync(cpsOptimizerPath), true, 'cps_optimizer.rs must exist');
+      assert.strictEqual(fs.existsSync(integrationTestPath), true, 'line_wrapper_cps_test.rs must exist');
+    });
+
+    it('should assert zero-panic clippy invariant in TASK-M4-19 Rust production modules', () => {
+      const targets = [
+        path.resolve('src-tauri/src/translation/line_wrapper.rs'),
+        path.resolve('src-tauri/src/translation/cps_optimizer.rs'),
+      ];
+
+      for (const file of targets) {
+        const content = fs.readFileSync(file, 'utf8');
+        // Separate test module from production code
+        const prodCode = content.split('#[cfg(test)]')[0] ?? '';
+        assert.ok(!prodCode.includes('.unwrap()'), `${file} must not contain .unwrap() in prod code`);
+        assert.ok(!prodCode.includes('.expect('), `${file} must not contain .expect() in prod code`);
+        assert.ok(!prodCode.includes('panic!('), `${file} must not contain panic!() in prod code`);
+      }
+    });
+
+    it('should verify Smart Compound Line Wrapping (UT-19.1, AC-19.1)', () => {
+      const text50 = 'Tôi đã mua một ổ bánh mì rất ngon cho bố Vedal ăn.';
+      assert.strictEqual(getUnicodeCharCount(text50), 50);
+
+      const lines = wrapVietnameseText(text50, 42, 2);
+      assert.strictEqual(lines.length, 2, 'Must wrap into exactly 2 lines');
+      for (const line of lines) {
+        assert.ok(getUnicodeCharCount(line) <= 42, `Line '${line}' must be <= 42 chars`);
+      }
+      assert.ok(!lines[0]?.endsWith('bánh'), 'Must not split "bánh mì"');
+      assert.ok(!lines[0]?.endsWith('bố'), 'Must not split "bố Vedal"');
+      assert.strictEqual(lines[0], 'Tôi đã mua một ổ bánh mì rất ngon cho');
+      assert.strictEqual(lines[1], 'bố Vedal ăn.');
+    });
+
+    it('should verify CPS calculation and red-flag threshold (UT-19.2)', () => {
+      const text40 = 'Một hai ba bốn năm sáu bảy tám chín mười';
+      assert.strictEqual(getUnicodeCharCount(text40), 40);
+
+      const cps = calculateCps(text40, 1.5);
+      assert.ok(Math.abs(cps - 26.67) < 0.1, `CPS must be ~26.7, got ${cps}`);
+      assert.ok(cps > RED_FLAG_CPS_THRESHOLD, 'CPS must exceed 20.0 threshold');
+    });
+
+    it('should verify Time Borrowing and Collision Avoidance (UT-19.3, ED-19.1, AC-19.2)', () => {
+      const text40 = 'Một hai ba bốn năm sáu bảy tám chín mười';
+      const segments: TranscriptSegment[] = [
+        normalizeTranscriptSegment({
+          segment_id: 'seg_1',
+          start_sec: 0.0,
+          end_sec: 1.5,
+          speaker_id: 'neuro',
+          text_en: 'English text here',
+          text_vi: text40,
+          confidence: 0.95,
+          cps_score: calculateCps(text40, 1.5),
+          is_flagged_for_review: true,
+          words: [],
+        }),
+        normalizeTranscriptSegment({
+          segment_id: 'seg_2',
+          start_sec: 2.5,
+          end_sec: 4.0,
+          speaker_id: 'vedal',
+          text_en: 'Next sentence',
+          text_vi: 'Câu tiếp theo',
+          confidence: 0.95,
+          cps_score: calculateCps('Câu tiếp theo', 1.5),
+          is_flagged_for_review: false,
+          words: [],
+        }),
+      ];
+
+      const optimized = optimizeCpsTimeBorrowing(segments);
+      const seg1 = optimized[0];
+      const seg2 = optimized[1];
+
+      assert.ok(seg1 && seg2);
+      // UT-19.3: extended by 0.8s -> 2.3s
+      assert.ok(Math.abs(seg1.endSec - 2.3) < 0.01, `endSec must be 2.3s, got ${seg1.endSec}`);
+      assert.ok(seg1.cpsScore <= RED_FLAG_CPS_THRESHOLD, `New CPS must be <= 20.0, got ${seg1.cpsScore}`);
+      assert.strictEqual(seg1.isFlaggedForReview, false, 'Flag must be cleared');
+
+      // ED-19.1: buffer to next start >= 50ms
+      assert.ok(seg2.startSec - seg1.endSec >= 0.05, 'Minimum 50ms gap preserved');
+    });
+
+    it('should verify Frontend IPC exports and command signatures for translation', () => {
+      assert.strictEqual(typeof wrapVietnameseSubtitles, 'function');
+      assert.strictEqual(typeof optimizeTranscriptCps, 'function');
+
+      const wrapOptions: WrapVietnameseSubtitlesOptions = {
+        maxCharsPerLine: 42,
+        maxLines: 2,
+      };
+      assert.strictEqual(wrapOptions.maxCharsPerLine, 42);
+
+      const cpsOptions: OptimizeTranscriptCpsOptions = {
+        maxBorrowMs: 800,
+        minGapMs: 50,
+        targetCps: 17.0,
+      };
+      assert.strictEqual(cpsOptions.maxBorrowMs, 800);
     });
   });
 });

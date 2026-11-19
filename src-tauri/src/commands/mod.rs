@@ -70,8 +70,10 @@ pub use stt_cmd::{
     start_whisper_transcription, transcribe_highlight_clip, verify_stt_model,
 };
 pub use translation_cmd::{
-    __cmd__test_gemini_connection, __cmd__translate_vietsub, __cmd__update_speaker_role,
-    __tauri_command_name_test_gemini_connection, __tauri_command_name_translate_vietsub,
-    __tauri_command_name_update_speaker_role, test_gemini_connection, translate_vietsub,
-    update_speaker_role,
+    __cmd__optimize_transcript_cps, __cmd__test_gemini_connection, __cmd__translate_vietsub,
+    __cmd__update_speaker_role, __cmd__wrap_vietnamese_subtitles,
+    __tauri_command_name_optimize_transcript_cps, __tauri_command_name_test_gemini_connection,
+    __tauri_command_name_translate_vietsub, __tauri_command_name_update_speaker_role,
+    __tauri_command_name_wrap_vietnamese_subtitles, optimize_transcript_cps,
+    test_gemini_connection, translate_vietsub, update_speaker_role, wrap_vietnamese_subtitles,
 };

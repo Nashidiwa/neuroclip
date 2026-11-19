@@ -24,6 +24,18 @@ import {
 
 export * from '../../types/translation.ts';
 
+export interface WrapVietnameseSubtitlesOptions {
+  maxCharsPerLine?: number;
+  maxLines?: number;
+}
+
+export interface OptimizeTranscriptCpsOptions {
+  clipDuration?: number;
+  maxBorrowMs?: number;
+  minGapMs?: number;
+  targetCps?: number;
+}
+
 /**
  * Translate transcript segments into natural Vietnamese subtitles using Gemini 1.5 Flash.
  *
@@ -92,6 +104,56 @@ export async function updateSpeakerRole(
       container: wireContainer,
       segmentId,
       newSpeaker,
+    });
+    return normalizeTranscriptSegmentsContainer(raw);
+  } catch (err: unknown) {
+    throw parseIpcError(err);
+  }
+}
+
+/**
+ * Wrap Vietnamese subtitles across all segments, preserving compound words.
+ *
+ * @param container Transcript container adhering to Schema 5.5.
+ * @param options Line wrapping constraints (maxCharsPerLine, maxLines).
+ * @returns Updated TranscriptSegmentsContainer with wrapped text_vi.
+ */
+export async function wrapVietnameseSubtitles(
+  container: TranscriptSegmentsContainer,
+  options?: WrapVietnameseSubtitlesOptions,
+): Promise<TranscriptSegmentsContainer> {
+  try {
+    const wireContainer = toTranscriptSegmentsContainerJson(container);
+    const raw = await invoke<TranscriptSegmentsContainerJson>('wrap_vietnamese_subtitles', {
+      container: wireContainer,
+      maxCharsPerLine: options?.maxCharsPerLine ?? null,
+      maxLines: options?.maxLines ?? null,
+    });
+    return normalizeTranscriptSegmentsContainer(raw);
+  } catch (err: unknown) {
+    throw parseIpcError(err);
+  }
+}
+
+/**
+ * Optimize transcript CPS reading speed via Time Borrowing.
+ *
+ * @param container Transcript container adhering to Schema 5.5.
+ * @param options Time Borrowing parameters (clipDuration, maxBorrowMs, minGapMs, targetCps).
+ * @returns Updated TranscriptSegmentsContainer with optimized end_sec and cps_score.
+ */
+export async function optimizeTranscriptCps(
+  container: TranscriptSegmentsContainer,
+  options?: OptimizeTranscriptCpsOptions,
+): Promise<TranscriptSegmentsContainer> {
+  try {
+    const wireContainer = toTranscriptSegmentsContainerJson(container);
+    const raw = await invoke<TranscriptSegmentsContainerJson>('optimize_transcript_cps', {
+      container: wireContainer,
+      clipDuration: options?.clipDuration ?? null,
+      maxBorrowMs: options?.maxBorrowMs ?? null,
+      minGapMs: options?.minGapMs ?? null,
+      targetCps: options?.targetCps ?? null,
     });
     return normalizeTranscriptSegmentsContainer(raw);
   } catch (err: unknown) {

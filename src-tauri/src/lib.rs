@@ -162,7 +162,9 @@ pub fn run() {
             commands::cancel_slice_video_segment,
             commands::translate_vietsub,
             commands::test_gemini_connection,
-            commands::update_speaker_role
+            commands::update_speaker_role,
+            commands::wrap_vietnamese_subtitles,
+            commands::optimize_transcript_cps
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

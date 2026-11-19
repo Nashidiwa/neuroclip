@@ -2,8 +2,8 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
-**Phiên bản:** 2.0.0 (Phase 4: Implementation & Verification — M4.1–M4.4 & TASK-M4-17 Completed; Pre-M4-18 Remediation Verified)  
-**Ngày cập nhật:** 2026-11-18  
+**Phiên bản:** 2.1.0 (Phase 4: Implementation & Verification — M4.1–M4.5 Completed: TASK-M4-01..M4-19)  
+**Ngày cập nhật:** 2026-11-19  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`.
 
@@ -16,7 +16,7 @@
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
 | **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (17 / 32 Tasks Completed: TASK-M4-01..M4-17)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (19 / 32 Tasks Completed: TASK-M4-01..M4-19)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -841,7 +841,7 @@
 
 ---
 
-#### TASK-M4-18: Từ Điển Thuật Ngữ Neuro Lore, Ma Trận Đại Từ Xưng Hô & Tự Động Gán Vai Ngữ Cảnh
+#### TASK-M4-18: Từ Điển Thuật Ngữ Neuro Lore, Ma Trận Đại Từ Xưng Hô & Tự Động Gán Vai Ngữ Cảnh — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `@product-owner-proxy` & Senior Backend Dev (Rust)
 - **Target Files:**
   - `src-tauri/src/translation/lore_dictionary.rs`
@@ -879,25 +879,25 @@
   - Prerequisites: TASK-M4-17.
   - Blocks: TASK-M4-19, TASK-M4-20, TASK-M4-22.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-18.1:** 100% các thuật ngữ trong Lore Dictionary (12 thuật ngữ `PRD.md` §6.2) được dịch chuẩn nghĩa theo văn hóa Swarm VN, không có hiện tượng dịch word-by-word ngô nghê.
-  - [ ] **AC-18.2:** Độ chính xác tự động gán nhãn người nói (`speaker_id`) dựa trên ngữ cảnh đạt $\ge 85\%$ trước khi người dùng cần can thiệp thủ công.
+  - [x] **AC-18.1:** 100% các thuật ngữ trong Lore Dictionary (12 thuật ngữ `PRD.md` §6.2) được dịch chuẩn nghĩa theo văn hóa Swarm VN, không có hiện tượng dịch word-by-word ngô nghê.
+  - [x] **AC-18.2:** Độ chính xác tự động gán nhãn người nói (`speaker_id`) dựa trên ngữ cảnh đạt $\ge 85\%$ trước khi người dùng cần can thiệp thủ công.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Pure Logic Translation & Diarization Unit Test
   - *Unit Test Cases:*
-    - [ ] **UT-18.1 (Lore Dictionary Match — 12 Terms `PRD.md` §6.2):**
+    - [x] **UT-18.1 (Lore Dictionary Match — 12 Terms `PRD.md` §6.2):**
       - `"Heart"` / `"Heart Heart"` $\rightarrow$ `"Heart <3"` / `"Thả tim <3"` / `"Bắn tim"` / `"Bắn tim bắn tim"`.
       - `"Tutel"` / `"Turtle"` $\rightarrow$ `"Tutel"` / `"Cụ Rùa"` / `"Con Rùa"` / `"Bố rùa"`.
       - `"Gymbag"` $\rightarrow$ `"Gymbag"` / `"Bao tải gym"` / `"Bao cát gym"`.
       - `"Filter / Leaking"` (`"Filter is leaking"`) $\rightarrow$ `"Bộ lọc bị thủng rồi!"` / `"Filter lủng rồi cứu!"` / `"Bộ lọc rò rỉ rồi"` / `"Bộ lọc lủng rồi"` / `"Lộ bản chất rồi"`.
       - Đầy đủ 8 thuật ngữ còn lại (`Swarm`, `Abandoned`, `Dinking`, `Erm`, `Cooked`, `Unhinged`, `KEKW / LUL / 💀`, `Aware / Clueless`) khớp `PRD.md` §6.2.
-    - [ ] **UT-18.2 (Pronoun Matrix Consistency):**
+    - [x] **UT-18.2 (Pronoun Matrix Consistency):**
       - Đoạn thoại Vedal nói với Neuro: tự xưng `"tôi / bố / anh / ta"` — gọi `"Neuro / Evil / em / con"`.
       - Đoạn thoại Neuro nói với Vedal: tự xưng `"con / em / cháu / Neuro"` — gọi `"bố Vedal / bố / anh Vedal / anh"`.
       - Đoạn thoại Evil nói với Vedal: tự xưng `"ta / chị / Evil / em"` — gọi `"ông già / lão già / con rùa / rùa ngốc / Vedal"`.
       - Hỗ trợ hồ sơ khách mời `cast_members` (`Anny`, `Camila`, `Filian`) ánh xạ vai `guest`.
-    - [ ] **UT-18.3 (Hybrid Speaker ID Diarization):** Phân tích ngữ cảnh câu nói (kết hợp LLM/mock + deterministic normalizer + heuristic fallback) tự động gán đúng `speaker_id` trong `["vedal", "neuro", "evil", "guest", "chat", "unknown"]` với độ chính xác $\ge 85\%$.
+    - [x] **UT-18.3 (Hybrid Speaker ID Diarization):** Phân tích ngữ cảnh câu nói (kết hợp LLM/mock + deterministic normalizer + heuristic fallback) tự động gán đúng `speaker_id` trong `["vedal", "neuro", "evil", "guest", "chat", "unknown"]` với độ chính xác $\ge 85\%$.
   - *Integration & Contract Verification:*
-    - [ ] **IT-18.1:** Cập nhật trường `speaker_id` và `text_vi` vào mảng transcript segments qua `PromptBuilder` & `GeminiClient::merge_translations()`.
+    - [x] **IT-18.1:** Cập nhật trường `speaker_id` và `text_vi` vào mảng transcript segments qua `PromptBuilder` & `GeminiClient::merge_translations()`.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --lib translation::lore_dictionary::tests
@@ -908,7 +908,7 @@
 
 ---
 
-#### TASK-M4-19: Động Cơ Ngắt Dòng Thông Minh Tiếng Việt & Tối Ưu Hóa Tốc Độ Đọc (CPS)
+#### TASK-M4-19: Động Cơ Ngắt Dòng Thông Minh Tiếng Việt & Tối Ưu Hóa Tốc Độ Đọc (CPS) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & Senior Frontend Dev
 - **Target Files:**
   - `src-tauri/src/translation/line_wrapper.rs`
@@ -929,19 +929,19 @@
   - Prerequisites: TASK-M4-18.
   - Blocks: TASK-M4-20, TASK-M4-21, TASK-M4-23, TASK-M4-24.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-19.1:** 100% các dòng phụ đề tiếng Việt tuân thủ giới hạn $\le 42\text{ ký tự/dòng}$ và không có dòng nào bị bẻ đôi từ ghép.
-  - [ ] **AC-19.2:** Thuật toán Time Borrowing nới rộng thời gian thành công cho các câu nói nhanh mà không bao giờ đè lên mốc bắt đầu của câu thoại kế tiếp.
-  - [ ] **AC-19.3:** File `transcript_segments.json` sinh ra hợp lệ 100% với JSON Schema 5.5.
+  - [x] **AC-19.1:** 100% các dòng phụ đề tiếng Việt tuân thủ giới hạn $\le 42\text{ ký tự/dòng}$ và không có dòng nào bị bẻ đôi từ ghép.
+  - [x] **AC-19.2:** Thuật toán Time Borrowing nới rộng thời gian thành công cho các câu nói nhanh mà không bao giờ đè lên mốc bắt đầu của câu thoại kế tiếp.
+  - [x] **AC-19.3:** File `transcript_segments.json` sinh ra hợp lệ 100% với JSON Schema 5.5.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Pure Logic String & Math Unit Test
   - *Unit Test Cases:*
-    - [ ] **UT-19.1 (Smart Compound Wrapping):** Đưa vào chuỗi tiếng Việt dài 50 ký tự chứa từ ghép `"bánh mì"` và `"bố Vedal"`. Assert thuật toán bẻ dòng thành 2 dòng $\le 42$ ký tự, điểm ngắt dòng tuyệt đối không nằm giữa `"bánh"` và `"mì"`.
-    - [ ] **UT-19.2 (CPS Math):** Câu thoại có 40 ký tự tiếng Việt hiển thị trong $1.5\text{ giây} \rightarrow \text{CPS} = 40 / 1.5 \approx 26.7\text{ CPS} > 20$ (Vượt ngưỡng đỏ).
-    - [ ] **UT-19.3 (Time Borrowing Calculation):** Câu thoại có $\text{CPS} = 26.7$, phía sau có khoảng lặng $1.0\text{s}$ trước câu kế tiếp. Thuật toán tự động nới rộng mốc `end_sec` thêm $0.8\text{s}$ $\rightarrow \text{CPS mới} = 40 / 2.3 \approx 17.4\text{ CPS} \le 20$.
+    - [x] **UT-19.1 (Smart Compound Wrapping):** Đưa vào chuỗi tiếng Việt dài 50 ký tự chứa từ ghép `"bánh mì"` và `"bố Vedal"`. Assert thuật toán bẻ dòng thành 2 dòng $\le 42$ ký tự, điểm ngắt dòng tuyệt đối không nằm giữa `"bánh"` và `"mì"`.
+    - [x] **UT-19.2 (CPS Math):** Câu thoại có 40 ký tự tiếng Việt hiển thị trong $1.5\text{ giây} \rightarrow \text{CPS} = 40 / 1.5 \approx 26.7\text{ CPS} > 20$ (Vượt ngưỡng đỏ).
+    - [x] **UT-19.3 (Time Borrowing Calculation):** Câu thoại có $\text{CPS} = 26.7$, phía sau có khoảng lặng $1.0\text{s}$ trước câu kế tiếp. Thuật toán tự động nới rộng mốc `end_sec` thêm $0.8\text{s}$ $\rightarrow \text{CPS mới} = 40 / 2.3 \approx 17.4\text{ CPS} \le 20$.
   - *Integration & Contract Verification (Schema 5.5):**
-    - [ ] **IT-19.1:** Xuất ra tệp `transcript_segments.json` tuân thủ 100% JSON Schema 5.5 trong `ARCHITECTURE.md`.
+    - [x] **IT-19.1:** Xuất ra tệp `transcript_segments.json` tuân thủ 100% JSON Schema 5.5 trong `ARCHITECTURE.md`.
   - *Boundary & Edge Cases:*
-    - [ ] **ED-19.1 (Collision Avoidance):** Phép mượn thời gian không bao giờ kéo dài `end_sec` đè lên hoặc vượt quá `start_sec` của câu thoại tiếp theo (khoảng cách tối thiểu $50\text{ms}$).
+    - [x] **ED-19.1 (Collision Avoidance):** Phép mượn thời gian không bao giờ kéo dài `end_sec` đè lên hoặc vượt quá `start_sec` của câu thoại tiếp theo (khoảng cách tối thiểu $50\text{ms}$).
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --lib translation::line_wrapper::tests

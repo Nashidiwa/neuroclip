@@ -93,3 +93,60 @@ pub async fn update_speaker_role(
     }
     Ok(container)
 }
+
+/// Wrap Vietnamese subtitle text across all segments in a container, preserving compound words.
+#[command]
+pub async fn wrap_vietnamese_subtitles(
+    mut container: TranscriptSegmentsContainer,
+    max_chars_per_line: Option<usize>,
+    max_lines: Option<usize>,
+) -> Result<TranscriptSegmentsContainer, AppError> {
+    let max_chars = max_chars_per_line
+        .filter(|&c| c > 0)
+        .unwrap_or(crate::translation::line_wrapper::DEFAULT_MAX_CHARS_PER_LINE);
+    let max_l = max_lines
+        .filter(|&l| l > 0)
+        .unwrap_or(crate::translation::line_wrapper::DEFAULT_MAX_LINES);
+
+    for seg in &mut container.segments {
+        if let Some(ref text_vi) = seg.text_vi {
+            if !text_vi.trim().is_empty()
+                && !text_vi.starts_with(crate::translation::SAFETY_FALLBACK_PREFIX)
+                && !text_vi.starts_with(crate::translation::FORMAT_FALLBACK_PREFIX)
+            {
+                seg.text_vi = Some(crate::translation::line_wrapper::wrap_vietnamese_text_to_string(
+                    text_vi,
+                    max_chars,
+                    max_l,
+                ));
+            }
+        }
+    }
+
+    Ok(container)
+}
+
+/// Optimize reading speed (CPS) across transcript segments using Time Borrowing.
+#[command]
+pub async fn optimize_transcript_cps(
+    mut container: TranscriptSegmentsContainer,
+    clip_duration: Option<f64>,
+    max_borrow_ms: Option<u64>,
+    min_gap_ms: Option<u64>,
+    target_cps: Option<f64>,
+) -> Result<TranscriptSegmentsContainer, AppError> {
+    let config = crate::translation::cps_optimizer::TimeBorrowingConfig {
+        max_borrow_ms: max_borrow_ms
+            .unwrap_or(crate::translation::cps_optimizer::DEFAULT_MAX_BORROW_MS),
+        min_gap_ms: min_gap_ms
+            .unwrap_or(crate::translation::cps_optimizer::DEFAULT_MIN_GAP_MS),
+        target_cps: target_cps
+            .unwrap_or(crate::translation::cps_optimizer::DEFAULT_TARGET_CPS),
+        trigger_cps: crate::translation::cps_optimizer::CPS_RED_THRESHOLD,
+        max_clip_duration_sec: clip_duration,
+    };
+
+    crate::translation::cps_optimizer::optimize_container_cps(&mut container, &config);
+
+    Ok(container)
+}

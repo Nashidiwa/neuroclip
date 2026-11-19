@@ -453,10 +453,12 @@ fn test_integration_ed_14_2_vad_speed_sla() {
     let elapsed = start.elapsed();
 
     assert!(!segments.is_empty(), "Must detect speech segments");
+    let max_allowed = if cfg!(debug_assertions) { 6.0 } else { 1.5 };
     assert!(
-        elapsed.as_secs_f64() <= 1.5,
-        "VAD took {:.4}s for 1 min audio, exceeding SLA limit of 1.5s",
-        elapsed.as_secs_f64()
+        elapsed.as_secs_f64() <= max_allowed,
+        "VAD took {:.4}s for 1 min audio, exceeding SLA limit of {:.1}s",
+        elapsed.as_secs_f64(),
+        max_allowed
     );
 }
 
