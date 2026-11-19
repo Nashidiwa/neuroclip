@@ -11,6 +11,7 @@
 
 import { createStore, type StoreHook } from './createStore.ts';
 import type { TranscriptSegment, SpeakerRole } from '../types/transcript.ts';
+import { calculateCps } from '../utils/text_wrap.ts';
 
 export type Preset916 = 'center-crop' | 'two-stack';
 export type AspectRatioMode = '9:16' | '16:9';
@@ -211,6 +212,23 @@ export interface StudioState {
   readonly setAspectRatio: (ratio: AspectRatioMode) => void;
   readonly setSegments: (segments: readonly TranscriptSegment[]) => void;
   readonly selectSegment: (segmentId: string | null) => void;
+  readonly setSelectedSegmentId: (segmentId: string | null) => void;
+  readonly updateSegmentText: (
+    segmentId: string,
+    updates: {
+      text?: string;
+      text_vi?: string | null;
+      text_en?: string;
+      textVi?: string | null;
+      textEn?: string;
+    },
+  ) => void;
+  readonly nudgeSegmentTime: (
+    segmentId: string,
+    boundary: 'start' | 'end',
+    deltaSec: number,
+  ) => void;
+  readonly updateSegmentSpeaker: (segmentId: string, speakerId: SpeakerRole) => void;
   readonly seekTo: (time: number) => void;
   readonly clearSeekTarget: () => void;
   readonly setIsScrubbing: (isScrubbing: boolean) => void;
@@ -324,6 +342,151 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
 
   selectSegment: (segmentId) => {
     set({ selectedSegmentId: segmentId });
+  },
+
+  setSelectedSegmentId: (segmentId) => {
+    set({ selectedSegmentId: segmentId });
+  },
+
+  updateSegmentText: (segmentId, updates) => {
+    const textVi =
+      updates.textVi !== undefined
+        ? updates.textVi
+        : updates.text_vi !== undefined
+        ? updates.text_vi
+        : undefined;
+
+    const textEn =
+      updates.textEn !== undefined
+        ? updates.textEn
+        : updates.text_en !== undefined
+        ? updates.text_en
+        : updates.text !== undefined
+        ? updates.text
+        : undefined;
+
+    set((state) => {
+      const nextSegments = state.segments.map((seg) => {
+        const id = seg.segmentId ?? seg.segment_id;
+        if (id !== segmentId) return seg;
+
+        const updatedVi = textVi !== undefined ? (textVi ?? '') : (seg.textVi ?? seg.text_vi ?? '');
+        const updatedEn = textEn !== undefined ? (textEn ?? '') : (seg.textEn ?? seg.text_en ?? '');
+
+        const start = seg.startSec ?? seg.start_sec;
+        const end = seg.endSec ?? seg.end_sec;
+        const durationSec = Math.max(0.05, end - start);
+        const effectiveText = updatedVi && updatedVi.trim() !== '' ? updatedVi : updatedEn;
+        const newCps = calculateCps(effectiveText, durationSec);
+
+        return {
+          ...seg,
+          textVi: updatedVi,
+          text_vi: updatedVi,
+          textEn: updatedEn,
+          text_en: updatedEn,
+          cpsScore: newCps,
+          cps_score: newCps,
+        };
+      });
+
+      const active = findActiveSegments(nextSegments, state.currentTime);
+      const activeIds = active.map((s) => s.segmentId ?? s.segment_id);
+
+      return {
+        segments: nextSegments,
+        activeSegments: active,
+        activeSegmentIds: activeIds,
+      };
+    });
+  },
+
+  nudgeSegmentTime: (segmentId, boundary, deltaSec) => {
+    if (!Number.isFinite(deltaSec) || deltaSec === 0) return;
+
+    set((state) => {
+      let needsResort = false;
+
+      const nextSegments = state.segments.map((seg) => {
+        const id = seg.segmentId ?? seg.segment_id;
+        if (id !== segmentId) return seg;
+
+        let start = seg.startSec ?? seg.start_sec;
+        let end = seg.endSec ?? seg.end_sec;
+
+        if (boundary === 'start') {
+          const raw = start + deltaSec;
+          start = Math.max(0, Math.round(raw * 1000) / 1000);
+          if (start > end - 0.05) {
+            start = Math.max(0, Math.round((end - 0.05) * 1000) / 1000);
+          }
+          needsResort = true;
+        } else {
+          const raw = end + deltaSec;
+          const minEnd = Math.round((start + 0.05) * 1000) / 1000;
+          end = Math.max(minEnd, Math.round(raw * 1000) / 1000);
+          if (state.duration > 0 && end > state.duration) {
+            end = state.duration;
+          }
+        }
+
+        const durationSec = Math.max(0.05, end - start);
+        const currentVi = seg.textVi ?? seg.text_vi ?? '';
+        const currentEn = seg.textEn ?? seg.text_en ?? '';
+        const effectiveText = currentVi && currentVi.trim() !== '' ? currentVi : currentEn;
+        const newCps = calculateCps(effectiveText, durationSec);
+
+        return {
+          ...seg,
+          startSec: start,
+          start_sec: start,
+          endSec: end,
+          end_sec: end,
+          cpsScore: newCps,
+          cps_score: newCps,
+        };
+      });
+
+      const finalSegments = needsResort
+        ? [...nextSegments].sort((a, b) => {
+            const aStart = a.startSec ?? a.start_sec;
+            const bStart = b.startSec ?? b.start_sec;
+            return aStart - bStart;
+          })
+        : nextSegments;
+
+      const active = findActiveSegments(finalSegments, state.currentTime);
+      const activeIds = active.map((s) => s.segmentId ?? s.segment_id);
+
+      return {
+        segments: finalSegments,
+        activeSegments: active,
+        activeSegmentIds: activeIds,
+      };
+    });
+  },
+
+  updateSegmentSpeaker: (segmentId, speakerId) => {
+    set((state) => {
+      const nextSegments = state.segments.map((seg) => {
+        const id = seg.segmentId ?? seg.segment_id;
+        if (id !== segmentId) return seg;
+        return {
+          ...seg,
+          speakerId,
+          speaker_id: speakerId,
+        };
+      });
+
+      const active = findActiveSegments(nextSegments, state.currentTime);
+      const activeIds = active.map((s) => s.segmentId ?? s.segment_id);
+
+      return {
+        segments: nextSegments,
+        activeSegments: active,
+        activeSegmentIds: activeIds,
+      };
+    });
   },
 
   seekTo: (time) => {
