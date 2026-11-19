@@ -2,8 +2,8 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
-**Phiên bản:** 2.1.0 (Phase 4: Implementation & Verification — M4.1–M4.5 Completed: TASK-M4-01..M4-19)  
-**Ngày cập nhật:** 2026-11-19  
+**Phiên bản:** 2.2.0 (Phase 4: Implementation & Verification — M4.1–M4.6 Completed: TASK-M4-01..M4-23)  
+**Ngày cập nhật:** 2026-11-20  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`.
 
@@ -16,7 +16,7 @@
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
 | **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (19 / 32 Tasks Completed: TASK-M4-01..M4-19)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (23 / 32 Tasks Completed: TASK-M4-01..M4-23)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -951,9 +951,9 @@
 
 ---
 
-### Milestone M4.6: Trình Soạn Thảo Phụ Đề Tinh Gọn (Lean Subtitle Studio UI)
+### Milestone M4.6: Trình Soạn Thảo Phụ Đề Tinh Gọn (Lean Subtitle Studio UI) — ✅ ĐÃ HOÀN THÀNH
 
-#### TASK-M4-20: Màn Hình Biên Tập Subtitle Studio & Khung Xem Video Đồng Bộ Timeline
+#### TASK-M4-20: Màn Hình Biên Tập Subtitle Studio & Khung Xem Video Đồng Bộ Timeline — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Frontend Dev & `@tech-lead`
 - **Target Files:**
   - `src/components/studio/SubtitleStudio.tsx`
@@ -974,18 +974,18 @@
   - Prerequisites: TASK-M4-01, TASK-M4-07, TASK-M4-13, TASK-M4-19.
   - Blocks: TASK-M4-21, TASK-M4-22, TASK-M4-23.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-20.1:** Video phát mượt mà $60\text{ FPS}$, không giật hình khi tua timeline.
-  - [ ] **AC-20.2:** Chuyển đổi qua lại giữa 2 Preset 9:16 tức thì trong $\le 50\text{ms}$ mà không cần re-render toàn bộ video.
-  - [ ] **AC-20.3:** Độ trễ đồng bộ giữa vị trí đầu đọc video và dòng phụ đề được active $\le 30\text{ms}$.
+  - [x] **AC-20.1:** Video phát mượt mà $60\text{ FPS}$, không giật hình khi tua timeline.
+  - [x] **AC-20.2:** Chuyển đổi qua lại giữa 2 Preset 9:16 tức thì trong $\le 50\text{ms}$ mà không cần re-render toàn bộ video.
+  - [x] **AC-20.3:** Độ trễ đồng bộ giữa vị trí đầu đọc video và dòng phụ đề được active $\le 30\text{ms}$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Frontend React Component & Video Playback Test
   - *Unit Test Cases:*
-    - [ ] **UT-20.1 (Preset Switch):** Chọn chuyển đổi giữa `Preset 1 (Center-Crop 9:16)` và `Preset 2 (Two-stack Top-Bottom 50/50)` cập nhật đúng CSS layout styles và video container aspect ratio.
+    - [x] **UT-20.1 (Preset Switch):** Chọn chuyển đổi giữa `Preset 1 (Center-Crop 9:16)` và `Preset 2 (Two-stack Top-Bottom 50/50)` cập nhật đúng CSS layout styles và video container aspect ratio.
   - *Integration & Contract Verification:*
-    - [ ] **IT-20.1:** Video HTML5 nạp qua giao thức `asset://` phát video 1080p60 mượt mà.
-    - [ ] **IT-20.2 (Bi-directional Sync):** Khi video phát tới $t = 15.4\text{s}$, danh sách phụ đề tự động active dòng phụ đề bao hàm mốc thời gian đó; độ trễ đồng bộ $\le 30\text{ms}$.
+    - [x] **IT-20.1:** Video HTML5 nạp qua giao thức `asset://` phát video 1080p60 mượt mà.
+    - [x] **IT-20.2 (Bi-directional Sync):** Khi video phát tới $t = 15.4\text{s}$, danh sách phụ đề tự động active dòng phụ đề bao hàm mốc thời gian đó; độ trễ đồng bộ $\le 30\text{ms}$.
   - *Boundary & Performance Limits:*
-    - [ ] **ED-20.1:** Kéo tua thanh scrubber liên tục trong 10 giây, FPS của video canvas không tụt dưới 55 FPS.
+    - [x] **ED-20.1:** Kéo tua thanh scrubber liên tục trong 10 giây, FPS của video canvas không tụt dưới 55 FPS.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     npm run test:vitest -- src/components/studio/SubtitleStudio.test.tsx
@@ -994,7 +994,7 @@
 
 ---
 
-#### TASK-M4-21: Danh Sách Phụ Đề Ảo Hóa Hiệu Năng Cao & Biên Tập Trực Tiếp (Virtualized Segment List)
+#### TASK-M4-21: Danh Sách Phụ Đề Ảo Hóa Hiệu Năng Cao & Biên Tập Trực Tiếp (Virtualized Segment List) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Frontend Dev
 - **Target Files:**
   - `src/components/studio/VirtualizedSegmentList.tsx`
@@ -1014,18 +1014,18 @@
   - Prerequisites: TASK-M4-20.
   - Blocks: TASK-M4-22, TASK-M4-23, TASK-M4-24.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-21.1:** Tốc độ cuộn danh sách phụ đề đạt $60\text{ FPS}$ ngay cả với các dự án dài hơn 500 dòng thoại.
-  - [ ] **AC-21.2:** Các thao tác sửa văn bản phản hồi tức thì dưới $16\text{ms}$ (0 input lag).
-  - [ ] **AC-21.3:** Nudge thời gian cập nhật chính xác từng $100\text{ms}$ vào state và hiển thị ngay trên UI.
+  - [x] **AC-21.1:** Tốc độ cuộn danh sách phụ đề đạt $60\text{ FPS}$ ngay cả với các dự án dài hơn 500 dòng thoại.
+  - [x] **AC-21.2:** Các thao tác sửa văn bản phản hồi tức thì dưới $16\text{ms}$ (0 input lag).
+  - [x] **AC-21.3:** Nudge thời gian cập nhật chính xác từng $100\text{ms}$ vào state và hiển thị ngay trên UI.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Frontend Virtualization & State Management Test
   - *Unit Test Cases:*
-    - [ ] **UT-21.1 (Timecode Nudge):** Bấm phím tắt `Shift + A` giảm mốc thời gian $100\text{ms}$, `Shift + D` tăng mốc thời gian $100\text{ms}$ chính xác vào store.
-    - [ ] **UT-21.2 (Inline Edit):** Gõ sửa nội dung trong ô Textarea tiếng Việt cập nhật giá trị `text_vi` vào Zustand store tức thì.
+    - [x] **UT-21.1 (Timecode Nudge):** Bấm phím tắt `Shift + A` giảm mốc thời gian $100\text{ms}$, `Shift + D` tăng mốc thời gian $100\text{ms}$ chính xác vào store.
+    - [x] **UT-21.2 (Inline Edit):** Gõ sửa nội dung trong ô Textarea tiếng Việt cập nhật giá trị `text_vi` vào Zustand store tức thì.
   - *Integration & Contract Verification:*
-    - [ ] **IT-21.1:** Render danh sách chứa 1,000 dòng phụ đề bằng `@tanstack/react-virtual`. Kiểm tra DOM chỉ render số lượng DOM nodes tương ứng với viewport (15–20 rows).
+    - [x] **IT-21.1:** Render danh sách chứa 1,000 dòng phụ đề bằng `@tanstack/react-virtual`. Kiểm tra DOM chỉ render số lượng DOM nodes tương ứng với viewport (15–20 rows).
   - *Boundary & Performance Limits:*
-    - [ ] **ED-21.1:** Cuộn danh sách 1,000 dòng với tốc độ cao đạt $60\text{ FPS}$; độ trễ phản hồi khi gõ phím sửa text $\le 16\text{ms}$.
+    - [x] **ED-21.1:** Cuộn danh sách 1,000 dòng với tốc độ cao đạt $60\text{ FPS}$; độ trễ phản hồi khi gõ phím sửa text $\le 16\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     npm run test:vitest -- src/components/studio/VirtualizedSegmentList.test.tsx
@@ -1034,7 +1034,7 @@
 
 ---
 
-#### TASK-M4-22: Bàn Phím Số 1-Chạm Đổi Phong Cách Nhân Vật & Thanh Công Cụ Đa Chọn
+#### TASK-M4-22: Bàn Phím Số 1-Chạm Đổi Phong Cách Nhân Vật & Thanh Công Cụ Đa Chọn — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Frontend Dev
 - **Target Files:**
   - `src/components/studio/CharacterHotkeyBar.tsx`
@@ -1054,20 +1054,20 @@
   - Prerequisites: TASK-M4-20, TASK-M4-21.
   - Blocks: TASK-M4-24.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-22.1:** Thao tác bấm phím 1–5 đổi màu và vai nhân vật hoàn tất trong vòng $\le 50\text{ms}$ (cảm nhận tức thì 0ms).
-  - [ ] **AC-22.2:** Gán vai thành công cho cùng lúc $\ge 20$ dòng phụ đề được bôi đen mà không có lỗi state.
+  - [x] **AC-22.1:** Thao tác bấm phím 1–5 đổi màu và vai nhân vật hoàn tất trong vòng $\le 50\text{ms}$ (cảm nhận tức thì 0ms).
+  - [x] **AC-22.2:** Gán vai thành công cho cùng lúc $\ge 20$ dòng phụ đề được bôi đen mà không có lỗi state.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Frontend Hotkey & Styling Test
   - *Unit Test Cases (Bộ phím tắt 1-5):*
-    - [ ] **UT-22.1 (Key '1' - Vedal):** Bấm phím `1` gán `speaker_id = "vedal"`, đổi style màu chữ thành xanh lá `#98FB98`.
-    - [ ] **UT-22.2 (Key '2' - Neuro):** Bấm phím `2` gán `speaker_id = "neuro"`, đổi style màu chữ thành hồng phấn `#FFB6C1`.
-    - [ ] **UT-22.3 (Key '3' - Evil):** Bấm phím `3` gán `speaker_id = "evil"`, đổi style màu chữ thành đỏ `#FF0055`.
-    - [ ] **UT-22.4 (Key '4' - Guest):** Bấm phím `4` gán `speaker_id = "guest"`, đổi style màu chữ thành vàng kim `#FFD700`.
-    - [ ] **UT-22.5 (Key '5' - Chat):** Bấm phím `5` gán `speaker_id = "chat"`, đổi style màu chữ thành xanh dương `#87CEEB`.
+    - [x] **UT-22.1 (Key '1' - Vedal):** Bấm phím `1` gán `speaker_id = "vedal"`, đổi style màu chữ thành xanh lá `#98FB98`.
+    - [x] **UT-22.2 (Key '2' - Neuro):** Bấm phím `2` gán `speaker_id = "neuro"`, đổi style màu chữ thành hồng phấn `#FFB6C1`.
+    - [x] **UT-22.3 (Key '3' - Evil):** Bấm phím `3` gán `speaker_id = "evil"`, đổi style màu chữ thành đỏ `#FF0055`.
+    - [x] **UT-22.4 (Key '4' - Guest):** Bấm phím `4` gán `speaker_id = "guest"`, đổi style màu chữ thành vàng kim `#FFD700`.
+    - [x] **UT-22.5 (Key '5' - Chat):** Bấm phím `5` gán `speaker_id = "chat"`, đổi style màu chữ thành xanh dương `#87CEEB`.
   - *Integration & Contract Verification:*
-    - [ ] **IT-22.1:** Bôi đen chọn nhiều dòng (Multi-select 20 rows qua `Shift+Click`), bấm phím `2` gán đồng loạt cả 20 dòng sang Neuro trong vòng 1 lượt bấm phím.
+    - [x] **IT-22.1:** Bôi đen chọn nhiều dòng (Multi-select 20 rows qua `Shift+Click`), bấm phím `2` gán đồng loạt cả 20 dòng sang Neuro trong vòng 1 lượt bấm phím.
   - *Boundary & UI Speed Limits:*
-    - [ ] **ED-22.1:** Thao tác bấm phím đổi màu nhân vật phản hồi lên màn hình trong $\le 50\text{ms}$.
+    - [x] **ED-22.1:** Thao tác bấm phím đổi màu nhân vật phản hồi lên màn hình trong $\le 50\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     npm run test:vitest -- src/hooks/useStudioHotkeys.test.ts
@@ -1076,7 +1076,7 @@
 
 ---
 
-#### TASK-M4-23: Đèn Cảnh Báo Tốc Độ Đọc Trực Quan & Trợ Lý Nới Rộng Thời Gian Thủ Công
+#### TASK-M4-23: Đèn Cảnh Báo Tốc Độ Đọc Trực Quan & Trợ Lý Nới Rộng Thời Gian Thủ Công — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Frontend Dev
 - **Target Files:**
   - `src/components/studio/CPSIndicator.tsx`
@@ -1094,19 +1094,19 @@
   - Prerequisites: TASK-M4-19, TASK-M4-21.
   - Blocks: TASK-M4-24.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-23.1:** Chỉ số CPS được tính toán lại tức thì theo thời gian thực mỗi khi người dùng gõ sửa ký tự trong ô văn bản.
-  - [ ] **AC-23.2:** Hiển thị cảnh báo đỏ chính xác 100% cho mọi dòng phụ đề có $\text{CPS} > 20$.
+  - [x] **AC-23.1:** Chỉ số CPS được tính toán lại tức thì theo thời gian thực mỗi khi người dùng gõ sửa ký tự trong ô văn bản.
+  - [x] **AC-23.2:** Hiển thị cảnh báo đỏ chính xác 100% cho mọi dòng phụ đề có $\text{CPS} > 20$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Frontend Component & User Interaction Test
   - *Unit Test Cases:*
-    - [ ] **UT-23.1 (Badge Color Logic):**
+    - [x] **UT-23.1 (Badge Color Logic):**
       - $\text{CPS} < 17 \rightarrow$ Badge màu Xanh lá ("Tốt").
       - $17 \le \text{CPS} \le 20 \rightarrow$ Badge màu Vàng ("Nhanh").
       - $\text{CPS} > 20 \rightarrow$ Badge màu Đỏ nhấp nháy ("Quá nhanh!").
   - *Integration & Contract Verification:*
-    - [ ] **IT-23.1:** Khi đèn đỏ bật, click nút *"Nới thời gian (Borrow Silence)"* tự động gọi hàm Time Borrowing, kéo dài `end_sec` và lập tức chuyển badge từ Đỏ sang Vàng hoặc Xanh.
+    - [x] **IT-23.1:** Khi đèn đỏ bật, click nút *"Nới thời gian (Borrow Silence)"* tự động gọi hàm Time Borrowing, kéo dài `end_sec` và lập tức chuyển badge từ Đỏ sang Vàng hoặc Xanh.
   - *Boundary & Realtime Limits:*
-    - [ ] **ED-23.1:** Khi người dùng đang gõ thêm hoặc xóa ký tự trong ô text, badge CPS tính toán lại và cập nhật màu sắc ngay theo thời gian thực.
+    - [x] **ED-23.1:** Khi người dùng đang gõ thêm hoặc xóa ký tự trong ô text, badge CPS tính toán lại và cập nhật màu sắc ngay theo thời gian thực.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     npm run test:vitest -- src/components/studio/CPSIndicator.test.tsx
