@@ -1,14 +1,23 @@
 //! Tauri IPC commands for subtitle export (.ass, .srt) and project metadata persistence.
 
 use std::path::Path;
+use serde::{Deserialize, Serialize};
 use tauri::command;
 
 use crate::error::AppError;
 use crate::export::{
-    export_ass_file, export_ass_project_file, export_srt_file, export_srt_project_file,
-    export_subtitle_project_json, SubtitleProject,
+    export_ass_file, export_ass_project_file, export_capcut_draft_folder, export_srt_file,
+    export_srt_project_file, export_subtitle_project_json, CapCutExportResult, SubtitleProject,
 };
 use crate::stt::transcript_parser::TranscriptSegmentsContainer;
+
+/// Options for CapCut PC Draft export command.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CapCutExportOptions {
+    pub video_file_path: Option<String>,
+    pub custom_draft_root: Option<String>,
+}
 
 /// Export transcript segments into an Advanced SubStation Alpha (`.ass`) file with UTF-8 BOM.
 ///
@@ -78,4 +87,29 @@ pub async fn export_subtitles_project_srt(
     let path = Path::new(&output_path);
     export_srt_project_file(&project, path)?;
     Ok(output_path)
+}
+
+/// Export full CapCut PC Draft project folder with Dual Export Safeguard (subtitle.ass & subtitle.srt).
+///
+/// Executes on a background blocking thread (`tokio::task::spawn_blocking`) to keep async loop responsive.
+///
+/// # Errors
+/// Returns [`AppError::Export`] with canonical error codes (`ERR_EXPORT_CAPCUT_NOT_FOUND`, `ERR_EXPORT_INVALID_LAYOUT`, `ERR_EXPORT_FILE_WRITE_FAILED`).
+#[command]
+pub async fn export_capcut_draft(
+    project: SubtitleProject,
+    options: Option<CapCutExportOptions>,
+) -> Result<CapCutExportResult, AppError> {
+    tokio::task::spawn_blocking(move || {
+        let (v_path, custom_root) = match &options {
+            Some(opt) => (
+                opt.video_file_path.as_deref().or(project.video_file_path.as_deref()),
+                opt.custom_draft_root.as_deref().map(Path::new),
+            ),
+            None => (project.video_file_path.as_deref(), None),
+        };
+        export_capcut_draft_folder(&project, v_path, custom_root)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("CapCut export task panicked: {e}")))?
 }

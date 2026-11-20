@@ -5,6 +5,8 @@
 //! alongside Schema 5.6 [`SubtitleProject`] project serialization.
 
 pub mod ass_exporter;
+pub mod capcut_draft;
+pub mod capcut_schema;
 pub mod srt_exporter;
 
 use std::collections::HashMap;
@@ -25,6 +27,18 @@ pub use ass_exporter::{
 pub use srt_exporter::{
     export_srt_file, export_srt_project_file, format_srt_timecode, generate_srt_script,
     generate_srt_script_from_project, generate_srt_script_from_segments,
+};
+pub use capcut_draft::{
+    default_capcut_drafts_dir, detect_capcut_drafts_dir, export_capcut_draft_folder,
+    generate_project_folder_name, sanitize_project_name, update_root_meta_info,
+    CapCutExportResult,
+};
+pub use capcut_schema::{
+    canvas_config_for_layout, hex_to_normalized_rgb, sec_to_micros, CanvasConfig,
+    DraftAudioMaterial, DraftContent, DraftMaterials, DraftMetaInfo, DraftMetaMaterialItem,
+    DraftMetaMaterials, DraftSegment, DraftStoreItem, DraftTextMaterial, DraftTrack,
+    DraftVideoMaterial, RootMetaInfo, TimeRange, DEFAULT_SUBTITLE_TRANSFORM_X,
+    DEFAULT_SUBTITLE_TRANSFORM_Y, MICROS_PER_SEC, MIN_CLIP_DURATION_MICROS,
 };
 
 /// UTF-8 Byte Order Mark string representation (`\u{FEFF}`).

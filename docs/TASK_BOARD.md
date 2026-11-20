@@ -1166,7 +1166,7 @@
 
 ---
 
-#### TASK-M4-25: Bộ Sinh Thư Mục Dự Án CapCut PC Draft JSON Kèm Chiến Lược Phòng Thủ Kép
+#### TASK-M4-25: Bộ Sinh Thư Mục Dự Án CapCut PC Draft JSON Kèm Chiến Lược Phòng Thủ Kép — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@lead-architect`
 - **Target Files:**
   - `src-tauri/src/export/capcut_draft.rs`
@@ -1189,20 +1189,20 @@
   - Prerequisites: TASK-M4-13, TASK-M4-24.
   - Blocks: TASK-M4-30.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-25.1:** Mở CapCut PC lên thấy ngay dự án mới xuất hiện trên màn hình chính của CapCut; mở dự án thấy sẵn video và track chữ nằm khớp dòng thời gian.
-  - [ ] **AC-25.2:** Thời gian sinh thư mục CapCut Draft hoàn tất trong vòng $\le 200\text{ms}$.
-  - [ ] **AC-25.3:** 100% các lần xuất CapCut Draft đều có mặt 2 file dự phòng `subtitle.ass` và `subtitle.srt` trong thư mục.
+  - [x] **AC-25.1:** Mở CapCut PC lên thấy ngay dự án mới xuất hiện trên màn hình chính của CapCut; mở dự án thấy sẵn video và track chữ nằm khớp dòng thời gian.
+  - [x] **AC-25.2:** Thời gian sinh thư mục CapCut Draft hoàn tất trong vòng $\le 200\text{ms}$.
+  - [x] **AC-25.3:** 100% các lần xuất CapCut Draft đều có mặt 2 file dự phòng `subtitle.ass` và `subtitle.srt` trong thư mục.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* NLE Integration & Dual Safeguard Test
   - *Unit Test Cases:*
-    - [ ] **UT-25.1 (Draft Structure Construction):** Sinh struct `draft_content.json` chứa: Track 0 (Video track), Track 1 (Audio track), Track 2 (Text subtitle track) với tọa độ canh giữa dưới đáy khung hình.
+    - [x] **UT-25.1 (Draft Structure Construction):** Sinh struct `draft_content.json` chứa: Track 0 (Video track), Track 1 (Audio track), Track 2 (Text subtitle track) với tọa độ canh giữa dưới đáy khung hình.
   - *Integration & Contract Verification:*
-    - [ ] **IT-25.1:** Tự động phát hiện đúng đường dẫn CapCut Windows: `%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft/`.
-    - [ ] **IT-25.2:** Tạo thư mục dự án `NeuroClip_Highlight_<timestamp>/` chứa `draft_content.json` và `draft_meta_info.json`. Mở CapCut PC lên nhận diện dự án ngay tại màn hình trang chủ.
+    - [x] **IT-25.1:** Tự động phát hiện đúng đường dẫn CapCut Windows: `%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft/`.
+    - [x] **IT-25.2:** Tạo thư mục dự án `NeuroClip_Highlight_<timestamp>/` chứa `draft_content.json` và `draft_meta_info.json`. Mở CapCut PC lên nhận diện dự án ngay tại màn hình trang chủ.
   - *Boundary & Fallback Limits (ERR-09 Dual Export Invariant):**
-    - [ ] **ED-25.1 (Chiến Lược Phòng Thủ Kép):** Bất kể xuất CapCut thành công hay thất bại, hệ thống LUÔN TỰ ĐỘNG sao lưu 2 file độc lập `subtitle.ass` và `subtitle.srt` vào cùng thư mục dự án đó.
-    - [ ] **ED-25.2 (CapCut Schema Safeguard):** Kiểm tra file backup tồn tại 100% trong mọi lần test xuất bản; người dùng luôn có phương án kéo thả file `.srt` vào CapCut nếu phiên bản CapCut mới thay đổi schema JSON.
-    - [ ] **ED-25.3:** Thời gian sinh toàn bộ thư mục CapCut Draft $\le 200\text{ms}$.
+    - [x] **ED-25.1 (Chiến Lược Phòng Thủ Kép):** Bất kể xuất CapCut thành công hay thất bại, hệ thống LUÔN TỰ ĐỘNG sao lưu 2 file độc lập `subtitle.ass` và `subtitle.srt` vào cùng thư mục dự án đó.
+    - [x] **ED-25.2 (CapCut Schema Safeguard):** Kiểm tra file backup tồn tại 100% trong mọi lần test xuất bản; người dùng luôn có phương án kéo thả file `.srt` vào CapCut nếu phiên bản CapCut mới thay đổi schema JSON.
+    - [x] **ED-25.3:** Thời gian sinh toàn bộ thư mục CapCut Draft $\le 200\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --test capcut_draft_integration_test -- --nocapture

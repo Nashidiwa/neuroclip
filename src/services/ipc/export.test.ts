@@ -5,6 +5,10 @@ import {
   exportSubtitlesSrt,
   exportSubtitleProject,
   exportSubtitlesDual,
+  exportCapCutDraft,
+  exportSubtitlesProjectAss,
+  exportSubtitlesProjectSrt,
+  normalizeCapCutExportResult,
   VTUBER_PALETTE_HEX,
   VTUBER_PALETTE_ASS_BGR,
   isSubtitleExportFormat,
@@ -252,5 +256,142 @@ describe('TASK-M4-24: Subtitle Export Engine IPC Client', () => {
     expect(isTargetLayout('preset_center_crop_9_16')).toBe(true);
     expect(isTargetLayout('preset_two_stack_9_16')).toBe(true);
     expect(isTargetLayout('invalid_layout')).toBe(false);
+  });
+
+  it('UT-25-TS.1: exportCapCutDraft transforms SubtitleProject and invokes tauri command', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockResolvedValueOnce({
+      projectDir: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000',
+      projectPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000',
+      draftName: 'NeuroClip_Highlight_20261120_100000',
+      draftContentPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\draft_content.json',
+      draftMetaInfoPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\draft_meta_info.json',
+      assBackupPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\subtitle.ass',
+      srtBackupPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\subtitle.srt',
+      dualSafeguardFiles: [
+        'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\subtitle.ass',
+        'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\subtitle.srt',
+      ],
+      durationMs: 42,
+    });
+
+    const result = await exportCapCutDraft(sampleProject);
+
+    expect(result.projectDir).toBe('C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000');
+    expect(result.draftName).toBe('NeuroClip_Highlight_20261120_100000');
+    expect(result.dualSafeguardFiles).toHaveLength(2);
+    expect(result.durationMs).toBe(42);
+    expect(mockInvoke).toHaveBeenCalledWith('export_capcut_draft', {
+      project: expect.objectContaining({
+        project_id: 'subproj_clip_sample_export',
+      }),
+      options: null,
+    });
+  });
+
+  it('UT-25-TS.2: exportCapCutDraft handles optional options (customDraftRoot, videoFilePath)', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockResolvedValueOnce({
+      projectDir: 'D:\\CustomDrafts\\NeuroClip_Highlight_1',
+      draftName: 'NeuroClip_Highlight_1',
+      dualSafeguardFiles: ['subtitle.ass', 'subtitle.srt'],
+    });
+
+    const result = await exportCapCutDraft(sampleProject, {
+      customDraftRoot: 'D:\\CustomDrafts',
+      videoFilePath: 'D:\\Videos\\clip.mp4',
+    });
+
+    expect(result.projectDir).toBe('D:\\CustomDrafts\\NeuroClip_Highlight_1');
+    expect(mockInvoke).toHaveBeenCalledWith('export_capcut_draft', {
+      project: expect.anything(),
+      options: {
+        custom_draft_root: 'D:\\CustomDrafts',
+        video_file_path: 'D:\\Videos\\clip.mp4',
+      },
+    });
+  });
+
+  it('UT-25-TS.3: exportCapCutDraft handles ERR_EXPORT_CAPCUT_NOT_FOUND error', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockRejectedValueOnce({
+      code: ERROR_CODES.ERR_EXPORT_CAPCUT_NOT_FOUND,
+      message: 'Không tìm thấy thư mục CapCut Draft trên máy',
+      recoverable: true,
+    });
+
+    await expect(exportCapCutDraft(sampleProject)).rejects.toMatchObject({
+      code: ERROR_CODES.ERR_EXPORT_CAPCUT_NOT_FOUND,
+      recoverable: true,
+    });
+  });
+
+  it('UT-25-TS.4: exportCapCutDraft handles ERR_EXPORT_FILE_WRITE_FAILED error', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockRejectedValueOnce({
+      code: ERROR_CODES.ERR_EXPORT_FILE_WRITE_FAILED,
+      message: 'Lỗi ghi file dự án NLE',
+      details: 'Disk is full',
+      recoverable: true,
+    });
+
+    await expect(exportCapCutDraft(sampleProject)).rejects.toMatchObject({
+      code: ERROR_CODES.ERR_EXPORT_FILE_WRITE_FAILED,
+      recoverable: true,
+      details: 'Disk is full',
+    });
+  });
+
+  it('UT-25-TS.5: exportSubtitlesProjectAss invokes export_subtitles_project_ass', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockResolvedValueOnce('C:\\export\\proj.ass');
+
+    const result = await exportSubtitlesProjectAss(sampleProject, 'C:\\export\\proj.ass');
+
+    expect(result).toBe('C:\\export\\proj.ass');
+    expect(mockInvoke).toHaveBeenCalledWith('export_subtitles_project_ass', {
+      project: expect.objectContaining({ project_id: 'subproj_clip_sample_export' }),
+      outputPath: 'C:\\export\\proj.ass',
+    });
+  });
+
+  it('UT-25-TS.6: exportSubtitlesProjectSrt invokes export_subtitles_project_srt', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockResolvedValueOnce('C:\\export\\proj.srt');
+
+    const result = await exportSubtitlesProjectSrt(sampleProject, 'C:\\export\\proj.srt');
+
+    expect(result).toBe('C:\\export\\proj.srt');
+    expect(mockInvoke).toHaveBeenCalledWith('export_subtitles_project_srt', {
+      project: expect.objectContaining({ project_id: 'subproj_clip_sample_export' }),
+      outputPath: 'C:\\export\\proj.srt',
+    });
+  });
+
+  it('UT-25-TS.7: normalizeCapCutExportResult handles both snake_case and camelCase payloads', () => {
+    const snakePayload = {
+      project_dir: 'C:\\Drafts\\Project_1',
+      draft_name: 'Project_1',
+      draft_content_path: 'C:\\Drafts\\Project_1\\draft_content.json',
+      draft_meta_info_path: 'C:\\Drafts\\Project_1\\draft_meta_info.json',
+      ass_backup_path: 'C:\\Drafts\\Project_1\\subtitle.ass',
+      srt_backup_path: 'C:\\Drafts\\Project_1\\subtitle.srt',
+      dual_safeguard_files: [
+        'C:\\Drafts\\Project_1\\subtitle.ass',
+        'C:\\Drafts\\Project_1\\subtitle.srt',
+      ],
+      duration_ms: 18,
+    };
+
+    const normalized = normalizeCapCutExportResult(snakePayload);
+    expect(normalized.projectDir).toBe('C:\\Drafts\\Project_1');
+    expect(normalized.projectPath).toBe('C:\\Drafts\\Project_1');
+    expect(normalized.draftName).toBe('Project_1');
+    expect(normalized.dualSafeguardFiles).toHaveLength(2);
+    expect(normalized.durationMs).toBe(18);
+
+    // Rejection on non-object
+    expect(() => normalizeCapCutExportResult(null)).toThrow('expected an object');
+    expect(() => normalizeCapCutExportResult('invalid')).toThrow('expected an object');
   });
 });

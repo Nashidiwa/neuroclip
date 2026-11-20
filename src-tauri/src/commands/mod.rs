@@ -60,13 +60,15 @@ pub use storage_cmd::{
     initialize_project, initialize_storage,
 };
 pub use export_cmd::{
-    __cmd__export_subtitle_project, __cmd__export_subtitles_ass,
+    __cmd__export_capcut_draft, __cmd__export_subtitle_project, __cmd__export_subtitles_ass,
     __cmd__export_subtitles_project_ass, __cmd__export_subtitles_project_srt,
-    __cmd__export_subtitles_srt, __tauri_command_name_export_subtitle_project,
-    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_project_ass,
+    __cmd__export_subtitles_srt, __tauri_command_name_export_capcut_draft,
+    __tauri_command_name_export_subtitle_project, __tauri_command_name_export_subtitles_ass,
+    __tauri_command_name_export_subtitles_project_ass,
     __tauri_command_name_export_subtitles_project_srt, __tauri_command_name_export_subtitles_srt,
-    export_subtitle_project, export_subtitles_ass, export_subtitles_project_ass,
-    export_subtitles_project_srt, export_subtitles_srt,
+    export_capcut_draft, export_subtitle_project, export_subtitles_ass,
+    export_subtitles_project_ass, export_subtitles_project_srt, export_subtitles_srt,
+    CapCutExportOptions,
 };
 pub use stt_cmd::{
     __cmd__start_faster_whisper_transcription, __cmd__start_whisper_transcription,
