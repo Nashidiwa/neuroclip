@@ -175,7 +175,26 @@ import {
   getUnicodeCharCount,
   RED_FLAG_CPS_THRESHOLD,
 } from '../utils/text_wrap.ts';
-import { normalizeTranscriptSegment, type TranscriptSegment } from '../types/transcript.ts';
+import {
+  normalizeTranscriptSegment,
+  normalizeSubtitleProject,
+  toSubtitleProjectJson,
+  type TranscriptSegment,
+  type SubtitleProject,
+  type SubtitleProjectJson,
+} from '../types/transcript.ts';
+import {
+  VTUBER_PALETTE_HEX,
+  VTUBER_PALETTE_ASS_BGR,
+  isSubtitleExportFormat,
+  isTargetLayout,
+} from '../types/export.ts';
+import {
+  exportSubtitlesAss,
+  exportSubtitlesSrt,
+  exportSubtitleProject,
+  exportSubtitlesDual,
+} from '../services/ipc/export.ts';
 
 describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
@@ -3823,6 +3842,177 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
         targetCps: 17.0,
       };
       assert.strictEqual(cpsOptions.maxBorrowMs, 800);
+    });
+  });
+
+  describe('TASK-M4-24 Test Suite: Subtitle Exporter Engine (.ASS, .SRT, UTF-8 BOM, Schema 5.6)', () => {
+    it('IT-24.1: should validate Schema 5.6 SubtitleProject Draft-07 JSON schema compliance using Ajv', () => {
+      const ajv = new Ajv({ allErrors: true });
+      const schema56 = {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        title: 'SubtitleProject',
+        type: 'object',
+        required: [
+          'project_id',
+          'project_name',
+          'vod_id',
+          'target_layout',
+          'segments',
+          'speaker_styles',
+          'updated_at',
+        ],
+        properties: {
+          project_id: { type: 'string' },
+          project_name: { type: 'string' },
+          vod_id: { type: 'string' },
+          video_file_path: { type: ['string', 'null'] },
+          target_layout: {
+            type: 'string',
+            enum: ['original_16_9', 'preset_center_crop_9_16', 'preset_two_stack_9_16'],
+          },
+          segments: { type: 'array' },
+          speaker_styles: {
+            type: 'object',
+            additionalProperties: {
+              type: 'object',
+              required: ['color_hex', 'font_name', 'font_size', 'outline_color_hex'],
+              properties: {
+                color_hex: { type: 'string' },
+                font_name: { type: 'string' },
+                font_size: { type: 'integer' },
+                outline_color_hex: { type: 'string' },
+              },
+            },
+          },
+          updated_at: { type: 'string' },
+        },
+      };
+
+      const validate = ajv.compile(schema56);
+
+      const validProject: SubtitleProjectJson = {
+        project_id: 'subproj_clip_101',
+        project_name: 'Neuro Tutel Clip',
+        vod_id: 'vod_98765',
+        video_file_path: '/path/to/video.mp4',
+        target_layout: 'preset_center_crop_9_16',
+        segments: [],
+        speaker_styles: {
+          neuro: {
+            color_hex: '#FFB6C1',
+            font_name: 'Arial',
+            font_size: 54,
+            outline_color_hex: '#000000',
+          },
+          vedal: {
+            color_hex: '#98FB98',
+            font_name: 'Arial',
+            font_size: 54,
+            outline_color_hex: '#000000',
+          },
+        },
+        updated_at: '2026-11-20T00:00:00Z',
+      };
+
+      assert.strictEqual(validate(validProject), true, 'Valid Schema 5.6 SubtitleProject must pass validation');
+
+      // Invalid: missing project_id
+      const missingId = { ...validProject };
+      // @ts-expect-error test invalid schema
+      delete missingId.project_id;
+      assert.strictEqual(validate(missingId), false, 'Missing project_id must fail');
+
+      // Invalid: unrecognized target_layout
+      const invalidLayout = { ...validProject, target_layout: 'unsupported_layout' as unknown as SubtitleProjectJson['target_layout'] };
+      assert.strictEqual(validate(invalidLayout), false, 'Invalid target_layout must fail');
+    });
+
+    it('UT-24.1 & PO Option 1: should verify VTuber color palette matrices (Hex & ASS BGR)', () => {
+      // Hex RGB constants
+      assert.strictEqual(VTUBER_PALETTE_HEX.vedal, '#98FB98');
+      assert.strictEqual(VTUBER_PALETTE_HEX.neuro, '#FFB6C1');
+      assert.strictEqual(VTUBER_PALETTE_HEX.evil, '#FF0055');
+      assert.strictEqual(VTUBER_PALETTE_HEX.guest, '#FFD700');
+      assert.strictEqual(VTUBER_PALETTE_HEX.chat, '#87CEEB');
+      assert.strictEqual(VTUBER_PALETTE_HEX.unknown, '#FFFFFF');
+
+      // ASS BGR (&HAABBGGRR&) constants
+      assert.strictEqual(VTUBER_PALETTE_ASS_BGR.vedal, '&H0098FB98&');
+      assert.strictEqual(VTUBER_PALETTE_ASS_BGR.neuro, '&H00C1B6FF&');
+      assert.strictEqual(VTUBER_PALETTE_ASS_BGR.evil, '&H005500FF&');
+      assert.strictEqual(VTUBER_PALETTE_ASS_BGR.guest, '&H0000D7FF&');
+      assert.strictEqual(VTUBER_PALETTE_ASS_BGR.chat, '&H00EBCE87&');
+      assert.strictEqual(VTUBER_PALETTE_ASS_BGR.unknown, '&H00FFFFFF&');
+    });
+
+    it('should verify Rust backend export files exist and enforce zero-panic invariant', () => {
+      const targetRustFiles = [
+        'src-tauri/src/export/mod.rs',
+        'src-tauri/src/export/ass_exporter.rs',
+        'src-tauri/src/export/srt_exporter.rs',
+        'src-tauri/src/commands/export_cmd.rs',
+      ];
+
+      for (const relPath of targetRustFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.ok(fs.existsSync(fullPath), `File must exist: ${relPath}`);
+        const content = fs.readFileSync(fullPath, 'utf8');
+
+        // Extract non-test code
+        const nonTestCode = content.split('#[cfg(test)]')[0] ?? content;
+        assert.ok(!nonTestCode.includes('.unwrap()'), `No .unwrap() allowed in production code in ${relPath}`);
+        assert.ok(!nonTestCode.includes('.expect('), `No .expect() allowed in production code in ${relPath}`);
+        assert.ok(!nonTestCode.includes('panic!'), `No panic! allowed in production code in ${relPath}`);
+      }
+
+      // Verify UTF-8 BOM constant defined in Rust export mod
+      const exportMod = fs.readFileSync(path.resolve('src-tauri/src/export/mod.rs'), 'utf8');
+      assert.ok(exportMod.includes('UTF8_BOM'), 'Must define UTF8_BOM');
+      assert.ok(exportMod.includes('UTF8_BOM_BYTES'), 'Must define UTF8_BOM_BYTES');
+    });
+
+    it('should verify TypeScript IPC contracts, serializers, and type guards', () => {
+      assert.strictEqual(typeof exportSubtitlesAss, 'function');
+      assert.strictEqual(typeof exportSubtitlesSrt, 'function');
+      assert.strictEqual(typeof exportSubtitleProject, 'function');
+      assert.strictEqual(typeof exportSubtitlesDual, 'function');
+
+      // Type guards
+      assert.strictEqual(isSubtitleExportFormat('ass'), true);
+      assert.strictEqual(isSubtitleExportFormat('srt'), true);
+      assert.strictEqual(isSubtitleExportFormat('project_json'), true);
+      assert.strictEqual(isSubtitleExportFormat('other'), false);
+
+      assert.strictEqual(isTargetLayout('original_16_9'), true);
+      assert.strictEqual(isTargetLayout('preset_center_crop_9_16'), true);
+      assert.strictEqual(isTargetLayout('preset_two_stack_9_16'), true);
+      assert.strictEqual(isTargetLayout('invalid'), false);
+
+      // toSubtitleProjectJson serializer
+      const domainProject: SubtitleProject = normalizeSubtitleProject({
+        project_id: 'subproj_roundtrip',
+        project_name: 'Roundtrip Test',
+        vod_id: 'vod_rt',
+        video_file_path: null,
+        target_layout: 'original_16_9',
+        segments: [],
+        speaker_styles: {
+          neuro: {
+            color_hex: '#FFB6C1',
+            font_name: 'Arial',
+            font_size: 54,
+            outline_color_hex: '#000000',
+          },
+        },
+        updated_at: '2026-11-20T00:00:00Z',
+      });
+
+      const wireJson = toSubtitleProjectJson(domainProject);
+      assert.strictEqual(wireJson.project_id, 'subproj_roundtrip');
+      assert.strictEqual(wireJson.project_name, 'Roundtrip Test');
+      assert.strictEqual(wireJson.vod_id, 'vod_rt');
+      assert.strictEqual(wireJson.target_layout, 'original_16_9');
+      assert.strictEqual(wireJson.speaker_styles.neuro?.color_hex, '#FFB6C1');
     });
   });
 });

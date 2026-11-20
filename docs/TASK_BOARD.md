@@ -1117,7 +1117,7 @@
 
 ### Milestone M4.7: Phân Hệ Xuất Bản Đa Nền Tảng & NLE Export (Export Engine)
 
-#### TASK-M4-24: Bộ Xuất Phụ Đề Chuẩn Màu Aegisub (.ASS) & Phụ Đề Quốc Tế (.SRT)
+#### TASK-M4-24: Bộ Xuất Phụ Đề Chuẩn Màu Aegisub (.ASS) & Phụ Đề Quốc Tế (.SRT) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@tech-lead`
 - **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `e372200` (gắn nhầm nhãn `M4-08`) đã tạo sớm phần lõi backend tại `src-tauri/src/stt/subtitle_export.rs` (`generate_ass_script`, `generate_srt_script`, `create_subtitle_project`, `default_speaker_styles`), `src-tauri/src/commands/stt_cmd.rs` (`export_subtitles_ass`, `export_subtitles_srt`), `src/services/ipc/stt.ts` và `src-tauri/tests/subtitle_export_test.rs`. Trong Milestone M2, bug byte-order BGR của Neuro (`&H00B6B6FF` $\rightarrow$ `&H00C1B6FF`) và bảng màu **PO Option 1** (`Vedal #98FB98`, `Neuro #FFB6C1`, `Evil #FF0055`, `Guest #FFD700`, `Chat #87CEEB`, `Unknown #FFFFFF`) đã được sửa và pass test. **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-24`:** refactor sang `src-tauri/src/export/{ass_exporter.rs, srt_exporter.rs}`, `src-tauri/src/commands/export_cmd.rs`, `src/services/ipc/export.ts`, ghi **UTF-8 with BOM** (`AC-24.1`, `IT-24.2`), và tích hợp đầy đủ `subtitle_project.json` Schema 5.6 + UI export.
 - **Target Files:**
@@ -1143,20 +1143,20 @@
   - Prerequisites: TASK-M4-19, TASK-M4-21, TASK-M4-22.
   - Blocks: TASK-M4-25, TASK-M4-26.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-24.1:** File `.ass` mở trên phần mềm Aegisub hiển thị chính xác 100% màu sắc, font chữ và không bị lỗi hiển thị ký tự tiếng Việt (UTF-8 with BOM).
-  - [ ] **AC-24.2:** Thời gian sinh file `.ass` và `.srt` cho dự án 300 câu thoại $\le 200\text{ms}$.
+  - [x] **AC-24.1:** File `.ass` mở trên phần mềm Aegisub hiển thị chính xác 100% màu sắc, font chữ và không bị lỗi hiển thị ký tự tiếng Việt (UTF-8 with BOM).
+  - [x] **AC-24.2:** Thời gian sinh file `.ass` và `.srt` cho dự án 300 câu thoại $\le 200\text{ms}$.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Subtitle Serialization & Format Standards Test
   - *Unit Test Cases:*
-    - [ ] **UT-24.1 (ASS Color Conversion):** Màu Hex Vedal `#98FB98` chuyển đổi chính xác sang mã màu ASS BGR `&H0098FB98&`. Màu Neuro `#FFB6C1` chuyển sang ASS BGR `&H00C1B6FF&`.
-    - [ ] **UT-24.2 (ASS Header V4+ Styles):** Khối `[V4+ Styles]` chứa đầy đủ định nghĩa style riêng cho từng nhân vật với đúng font chữ, size, outline, shadow.
-    - [ ] **UT-24.3 (SRT Timecode Format):** Khối SRT sinh chuẩn định dạng timecode `00:01:23,450 --> 00:01:25,800`.
+    - [x] **UT-24.1 (ASS Color Conversion):** Màu Hex Vedal `#98FB98` chuyển đổi chính xác sang mã màu ASS BGR `&H0098FB98&`. Màu Neuro `#FFB6C1` chuyển sang ASS BGR `&H00C1B6FF&`.
+    - [x] **UT-24.2 (ASS Header V4+ Styles):** Khối `[V4+ Styles]` chứa đầy đủ định nghĩa style riêng cho từng nhân vật với đúng font chữ, size, outline, shadow.
+    - [x] **UT-24.3 (SRT Timecode Format):** Khối SRT sinh chuẩn định dạng timecode `00:01:23,450 --> 00:01:25,800`.
   - *Integration & Contract Verification (Schema 5.6):**
-    - [ ] **IT-24.1:** Sinh tệp `subtitle_project.json` tuân thủ 100% JSON Schema 5.6 trong `ARCHITECTURE.md`.
-    - [ ] **IT-24.2:** File `.ass` và `.srt` được ghi ra đĩa với encoding UTF-8 có BOM.
+    - [x] **IT-24.1:** Sinh tệp `subtitle_project.json` tuân thủ 100% JSON Schema 5.6 trong `ARCHITECTURE.md`.
+    - [x] **IT-24.2:** File `.ass` và `.srt` được ghi ra đĩa với encoding UTF-8 có BOM.
   - *Boundary & Encoding Limits:*
-    - [ ] **ED-24.1:** Xuất 300 câu phụ đề tiếng Việt chứa đầy đủ dấu thanh phức tạp (`ể`, `ễ`, `ợ`, `ứ`, `đ`); mở file `.ass` trên Aegisub hiển thị hoàn hảo 100% không có ký tự rác.
-    - [ ] **ED-24.2:** Thời gian sinh file `.ass` và `.srt` cho dự án 300 câu $\le 200\text{ms}$.
+    - [x] **ED-24.1:** Xuất 300 câu phụ đề tiếng Việt chứa đầy đủ dấu thanh phức tạp (`ể`, `ễ`, `ợ`, `ứ`, `đ`); mở file `.ass` trên Aegisub hiển thị hoàn hảo 100% không có ký tự rác.
+    - [x] **ED-24.2:** Thời gian sinh file `.ass` và `.srt` cho dự án 300 câu $\le 200\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --lib export::ass_exporter::tests

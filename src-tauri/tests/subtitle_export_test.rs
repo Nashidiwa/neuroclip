@@ -185,3 +185,59 @@ fn test_default_speaker_styles_po_option_1_palette() {
     assert_eq!(styles["chat"].color_hex, "#87CEEB");
     assert_eq!(styles["unknown"].color_hex, "#FFFFFF");
 }
+
+#[test]
+fn test_task_m4_24_export_module_bgr_and_bom_integration() {
+    use neuroclip_lib::export::{
+        export_ass_file, export_srt_file, export_subtitle_project_json,
+        hex_to_ass_bgr, load_subtitle_project_json, UTF8_BOM, UTF8_BOM_BYTES,
+    };
+
+    // UT-24.1: BGR Hex conversions
+    assert_eq!(UTF8_BOM, "\u{FEFF}");
+    assert_eq!(hex_to_ass_bgr("#98FB98"), "&H0098FB98&");
+    assert_eq!(hex_to_ass_bgr("#FFB6C1"), "&H00C1B6FF&");
+    assert_eq!(hex_to_ass_bgr("#FF0055"), "&H005500FF&");
+    assert_eq!(hex_to_ass_bgr("#FFD700"), "&H0000D7FF&");
+    assert_eq!(hex_to_ass_bgr("#87CEEB"), "&H00EBCE87&");
+    assert_eq!(hex_to_ass_bgr("#FFFFFF"), "&H00FFFFFF&");
+
+    let container = create_sample_container();
+    let temp_dir = std::env::temp_dir().join(format!(
+        "neuroclip_integration_{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+    ));
+
+    let ass_path = temp_dir.join("test_out.ass");
+    let srt_path = temp_dir.join("test_out.srt");
+    let json_path = temp_dir.join("test_proj.json");
+
+    // Test ASS export with BOM
+    let exported_ass = export_ass_file(&container, &ass_path).unwrap();
+    assert_eq!(exported_ass, ass_path);
+    let ass_bytes = std::fs::read(&ass_path).unwrap();
+    assert_eq!(&ass_bytes[0..3], UTF8_BOM_BYTES);
+    assert_eq!(&ass_bytes[0..3], &[0xEF, 0xBB, 0xBF]);
+
+    // Test SRT export with BOM
+    let exported_srt = export_srt_file(&container, &srt_path).unwrap();
+    assert_eq!(exported_srt, srt_path);
+    let srt_bytes = std::fs::read(&srt_path).unwrap();
+    assert_eq!(&srt_bytes[0..3], UTF8_BOM_BYTES);
+    assert_eq!(&srt_bytes[0..3], &[0xEF, 0xBB, 0xBF]);
+
+    // Test SubtitleProject JSON serialization
+    let project = create_subtitle_project(
+        container,
+        "Integration Project",
+        "vod_int_456",
+        Some("preset_two_stack_9_16"),
+    );
+    let exported_json = export_subtitle_project_json(&project, &json_path).unwrap();
+    assert_eq!(exported_json, json_path);
+    let loaded_project = load_subtitle_project_json(&json_path).unwrap();
+    assert_eq!(loaded_project.project_id, project.project_id);
+    assert_eq!(loaded_project.target_layout, "preset_two_stack_9_16");
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}

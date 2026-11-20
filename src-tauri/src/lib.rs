@@ -14,6 +14,7 @@ pub mod commands;
 pub mod config;
 pub mod core;
 pub mod error;
+pub mod export;
 pub mod highlight;
 pub mod ingestion;
 pub mod logging;
@@ -33,6 +34,12 @@ pub use core::storage;
 pub use error::{
     codes, AppError, ConfigError, ExportError, HardwareError, HighlightError, IngestError,
     IpcErrorResponse, SidecarError, StorageError, SttError, TranslationError,
+};
+pub use export::{
+    export_ass_file, export_ass_project_file, export_srt_file, export_srt_project_file,
+    export_subtitle_project_json, generate_ass_script_from_project,
+    generate_srt_script_from_project, generate_srt_script_from_segments, hex_to_ass_bgr,
+    load_subtitle_project_json, write_file_with_bom, UTF8_BOM, UTF8_BOM_BYTES,
 };
 pub use highlight::{
     analyze_audio_samples, analyze_audio_samples_default, analyze_wav_file, apply_silence_clamp,
@@ -154,6 +161,9 @@ pub fn run() {
             commands::verify_stt_model,
             commands::export_subtitles_ass,
             commands::export_subtitles_srt,
+            commands::export_subtitle_project,
+            commands::export_subtitles_project_ass,
+            commands::export_subtitles_project_srt,
             commands::detect_highlights,
             commands::get_highlight_clusters,
             commands::toggle_highlight_bookmark,

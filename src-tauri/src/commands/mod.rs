@@ -2,6 +2,7 @@
 
 pub mod chat_cmd;
 pub mod config_cmd;
+pub mod export_cmd;
 pub mod highlight_cmd;
 pub mod ingest_cmd;
 pub mod log_cmd;
@@ -58,16 +59,23 @@ pub use storage_cmd::{
     __tauri_command_name_initialize_storage, check_preflight_storage, clean_expired_cache,
     initialize_project, initialize_storage,
 };
+pub use export_cmd::{
+    __cmd__export_subtitle_project, __cmd__export_subtitles_ass,
+    __cmd__export_subtitles_project_ass, __cmd__export_subtitles_project_srt,
+    __cmd__export_subtitles_srt, __tauri_command_name_export_subtitle_project,
+    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_project_ass,
+    __tauri_command_name_export_subtitles_project_srt, __tauri_command_name_export_subtitles_srt,
+    export_subtitle_project, export_subtitles_ass, export_subtitles_project_ass,
+    export_subtitles_project_srt, export_subtitles_srt,
+};
 pub use stt_cmd::{
-    __cmd__export_subtitles_ass, __cmd__export_subtitles_srt,
     __cmd__start_faster_whisper_transcription, __cmd__start_whisper_transcription,
     __cmd__transcribe_highlight_clip, __cmd__verify_stt_model,
-    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_srt,
     __tauri_command_name_start_faster_whisper_transcription,
     __tauri_command_name_start_whisper_transcription,
     __tauri_command_name_transcribe_highlight_clip, __tauri_command_name_verify_stt_model,
-    export_subtitles_ass, export_subtitles_srt, start_faster_whisper_transcription,
-    start_whisper_transcription, transcribe_highlight_clip, verify_stt_model,
+    start_faster_whisper_transcription, start_whisper_transcription, transcribe_highlight_clip,
+    verify_stt_model,
 };
 pub use translation_cmd::{
     __cmd__optimize_transcript_cps, __cmd__test_gemini_connection, __cmd__translate_vietsub,

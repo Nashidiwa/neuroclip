@@ -6,10 +6,10 @@ use tauri::{command, Emitter};
 
 use crate::commands::config_cmd::AppState;
 use crate::config::hardware::{probe_system_hardware, HardwareProfile};
-use crate::error::{AppError, ExportError, SttError};
+use crate::error::{AppError, SttError};
 use crate::stt::whisper_sidecar::ProgressCallback;
 use crate::stt::{
-    evaluate_hardware_guardrail_from_profile, generate_ass_script, generate_srt_script,
+    evaluate_hardware_guardrail_from_profile,
     prepare_audio_to_buffer, run_faster_whisper_worker, run_whisper_transcription, verify_model,
     AudioPrepConfig, FasterWhisperConfig, GroqClient, GroqClientConfig, GuardrailPolicy, ModelInfo,
     PreparedAudioBuffer, SttProgressPayload, TranscriptSegment, TranscriptSegmentsContainer,
@@ -66,71 +66,11 @@ pub async fn verify_stt_model(model_name: Option<String>) -> Result<ModelInfo, A
     verify_model(&target, None)
 }
 
-/// Export transcript segments into an Advanced SubStation Alpha (`.ass`) subtitle file.
-///
-/// # Errors
-/// Returns [`AppError::Export`] if creating parent directories or writing the `.ass` file fails.
-#[command]
-pub async fn export_subtitles_ass(
-    container: TranscriptSegmentsContainer,
-    output_path: String,
-) -> Result<String, AppError> {
-    let ass_content = generate_ass_script(&container);
-    let path = Path::new(&output_path);
-
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                AppError::Export(ExportError::FileWriteFailed {
-                    path: parent.display().to_string(),
-                    details: e.to_string(),
-                })
-            })?;
-        }
-    }
-
-    std::fs::write(path, ass_content).map_err(|e| {
-        AppError::Export(ExportError::FileWriteFailed {
-            path: output_path.clone(),
-            details: e.to_string(),
-        })
-    })?;
-
-    Ok(output_path)
-}
-
-/// Export transcript segments into a standard SubRip (`.srt`) subtitle file.
-///
-/// # Errors
-/// Returns [`AppError::Export`] if creating parent directories or writing the `.srt` file fails.
-#[command]
-pub async fn export_subtitles_srt(
-    container: TranscriptSegmentsContainer,
-    output_path: String,
-) -> Result<String, AppError> {
-    let srt_content = generate_srt_script(&container);
-    let path = Path::new(&output_path);
-
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                AppError::Export(ExportError::FileWriteFailed {
-                    path: parent.display().to_string(),
-                    details: e.to_string(),
-                })
-            })?;
-        }
-    }
-
-    std::fs::write(path, srt_content).map_err(|e| {
-        AppError::Export(ExportError::FileWriteFailed {
-            path: output_path.clone(),
-            details: e.to_string(),
-        })
-    })?;
-
-    Ok(output_path)
-}
+pub use crate::commands::export_cmd::{
+    __cmd__export_subtitles_ass, __cmd__export_subtitles_srt,
+    __tauri_command_name_export_subtitles_ass, __tauri_command_name_export_subtitles_srt,
+    export_subtitles_ass, export_subtitles_srt,
+};
 
 /// Callback invoked for each transcribed segment before returning the full container.
 pub type ChunkCallback<'a> = &'a (dyn Fn(usize, &TranscriptSegment) + Send + Sync);

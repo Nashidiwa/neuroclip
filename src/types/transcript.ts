@@ -504,3 +504,43 @@ export function toTranscriptSegmentsContainerJson(
     })),
   };
 }
+
+export function toSubtitleProjectJson(project: SubtitleProject): SubtitleProjectJson {
+  const speakerStylesJson: Record<string, SpeakerStyleJson> = {};
+  for (const [key, style] of Object.entries(project.speakerStyles)) {
+    speakerStylesJson[key] = {
+      color_hex: style.colorHex,
+      font_name: style.fontName,
+      font_size: style.fontSize,
+      outline_color_hex: style.outlineColorHex,
+    };
+  }
+
+  return {
+    project_id: project.projectId,
+    project_name: project.projectName,
+    vod_id: project.vodId,
+    video_file_path: project.videoFilePath,
+    target_layout: project.targetLayout,
+    segments: project.segments.map((seg) => ({
+      segment_id: seg.segmentId,
+      start_sec: seg.startSec,
+      end_sec: seg.endSec,
+      speaker_id: seg.speakerId,
+      text_en: seg.textEn,
+      text_vi: seg.textVi,
+      confidence: seg.confidence,
+      cps_score: seg.cpsScore,
+      is_flagged_for_review: seg.isFlaggedForReview,
+      words: seg.words.map((w) => ({
+        word: w.word,
+        start_sec: w.startSec,
+        end_sec: w.endSec,
+        probability: w.probability,
+        confidence: w.confidence,
+      })),
+    })),
+    speaker_styles: speakerStylesJson,
+    updated_at: project.updatedAt,
+  };
+}

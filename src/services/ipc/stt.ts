@@ -22,7 +22,6 @@ import {
   normalizeSttProgressPayload,
   normalizeTranscriptSegment,
   normalizeTranscriptSegmentsContainer,
-  toTranscriptSegmentsContainerJson,
 } from '../../types/transcript.ts';
 
 export * from '../../types/transcript.ts';
@@ -162,49 +161,8 @@ export async function verifySttModel(modelName?: string): Promise<ModelInfo> {
   }
 }
 
-/**
- * Export transcript segments to an Advanced SubStation Alpha (.ass) file with VTuber styles.
- *
- * @param container Transcript container to export.
- * @param outputPath Target file destination path on disk.
- * @returns Path to the exported subtitle file.
- */
-export async function exportSubtitlesAss(
-  container: TranscriptSegmentsContainer,
-  outputPath: string,
-): Promise<string> {
-  try {
-    const wireContainer = toTranscriptSegmentsContainerJson(container);
-    return await invoke<string>('export_subtitles_ass', {
-      container: wireContainer,
-      outputPath,
-    });
-  } catch (err: unknown) {
-    throw parseIpcError(err);
-  }
-}
-
-/**
- * Export transcript segments to a standard SubRip (.srt) subtitle file.
- *
- * @param container Transcript container to export.
- * @param outputPath Target file destination path on disk.
- * @returns Path to the exported subtitle file.
- */
-export async function exportSubtitlesSrt(
-  container: TranscriptSegmentsContainer,
-  outputPath: string,
-): Promise<string> {
-  try {
-    const wireContainer = toTranscriptSegmentsContainerJson(container);
-    return await invoke<string>('export_subtitles_srt', {
-      container: wireContainer,
-      outputPath,
-    });
-  } catch (err: unknown) {
-    throw parseIpcError(err);
-  }
-}
+// Re-export subtitle export functions from the dedicated export subsystem
+export { exportSubtitlesAss, exportSubtitlesSrt } from './export.ts';
 
 // ---------------------------------------------------------------------------
 // Event Stream Listeners
