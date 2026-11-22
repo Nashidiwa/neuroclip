@@ -16,8 +16,8 @@
 [![React: v18.3](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests: 633 Vitest + 131 Node + 380 Rust](https://img.shields.io/badge/Tests-633%20Vitest%20%2B%20131%20Node%20%2B%20380%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
-[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(23%2F32%20Tasks)-orange?style=flat-square)](#-current-implementation)
+[![Tests: 667 Vitest + 135 Node + 409 Rust](https://img.shields.io/badge/Tests-667%20Vitest%20%2B%20135%20Node%20%2B%20409%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
+[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(25%2F33%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
 [Current Implementation](#-current-implementation) •
@@ -43,7 +43,7 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 - **Multimodal Highlight Scoring**: Tính toán tương quan giữa chat Twitch (Z-Score hiệu chỉnh), tỷ lệ Emote, và Audio RMS bù độ trễ livestream 4.5 giây.
 - **Hybrid AI Speech-to-Text**: Kết hợp Cloud Groq Whisper Large-v3 (200x) và Local Faster-Whisper INT8 ngoại tuyến với bộ lọc Silero VAD.
 - **Theatrical Framing Vietsub**: Hỗ trợ dịch thuật LLM tích hợp Neuroverse Lore độc quyền và ma trận đại từ, nội suy bypass filter (optional).
-- **Native NLE Timeline Export**: Export project folder **CapCut PC Draft JSON**, **Adobe Premiere Pro XML**. Dual Export Safeguard: luôn tự động sinh file phụ đề `.ass` (chuẩn màu char) + `.srt`.
+- **Native NLE Timeline Export**: Export project folder **CapCut PC Draft JSON**, **Adobe Premiere Pro XML (FCP7 `<xmeml version="4">`)**. Dual Export Safeguard: luôn tự động sinh file phụ đề `.ass` (chuẩn màu char) + `.srt`.
 
 ---
 
@@ -52,15 +52,15 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
 
 ```text
-[███████████████████████░░░░░░░░░] 23 / 32 Tasks Hoàn thành (71.9% v1 Core)
-633 Vitest Tests Passing (34 files) • 131 Node Native Runner Tests Passing (51 suites) • 380 Rust Tests Passing (24 binaries) • Zero Unhandled Panics
+[█████████████████████████░░░░░░░] 25 / 33 Tasks Hoàn thành (75.8% v1 Core)
+667 Vitest Tests Passing (36 files) • 135 Node Native Runner Tests Passing (52 suites) • 409 Rust Tests Passing (25 active binaries) • Zero Unhandled Panics
 ```
 
-Toàn bộ 23 tasks thuộc 6 Milestones đầu tiên (`M4.1`–`M4.6`) đã hoàn thành xuất sắc và được kiểm thử toàn diện qua 19/19 cổng kiểm định:
+Toàn bộ 25 tasks thuộc 6 Milestones đầu tiên (`M4.1`–`M4.6`) và 2/3 tasks của Milestone `M4.7` (`TASK-M4-24`, `TASK-M4-25`) đã hoàn thành và vượt qua toàn bộ cổng kiểm định tự động (cùng đợt Stabilization `P0`–`P2`):
 
 - **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
   - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
-  - Giao diện Dark Theme theo bảng màu chuẩn **PO Option 1** (`#12131C`, `#1A1C28`, Neuro `#FFB6C1`, Evil `#FF0055`, Vedal `#98FB98`, Guest `#FFD700`, Chat `#87CEEB`), hỗ trợ hiệu ứng Acrylic/Mica và fallback về màu đặc an toàn; `main.tsx` bọc `<GlobalErrorBoundary><App /></GlobalErrorBoundary>` và `App.tsx` cung cấp shell 3 tab tối giản (`overview`, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`).
+  - Giao diện Dark Theme theo bảng màu chuẩn **PO Option 1** (`#12131C`, `#1A1C28`, Neuro `#FFB6C1`, Evil `#FF0055`, Vedal `#98FB98`, Guest `#FFD700`, Chat `#87CEEB`), hỗ trợ hiệu ứng Acrylic/Mica và fallback về màu đặc an toàn; `main.tsx` bọc `<GlobalErrorBoundary><App /></GlobalErrorBoundary>` và `App.tsx` cung cấp shell 4 tab tối giản (`overview`, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`, `studio` gắn `SubtitleStudio`).
 - **Xử lý lỗi hợp nhất & Giao thức IPC (`TASK-M4-02`)**:
   - Enum `AppError` (`thiserror` tại `error/{mod.rs, codes.rs}`) chuẩn hóa **48 mã lỗi định danh** (`ERR_*`, đồng bộ 48/48 với `src/services/ipc/error.ts`), thực thi chính sách zero-panic tĩnh trên Rust backend.
   - Tự động đóng gói `IpcErrorResponse` cho TypeScript kèm giải thích tiếng Việt và phân loại lỗi có thể phục hồi; React `GlobalErrorBoundary` và `ErrorBanner` hiển thị thông báo thân thiện và nút thử lại (Retry).
@@ -133,12 +133,18 @@ Toàn bộ 23 tasks thuộc 6 Milestones đầu tiên (`M4.1`–`M4.6`) đã ho�
 - **Đèn cảnh báo tốc độ đọc trực quan & Trợ lý nới rộng thời gian thủ công (`TASK-M4-23`)**:
   - Tính toán chỉ số CPS theo thời gian thực chuẩn Unicode UTF-8 (`Array.from(text.trim()).length`), phân loại 3 mức đèn cảnh báo trực quan: Xanh ($< 17\text{ CPS}$), Vàng ($17..=20\text{ CPS}$), Đỏ nhấp nháy ($> 20\text{ CPS}$).
   - Trợ lý 1-chạm *"Nới thời gian (Borrow Silence)"* (kèm phím tắt `Shift + E`) tự động mượn khoảng lặng liền kề tối đa $800\text{ms}$ để hạ CPS về mức an toàn, bảo toàn khoảng đệm an toàn $\ge 50\text{ms}$ chống đè timeline 100% (`cps.ts`, `CPSIndicator.tsx`, action `borrowSilence`).
+- **Bộ xuất phụ đề chuẩn màu `.ASS` & `.SRT` (`TASK-M4-24`)**:
+  - Chuẩn hóa phân hệ `src-tauri/src/export/{mod.rs, ass_exporter.rs, srt_exporter.rs}` (duy trì `stt/subtitle_export.rs` làm facade tương thích ngược), `commands/export_cmd.rs`, `services/ipc/export.ts` và `types/export.ts`.
+  - Ghi file `.ass` và `.srt` chuẩn **UTF-8 with BOM** (`write_file_with_bom`), tự động phân giải `PlayResX`/`PlayResY` theo `target_layout` (`1920x1080` hoặc `1080x1920`), áp dụng bảng màu **PO Option 1** (`Vedal` `#98FB98` `Outline = 2.5px`, `Chat` `Bold = 0, Outline = 2.0px`, `Neuro`/`Evil`/`Guest` `Bold = -1, Outline = 3.0px`).
+- **Bộ sinh thư mục dự án CapCut PC Draft JSON & Dual Export Safeguard (`TASK-M4-25`)**:
+  - Triển khai `capcut_draft.rs` và `capcut_schema.rs` sinh thư mục dự án CapCut Windows (`draft_content.json`, `draft_meta_info.json`) với video/audio/subtitle track theo đúng `target_layout`, đồng thời luôn sao lưu song song `subtitle.ass` và `subtitle.srt` vào cùng thư mục.
+  - Hoàn thiện `ExportModal.tsx` nối trực tiếp với `SubtitleStudio.tsx` và `useStudioStore` (truyền đúng `target_layout` và raw OS `video_file_path`).
 
 ---
 
 ## 🗺️ Lộ trình phát triển (v1 Milestone Roadmap)
 
-Toàn bộ 32 tasks của v1 được tổ chức thành 9 Milestones tuần tự. Quá trình phát triển tuân thủ luồng dữ liệu đầu-cuối:
+Toàn bộ 33 tasks của v1 (32 baseline + 1 task tích hợp `TASK-M4-29B`) được tổ chức thành 9 Milestones tuần tự. Quá trình phát triển tuân thủ luồng dữ liệu đầu-cuối:
 
 ```mermaid
 flowchart LR
@@ -181,6 +187,7 @@ flowchart LR
     subgraph M48 ["M4.8: Integration"]
         G1["Onboarding Wizard"]
         G2["DPAPI Key Vault"]
+        G3["App Pipeline Wiring"]
     end
 
     subgraph M49 ["M4.9: Packaging"]
@@ -201,12 +208,12 @@ flowchart LR
 | **M4.4** | **Bóc băng giọng nói & Tách thoại** | Silero VAD (`tract-onnx` 16kHz + DSP fallback) & FFmpeg loudnorm (`TASK-M4-14` ✅), Groq Whisper Large-v3 client `<20MB` chunks (`TASK-M4-15` ✅), Faster-Whisper INT8 worker & model manager (`TASK-M4-16` ✅) | **3 / 3** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing & `BLOCK_NONE` (`TASK-M4-17` ✅), Từ điển 12 thuật ngữ Swarm Lore & Hybrid Diarization (`TASK-M4-18` ✅), Smart line-breaker & CPS (`TASK-M4-19` ✅) | **3 / 3** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline (`TASK-M4-20` ✅), Virtualized subtitle list 60fps (`TASK-M4-21` ✅), Bàn phím số 1-chạm đổi màu nhân vật (`TASK-M4-22` ✅), Đèn cảnh báo CPS (`TASK-M4-23` ✅) | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
-| **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT, CapCut PC Draft JSON (Dual Export safeguard), Adobe Premiere Pro XML | **0 / 3** | ⏳ *Planned* |
-| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater | **0 / 3** | ⏳ *Planned* |
+| **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT (`M4-24` ✅), CapCut PC Draft JSON & Dual Export (`M4-25` ✅), Adobe Premiere Pro XML FCP7 `<xmeml version="4">` & `export:progress` (`M4-26` ⏳) | **2 / 3** | 🔄 *In Progress (M4-24 ✅, M4-25 ✅; M4-26 Pending)* |
+| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater, App Pipeline Wiring (`HighlightViewer` → `Slicer` → `useStudioStore`, `M4-29B`) | **0 / 4** | ⏳ *Planned* |
 | **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | **0 / 3** | ⏳ *Planned* |
-| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **23 / 32** | **71.9% Complete** |
+| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **25 / 33** | **75.8% Complete** |
 
-> 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 32 tasks (TASK-M4-01 đến TASK-M4-32) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
+> 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 33 tasks (`TASK-M4-01` đến `TASK-M4-32` + `TASK-M4-29B`) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
 
 ---
 
@@ -281,7 +288,7 @@ graph TD
 | **State Management** | `src/stores/createStore.ts` (`React.useSyncExternalStore`, API tương thích [Zustand](https://github.com/pmndrs/zustand)) | Quản lý 8 stores nhẹ (kèm `useStudioStore`), memoized selector, chống race condition. |
 | **Build & Tooling** | [Vite 4.3](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier + `prettier-plugin-tailwindcss` | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
 | **Pure Rust Neural VAD** | `tract-onnx` v0.21 + `silero_vad_16k.onnx` | Suy luận Silero VAD đồ thị tĩnh 16kHz thuần Rust (không cần DLL C++), kèm DSP fallback an toàn (`ADR-008`). |
-| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | **1,144 bài kiểm tra tự động** (**633 Vitest** [34 files] + **131 Node** [51 suites] + **380 Cargo Rust tests** [24 binaries]). |
+| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | **1,211 bài kiểm tra tự động** (**667 Vitest** [36 files] + **135 Node** [52 suites] + **409 Cargo Rust tests** [25 active binaries: 1 lib + 24 integration]). |
 | **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest), `faster-whisper-worker`, `whisper.cpp` (`main.exe`) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch/YouTube, bóc băng giọng nói local INT8 / Q5_K. |
 
 ### Data Contracts & JSON Schemas (SSOT):
@@ -304,7 +311,7 @@ Mọi dữ liệu trao đổi giữa Rust Backend và TypeScript Frontend đều
 - **Visual Studio Build Tools**: C++ build tools (MSVC v142/v143) và Windows 10/11 SDK.
 - **WebView2 Runtime**: Đã tích hợp sẵn trên Windows 11 và Windows 10 bản mới.
 - **Sidecar Binaries (Công cụ phụ trợ)**:
-  - `ffmpeg.exe` và `yt-dlp.exe` (được cấu hình trong PATH hệ thống hoặc đặt trong thư mục `%LOCALAPPDATA%/NeuroClip/bin/`).
+  - `ffmpeg.exe` và `yt-dlp.exe` (được định vị qua biến môi trường `NEUROCLIP_*_PATH`, `AppConfig.sidecar_paths`, thư mục `%APPDATA%/NeuroClip/bin/` hoặc `%LOCALAPPDATA%/NeuroClip/bin/` [cùng `%LOCALAPPDATA%/NeuroClip/sidecars/<tool>/` cho local STT workers], thư mục đóng gói `resources/sidecars/`, hoặc `PATH` hệ thống; `tauri.conf.json` không dùng `externalBin` / `src-tauri/bin/`).
 
 ### 2. Cài đặt các gói phụ thuộc (Dependencies)
 Mở PowerShell hoặc terminal tại thư mục gốc của dự án:
@@ -331,13 +338,13 @@ npm run dev
 Dự án áp dụng quy chuẩn kiểm thử nghiêm ngặt, bao gồm cả các kịch bản tấn công dồn dập (Adversarial Stress Testing):
 
 ```powershell
-# Chạy bộ test hợp đồng & AST bằng Node.js Native Test Runner (131 tests, 51 suites)
+# Chạy bộ test hợp đồng & AST bằng Node.js Native Test Runner (135 tests, 52 suites)
 npm test
 
-# Chạy toàn bộ 633 bài kiểm thử bằng Vitest (34 files: Unit, Component, Adversarial)
+# Chạy toàn bộ 667 bài kiểm thử bằng Vitest (36 files: Unit, Component, Adversarial)
 npm run test:vitest   # hoặc: npm run test:run
 
-# Chạy toàn bộ 380 bài kiểm thử Rust backend song song (24 binaries)
+# Chạy toàn bộ 409 bài kiểm thử Rust backend song song (25 active binaries: 1 lib + 24 integration)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
 # Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant) & build Vite
@@ -374,24 +381,25 @@ neuroclip/
 │   ├── ARCHITECTURE.md         # Đặc tả kiến trúc hệ thống, data contracts, failure modes
 │   ├── CONVENTIONS.md          # Tiêu chuẩn code Rust/TypeScript, clippy lint, IPC protocol
 │   ├── PRD.md                  # Tài liệu yêu cầu sản phẩm, chân dung người dùng, epics
-│   └── TASK_BOARD.md           # Bảng theo dõi tiến độ chi tiết 32 tasks và 9 milestones
+│   └── TASK_BOARD.md           # Bảng theo dõi tiến độ chi tiết 33 tasks và 9 milestones
 ├── scripts/                    # Scripts tự động hóa hỗ trợ phát triển (icon generator...)
 ├── src/                        # FRONTEND TYPESCRIPT & REACT SPA
 │   ├── components/             # React UI Components
 │   │   ├── common/             # GlobalErrorBoundary, ErrorBoundary, ErrorBanner
 │   │   ├── dashboard/          # IngestionDashboard, DropZone (local video)
+│   │   ├── export/             # ExportModal (CapCut Draft, .ASS, .SRT)
 │   │   ├── highlight/          # HighlightViewer, index.ts
 │   │   └── studio/             # SubtitleStudio, VideoCanvas, TimelineScrubber, VirtualizedSegmentList, SegmentRow, TimecodeNudge, CharacterHotkeyBar, CPSIndicator
 │   ├── hooks/                  # Custom React Hooks (useStudioHotkeys: Numpad 1-5, IME isolation)
 │   ├── services/               # Tầng dịch vụ kết nối và gọi IPC
 │   │   ├── config/             # Hardware probing client, App settings client
-│   │   ├── ipc/                # error.ts (48/48), sidecar, storage, ingestion, chat, highlight, slice, stt, translation
+│   │   ├── ipc/                # error.ts (48/48), export, sidecar, storage, ingestion, chat, highlight, slice, stt, translation
 │   │   └── logging/            # Client logging service, Token redactor, Logger store bridge
 │   ├── stores/                 # createStore.ts (useSyncExternalStore, Zustand-compatible) + 8 stores (useStudioStore...)
 │   ├── styles/                 # Theme tokens (PO Option 1), globals.css, theme.css, theme.ts
-│   ├── types/                  # TypeScript Data Contracts (chat, highlight, range_slicer, transcript, translation)
+│   ├── types/                  # TypeScript Data Contracts (chat, export, highlight, range_slicer, transcript, translation)
 │   ├── utils/                  # text_wrap.ts (line wrap & CPS), cps.ts (Unicode CPS calculation & time borrowing assistant)
-│   ├── test/                   # Test Suites (Vitest 633 tests, Node runner 131 tests, typecheck.node.ts)
+│   ├── test/                   # Test Suites (Vitest 667 tests, Node runner 135 tests, typecheck.node.ts)
 │   ├── App.tsx                 # Acrylic shell + 4-tab minimal workspace (overview / ingestion / highlights / studio)
 │   └── main.tsx                # Root mount bọc <GlobalErrorBoundary>
 ├── src-tauri/                  # BACKEND RUST CORE (TAURI V2 NATIVE)
@@ -399,17 +407,18 @@ neuroclip/
 │   ├── icons/                  # Bộ biểu tượng ứng dụng đa kích thước cho Windows
 │   ├── resources/              # Tài nguyên tĩnh nhúng kèm ứng dụng (`models/silero_vad_16k.onnx`)
 │   ├── src/                    # Mã nguồn Rust
-│   │   ├── commands/           # 38 Tauri IPC Commands (`chat_cmd`, `config_cmd`, `highlight_cmd`, `ingest_cmd`, `log_cmd`, `slice_cmd`, `storage_cmd`, `stt_cmd`, `translation_cmd`)
+│   │   ├── commands/           # 42 Tauri IPC Commands (`chat_cmd`, `config_cmd`, `export_cmd`, `highlight_cmd`, `ingest_cmd`, `log_cmd`, `slice_cmd`, `storage_cmd`, `stt_cmd`, `translation_cmd`)
 │   │   ├── config/             # Early M4-27/28 backend (`app_config.rs`, `atomic.rs`, `hardware.rs`)
 │   │   ├── core/               # `storage.rs` (Win32 FreeSpace, `validate_vod_id`), `custom_protocol.rs` (`asset://` Range 206)
 │   │   ├── error/              # Cây lỗi phân cấp `AppError` (`mod.rs`) và 48 mã lỗi `ERR_*` (`codes.rs`)
+│   │   ├── export/             # `mod.rs` (Schema 5.6), `ass_exporter.rs`, `srt_exporter.rs`, `capcut_draft.rs`, `capcut_schema.rs`
 │   │   ├── highlight/          # `bucket.rs`, `zscore.rs`, `emote_filter.rs`, `swarm_dict.rs`, `audio_rms.rs`, `energy_analyzer.rs`, `fusion.rs`, `cluster.rs`
 │   │   ├── ingestion/          # `streamer.rs`, `cookies.rs`, `buffer.rs`, `validator.rs`, `local_importer.rs`, `range_slicer.rs`, `chat_parser.rs`, `twitch_gql.rs`, `youtube_chat.rs`
 │   │   ├── logging/            # Hạ tầng Tracing NDJSON (`mod.rs`), xoay vòng log (`rotation.rs`), lọc secret redaction (`secrets.rs`)
 │   │   ├── sidecar/            # `supervisor.rs` (bounded 1k lines, `sidecar:progress`) & `kill_switch.rs` (Windows Job Objects)
-│   │   ├── stt/                # `audio_prep.rs`, `vad.rs` (`tract-onnx` Silero VAD + DSP fallback), `vad_bridge.rs`, `groq_client.rs`, `faster_whisper_worker.rs`, `whisper_sidecar.rs`, `model_manager.rs`, `transcript_parser.rs`, early M4-24 `subtitle_export.rs`
+│   │   ├── stt/                # `audio_prep.rs`, `vad.rs` (`tract-onnx` Silero VAD + DSP fallback), `vad_bridge.rs`, `groq_client.rs`, `faster_whisper_worker.rs`, `whisper_sidecar.rs`, `model_manager.rs`, `transcript_parser.rs`, `subtitle_export.rs` (facade trỏ về `crate::export`)
 │   │   ├── translation/        # `gemini_client.rs`, `prompt_builder.rs` (`Theatrical Framing`), `lore_dictionary.rs` (12 Swarm terms), `pronoun_matrix.rs` (PO Option 1), `diarization.rs` (Hybrid 3-stage), `line_wrapper.rs`, `cps_optimizer.rs` (Time Borrowing)
-│   │   ├── lib.rs              # Clippy denies/pedantic, đăng ký `asset://` & 38 IPC handlers
+│   │   ├── lib.rs              # Clippy denies/pedantic, đăng ký `asset://` & 42 IPC handlers
 │   │   └── main.rs             # Điểm vào thực thi ứng dụng Windows desktop
 │   ├── tests/                  # 24 Integration & adversarial test suites + `fixtures/silero_test.wav`
 │   ├── build.rs                # Tauri build script

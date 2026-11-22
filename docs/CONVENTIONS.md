@@ -2,12 +2,12 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/CONVENTIONS.md`  
-**Phiên bản:** 1.0.0 (Ban hành chính thức tại Phase 3)  
+**Phiên bản:** 1.0.0 (Ban hành chính thức tại Phase 3 — Đồng bộ Phase 4 `M4-01..M4-25`)  
 **Chủ trì:** `@tech-lead`  
 **Căn cứ kỹ thuật & Pháp lý:**
 - Hiến pháp dự án: `AGENTS.md` (Zero-Guesswork Policy, Single Source of Truth, Gate Checks)
 - Kiến trúc hệ thống: `docs/ARCHITECTURE.md` (v1.0.0, Sections 1–7)
-- Yêu cầu sản phẩm: `docs/PRD.md` (v1.2.0, Epics 1–6)
+- Yêu cầu sản phẩm: `docs/PRD.md` (v1.3.0, Epics 1–6)
 - 8 Quyết định kiến trúc đã phê duyệt: `docs/adr/ADR-001` đến `ADR-008`
 - Bảng phân rã task & ma trận kiểm thử: `docs/TASK_BOARD.md`
 
@@ -154,7 +154,7 @@ src-tauri/
 │       └── silero_vad_16k.onnx   # Mô hình Silero VAD v5 đồ thị tĩnh 16kHz (ADR-008)
 ├── src/
 │   ├── main.rs                   # Điểm vào ứng dụng, khởi tạo Tauri runtime
-│   ├── lib.rs                    # Clippy lints, đăng ký asset:// & 36 Tauri IPC commands
+│   ├── lib.rs                    # Clippy lints, đăng ký asset:// & 42 Tauri IPC commands (10 modules)
 │   ├── error/                    # Cây lỗi & mã lỗi hợp nhất (48 mã ERR_*)
 │   │   ├── mod.rs                # AppError, IpcErrorResponse, details(), is_recoverable()
 │   │   └── codes.rs              # 48 canonical ERR_* constants
@@ -208,34 +208,36 @@ src-tauri/
 │   │   ├── whisper_sidecar.rs    # Sidecar whisper.cpp Q5_K GGUF (bổ sung sớm từ M4-08 legacy)
 │   │   ├── model_manager.rs      # Danh mục mô hình & kiểm tra toàn vẹn SHA-256 streaming
 │   │   ├── transcript_parser.rs  # Chuẩn hóa Schema 5.5 transcript_segments.json & CPS
-│   │   └── subtitle_export.rs    # (Early M4-24) Core .ass/.srt & default_speaker_styles (chuyển sang export/ ở M4-24)
+│   │   └── subtitle_export.rs    # Facade tương thích ngược re-export từ crate::export (bắt buộc giữ nguyên vì suite.node.test.ts kiểm tra)
 │   ├── translation/              # Phân hệ dịch thuật & phân vai (ADR-001, ADR-006)
 │   │   ├── mod.rs
 │   │   ├── gemini_client.rs      # Google Gemini 1.5 Flash client (BLOCK_NONE, ERR-07 fallback)
 │   │   ├── prompt_builder.rs     # Đóng gói Prompt Theatrical Framing & Sliding Window
-│   │   ├── [lore_dictionary.rs]  # (Target M4-18) Từ điển 12 thuật ngữ Swarm Lore
-│   │   ├── [pronoun_matrix.rs]   # (Target M4-18) Ma trận đại từ xưng hô nhân vật
-│   │   ├── [diarization.rs]      # (Target M4-18) Hybrid context diarization + deterministic normalizer
-│   │   ├── [line_wrapper.rs]     # (Target M4-19) Ngắt dòng bảo toàn từ ghép tiếng Việt
-│   │   └── [cps_optimizer.rs]    # (Target M4-19) Tối ưu CPS & Time Borrowing
-│   ├── [export/]                 # (Target M4-24..M4-26) Xuất bản NLE & Phụ đề (ADR-005)
-│   │   ├── [ass_exporter.rs]     # (Target M4-24) Xuất .ass UTF-8 with BOM từ subtitle_export.rs
-│   │   ├── [srt_exporter.rs]     # (Target M4-24) Xuất .srt UTF-8 with BOM
-│   │   ├── [capcut_draft.rs]     # (Target M4-25) Sinh CapCut Draft JSON + Dual Export Safeguard
-│   │   └── [premiere_xml.rs]     # (Target M4-26) Sinh Premiere Pro / FCP7 XML
-│   └── commands/                 # Cổng tiếp nhận 36 Tauri IPC Commands
+│   │   ├── lore_dictionary.rs    # Từ điển 12 thuật ngữ Swarm Lore
+│   │   ├── pronoun_matrix.rs     # Ma trận đại từ xưng hô nhân vật
+│   │   ├── diarization.rs        # Hybrid context diarization + deterministic normalizer
+│   │   ├── line_wrapper.rs       # Ngắt dòng bảo toàn từ ghép tiếng Việt
+│   │   └── cps_optimizer.rs      # Tối ưu CPS & Time Borrowing
+│   ├── export/                   # Xuất bản NLE & Phụ đề (ADR-005, M4-24..M4-25; Target M4-26)
+│   │   ├── mod.rs                # SubtitleProject, SpeakerStyle, UTF8_BOM, write_file_with_bom
+│   │   ├── ass_exporter.rs       # Xuất .ass UTF-8 with BOM theo target_layout (subtitle_export.rs re-export từ đây)
+│   │   ├── srt_exporter.rs       # Xuất .srt UTF-8 with BOM
+│   │   ├── capcut_draft.rs       # Sinh CapCut Draft JSON + Dual Export Safeguard
+│   │   ├── capcut_schema.rs      # DraftContent, DraftMetaInfo, canvas_config_for_layout
+│   │   └── [premiere_xml.rs]     # (Target M4-26) Sinh Premiere Pro / FCP7 XML (<xmeml version="4">)
+│   └── commands/                 # Cổng tiếp nhận 42 Tauri IPC Commands (10 modules)
 │       ├── mod.rs
 │       ├── config_cmd.rs         # ping, get_app_config, save_app_config, get_hardware_profile, detect_hardware
 │       ├── log_cmd.rs            # get_recent_logs, clear_logs, log_frontend_event
 │       ├── storage_cmd.rs        # check_preflight_storage, initialize_storage, initialize_project, clean_expired_cache
 │       ├── ingest_cmd.rs         # start_vod_ingestion, import_local_video, cancel_vod_ingestion, probe_vod, get_vod_manifest, extract_pcm_stream
 │       ├── chat_cmd.rs           # start_chat_extraction, get_chat_events, get_chat_velocity_heatmap
-│       ├── stt_cmd.rs            # start_whisper_transcription, start_faster_whisper_transcription, transcribe_highlight_clip, verify_stt_model, export_subtitles_ass, export_subtitles_srt
+│       ├── stt_cmd.rs            # start_whisper_transcription, start_faster_whisper_transcription, transcribe_highlight_clip, verify_stt_model (kèm re-export tương thích từ export_cmd)
 │       ├── highlight_cmd.rs      # detect_highlights, get_highlight_clusters, toggle_highlight_bookmark, toggle_cluster_bookmark
 │       ├── slice_cmd.rs          # slice_video_segment, cancel_slice_video_segment
-│       ├── translation_cmd.rs    # translate_vietsub, test_gemini_connection, update_speaker_role
-│       └── [export_cmd.rs]       # (Target M4-24..M4-26) Lệnh xuất bản NLE hợp nhất
-└── tests/                        # 21 Integration & Adversarial Rust test files + fixtures/silero_test.wav
+│       ├── translation_cmd.rs    # translate_vietsub, test_gemini_connection, update_speaker_role, wrap_vietnamese_subtitles, optimize_transcript_cps
+│       └── export_cmd.rs         # export_subtitles_ass, export_subtitles_srt, export_subtitle_project, export_subtitles_project_ass, export_subtitles_project_srt, export_capcut_draft (Target M4-26: export_premiere_xml & export:progress)
+└── tests/                        # 24 Integration & Adversarial Rust test files + fixtures/silero_test.wav
 ```
 
 ---
@@ -299,13 +301,14 @@ File `tsconfig.json` bắt buộc kích hoạt chế độ nghiêm ngặt cao nh
     "trailingComma": "all",
     "tabWidth": 2,
     "printWidth": 100,
+    "endOfLine": "auto",
     "plugins": ["prettier-plugin-tailwindcss"]
   }
   ```
 
 ### 3.3 Cấu Trúc Thư Mục Chuẩn `src/`
 
-*(Ghi chú: Cây thư mục dưới đây phản ánh cấu trúc thực tế đã triển khai qua `M4-01..M4-17` cùng các mục `[target M4-19..M4-28]` thuộc kiến trúc đích của Phase 4 — tuyệt đối không xem các file chưa tới milestone là thiếu sót của `M4-01..M4-17`.)*
+*(Ghi chú: Cây thư mục dưới đây phản ánh cấu trúc thực tế đã triển khai qua `M4-01..M4-25` cùng các mục `[target M4-26..M4-29]` thuộc kiến trúc đích của Phase 4 — tuyệt đối không xem các file chưa tới milestone là thiếu sót của `M4-01..M4-25`.)*
 
 ```
 index.html                        # Entry HTML gốc tại repo root
@@ -313,7 +316,7 @@ vite.config.ts                    # Cấu hình Vite tại repo root
 tailwind.config.js                # Tailwind tokens & bảng màu PO Option 1 tại repo root
 src/
 ├── main.tsx                      # Root mount bọc <GlobalErrorBoundary><App /></GlobalErrorBoundary>
-├── App.tsx                       # Acrylic Dark Shell + thanh chuyển tab tối giản (overview / ingestion / highlights)
+├── App.tsx                       # Acrylic Dark Shell + thanh chuyển 4 tabs (overview / ingestion / highlights / studio)
 ├── App.test.tsx
 ├── components/                   # React UI components
 │   ├── common/                   # ErrorBoundary.tsx (GlobalErrorBoundary), ErrorBanner.tsx & tests
@@ -321,9 +324,9 @@ src/
 │   ├── highlight/                # HighlightViewer.tsx, index.ts
 │   ├── [layout/]                 # (Target Phase 4) Header, Sidebar, WindowTitleBar, StatusBar
 │   ├── [onboarding/]             # (Target M4-27/M4-28) HardwareRecommendation, OnboardingWizardModal, ApiKeyTester
-│   ├── [studio/]                 # (Target M4-20..M4-23) SubtitleStudio, VideoCanvas, TimelineScrubber, VirtualizedSegmentList, SegmentRow, CharacterHotkeyBar, CPSIndicator
-│   └── [export/]                 # (Target M4-24..M4-26) ExportDialog, PresetSelector
-├── [hooks/]                      # (Target M4-22+) Custom React hooks (useStudioHotkeys.ts, v.v.)
+│   ├── studio/                   # SubtitleStudio, VideoCanvas, TimelineScrubber, VirtualizedSegmentList, SegmentRow, TimecodeNudge, CharacterHotkeyBar, CPSIndicator & tests
+│   └── export/                   # ExportModal.tsx, ExportModal.test.tsx (CapCut Draft, .ass, .srt; Target M4-26 bổ sung Premiere XML & progress bar)
+├── hooks/                        # Custom React hooks (useStudioHotkeys.ts, useStudioHotkeys.test.ts)
 ├── stores/                       # Quản lý trạng thái client (createStore / Zustand-compatible API)
 │   ├── createStore.ts            # Store factory dùng React.useSyncExternalStore với API tương thích Zustand
 │   ├── createStore.test.ts       # Unit tests kiểm chứng subscribe, selector memoization & curried API
@@ -334,7 +337,7 @@ src/
 │   ├── useHighlightStore.ts      # Highlight clusters & bookmark state
 │   ├── useTranscriptStore.ts     # STT (Groq / Faster-Whisper), translation & speaker role state
 │   ├── useLogStore.ts            # Ring-buffer log viewer (1,000 dòng FIFO)
-│   ├── [useStudioStore.ts]       # (Target M4-20) Trạng thái video playback & timeline sync
+│   ├── useStudioStore.ts         # Trạng thái video playback, layout (aspectRatio, preset916) & timeline sync
 │   └── [useHardwareStore.ts]     # (Target M4-27) Trạng thái hardware profile onboarding
 ├── services/                     # Giao tiếp Backend IPC, cấu hình & logging
 │   ├── ipc/                      # Wrapper Tauri IPC có kiểu tĩnh (zero-any)
@@ -346,17 +349,18 @@ src/
 │   │   ├── highlight.ts          # detect_highlights, get_highlight_clusters, toggle_*_bookmark
 │   │   ├── slice.ts              # slice_video_segment, cancel_slice_video_segment
 │   │   ├── stt.ts                # transcribe_highlight_clip, start_faster_whisper_transcription, stt:progress, stt:chunk
-│   │   ├── translation.ts        # translate_vietsub, test_gemini_connection, update_speaker_role, translation:progress
-│   │   └── [export.ts]           # (Target M4-24..M4-26) export_ass, export_srt, export_capcut_draft, export_premiere_xml
+│   │   ├── translation.ts        # translate_vietsub, test_gemini_connection, update_speaker_role, wrap_vietnamese_subtitles, optimize_transcript_cps, translation:progress
+│   │   └── export.ts             # exportSubtitlesAss, exportSubtitlesSrt, exportSubtitleProject, exportSubtitlesDual, exportSubtitlesProjectAss, exportSubtitlesProjectSrt, exportCapCutDraft (Target M4-26: exportPremiereXml)
 │   ├── config/                   # hardware.ts, settings.ts
 │   └── logging/                  # index.ts, logger.ts, redactor.ts, types.ts
 ├── types/                        # Khai báo TypeScript types (khớp Data Contracts)
 │   ├── chat.ts
+│   ├── export.ts                 # SubtitleExportFormat, TargetLayout, CapCutExportOptions/Result, VTUBER_PALETTE_*
 │   ├── highlight.ts
 │   ├── range_slicer.ts
 │   ├── transcript.ts             # Schema 5.5/5.6, SpeakerRole, GuardrailPolicy, SttProgressPayload
 │   └── translation.ts            # TranslateVietsubOptions, TranslationProgressPayload
-├── [utils/]                      # (Target M4-19/M4-23) Các hàm thuần túy (text_wrap.ts, cps.ts, timecode.ts, v.v.)
+├── utils/                        # Các hàm thuần túy (text_wrap.ts, cps.ts; formatStudioTimecode trong stores/useStudioStore.ts)
 ├── styles/
 │   ├── globals.css               # Tailwind directives, custom scrollbars, dark VTuber theme
 │   ├── theme.css                 # CSS variables cho bảng màu PO Option 1
@@ -365,8 +369,8 @@ src/
 ```
 
 - **Kiến trúc State Management (`createStore` & Lộ trình nâng cấp `zustand`):**
-  - Toàn bộ 7 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`) được xây dựng trên `src/stores/createStore.ts` sử dụng `React.useSyncExternalStore` với **API tương thích hoàn toàn với Zustand** (`createStore<T>(initializer)`, curried `createStore<T>()(initializer)`, `create` alias, `useStore(selector?, equalityFn?)` kèm snapshot memoization, `getState()`, `getInitialState()`, `setState(partial, replace?)`, `subscribe(listener)`).
-  - Kiến trúc này **sẵn sàng tương thích để chỉnh sửa và nâng cấp/triển khai `zustand` ở các task sau này (`TASK-M4-20+`) khi được chốt cài đặt gói `zustand`** trong `package.json`, mà không làm thay đổi chữ ký API của các store hoặc component đang sử dụng.
+  - Toàn bộ 8 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`, `useStudioStore.ts`) được xây dựng trên `src/stores/createStore.ts` sử dụng `React.useSyncExternalStore` với **API tương thích hoàn toàn với Zustand** (`createStore<T>(initializer)`, curried `createStore<T>()(initializer)`, `create` alias, `useStore(selector?, equalityFn?)` kèm snapshot memoization, `getState()`, `getInitialState()`, `setState(partial, replace?)`, `subscribe(listener)`).
+  - Kiến trúc này **chạy ổn định cho `M4-01..M4-25` không cần cài gói `zustand` rời**, đồng thời sẵn sàng tương thích nếu sau này chốt cài đặt gói `zustand` trong `package.json`, mà không làm thay đổi chữ ký API của các store hoặc component đang sử dụng.
 
 ### 3.4 Quy Ước Đặt Tên Toàn Diện (Naming Conventions)
 
@@ -385,7 +389,7 @@ src/
 ### 3.5 Hiệu Năng Timeline & Virtualized Subtitle Rendering
 
 Trong các VOD dài 4–8 tiếng, số lượng phân đoạn phụ đề có thể lên tới 500–2,000 dòng. Để đảm bảo UI phản hồi tức thì với tốc độ 60fps:
-1. **Virtualized Segment List:** Danh sách dòng phụ đề trong `SubtitleStudio` **BẮT BUỘC** sử dụng kỹ thuật ảo hóa danh sách (dùng `@tanstack/react-virtual` hoặc custom virtualizer). Chỉ render các dòng hiện diện trong viewport của bảng cuộn.
+1. **Virtualized Segment List:** Danh sách dòng phụ đề trong `SubtitleStudio` **BẮT BUỘC** sử dụng kỹ thuật ảo hóa danh sách (custom `useVirtualizer` trong `VirtualizedSegmentList.tsx`). Chỉ render các dòng hiện diện trong viewport của bảng cuộn.
 2. **Binary Search & Multi-segment Lookup cho Active Subtitle Rendering:**
    Khi video đang phát, con trỏ thời gian `currentTime` phát ra liên tục 60 lần/giây. Để hỗ trợ trọn vẹn các tình huống hội thoại nói đè lên nhau (Overlapping dialogue / banter đặc trưng giữa Neuro-sama và Vedal hoặc khách mời / Evil-Neuro):
    - Thuật toán tra cứu phụ đề **BẮT BUỘC trả về một mảng `SubtitleSegment[]`** (danh sách toàn bộ các phân đoạn đang kích hoạt tại mốc thời gian $t$), thay vì chỉ trả về một giá trị vô hướng đơn lẻ `SubtitleSegment`.
@@ -405,16 +409,17 @@ Trong các VOD dài 4–8 tiếng, số lượng phân đoạn phụ đề có t
 ### 4.1 Quy Ước Định Danh & Chữ Ký Tauri Command
 
 - **Tên Command:** Đồng nhất viết theo dạng `snake_case` ở cả Rust backend và TypeScript frontend.
-- **36 Tauri Commands đã đăng ký trong `src-tauri/src/lib.rs`:**
+- **42 Tauri Commands đã đăng ký trong `src-tauri/src/lib.rs` (10 modules):**
   - `config_cmd`: `ping`, `get_app_config`, `save_app_config`, `get_hardware_profile`, `detect_hardware`
   - `log_cmd`: `get_recent_logs`, `clear_logs`, `log_frontend_event`
   - `storage_cmd`: `check_preflight_storage`, `initialize_storage`, `initialize_project`, `clean_expired_cache`
   - `ingest_cmd`: `start_vod_ingestion`, `import_local_video`, `cancel_vod_ingestion`, `probe_vod`, `get_vod_manifest`, `extract_pcm_stream`
   - `chat_cmd`: `start_chat_extraction`, `get_chat_events`, `get_chat_velocity_heatmap`
-  - `stt_cmd`: `start_whisper_transcription`, `start_faster_whisper_transcription`, `transcribe_highlight_clip`, `verify_stt_model`, `export_subtitles_ass`, `export_subtitles_srt`
+  - `stt_cmd`: `start_whisper_transcription`, `start_faster_whisper_transcription`, `transcribe_highlight_clip`, `verify_stt_model` *(kèm re-export tương thích `export_subtitles_ass`, `export_subtitles_srt` từ `export_cmd`)*
   - `highlight_cmd`: `detect_highlights`, `get_highlight_clusters`, `toggle_highlight_bookmark`, `toggle_cluster_bookmark`
   - `slice_cmd`: `slice_video_segment`, `cancel_slice_video_segment`
-  - `translation_cmd`: `translate_vietsub`, `test_gemini_connection`, `update_speaker_role`
+  - `translation_cmd`: `translate_vietsub`, `test_gemini_connection`, `update_speaker_role`, `wrap_vietnamese_subtitles`, `optimize_transcript_cps`
+  - `export_cmd`: `export_subtitles_ass`, `export_subtitles_srt`, `export_subtitle_project`, `export_subtitles_project_ass`, `export_subtitles_project_srt`, `export_capcut_draft` *(Target M4-26: `export_premiere_xml`)*
 - **Kiểu trả về chuẩn:** Mọi hàm command phía Rust phải trả về `Result<T, AppError>`.
 - **Ví dụ chữ ký Command:**
   ```rust
@@ -462,7 +467,7 @@ Các tiến trình dài hạn (tải audio, tính highlight, STT, dịch thuật
 | `stt:chunk` | `{ clip_id: string, chunk_index: number, segment: TranscriptSegment }` *(snake_case; `stt.ts` nhận cả camelCase)* | **Đã triển khai (`commands/stt_cmd.rs`):** Stream từng phân đoạn thoại bóc băng xong tức thì |
 | `translation:progress` | `{ clipId: string, translatedCount: number, totalCount: number }` *(camelCase)* | **Đã triển khai (`translation/mod.rs`, `translation_cmd.rs`):** Tiến độ dịch Vietsub theo lô |
 | `highlight:progress` | `{ taskId: string, stage: 'chat_parsing' \| 'audio_rms' \| 'clustering', percent: number }` | *(Target Phase 4 — hiện `detect_highlights` chạy đồng bộ trên `spawn_blocking`)* |
-| `export:progress` | `{ projectId: string, percent: number, currentStep: string }` | *(Target M4-24..M4-26 — tiến độ xuất CapCut Draft / NLE)* |
+| `export:progress` | `{ projectId: string, percent: number, currentStep: string }` | *(Target M4-26 — tiến độ xuất NLE & progress bar)* |
 | `sidecar:status` | `{ binary: 'yt-dlp' \| 'ffmpeg', status: 'ready' \| 'updating' \| 'failed', message?: string }` | *(Target M4-29 — trạng thái tự cập nhật sidecar)* |
 
 - **Frontend Hook Quản Lý Event (`useTauriEvent`):**
@@ -704,14 +709,14 @@ tracing::info!(
   # Chạy clippy nghiêm ngặt (giữ nguyên clippy::pedantic, 0 warning)
   cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 
-  # Chạy toàn bộ test suites song song (23 binaries)
+  # Chạy toàn bộ test suites song song (25 active test binaries: 1 lib + 24 integration = 409 tests; [[bin]] test = false)
   cargo test --manifest-path src-tauri/Cargo.toml --all-targets
   ```
 
 ### 7.2 Unit & Component Testing Phía Frontend
 
 - **Testing Framework:** Vitest + React Testing Library + `@testing-library/jest-dom`, kết hợp Node.js Native Test Runner (`node --experimental-strip-types --test src/test/suite.node.test.ts`) cho contract & AST assertions.
-- **Vị trí file test:** Đặt song song với file component/store/service (vd: `DropZone.test.tsx`, `createStore.test.ts`, `error.test.ts`, `sidecar.test.ts`, cùng các target tương lai `SubtitleStudio.test.tsx`, `useStudioHotkeys.test.ts`, `cps.test.ts`).
+- **Vị trí file test:** Đặt song song với file component/store/service (vd: `DropZone.test.tsx`, `createStore.test.ts`, `error.test.ts`, `sidecar.test.ts`, `SubtitleStudio.test.tsx`, `VirtualizedSegmentList.test.tsx`, `CharacterHotkeyBar.test.tsx`, `CPSIndicator.test.tsx`, `useStudioHotkeys.test.ts`, `ExportModal.test.tsx`, `export.test.ts`, cùng các target mở rộng `cps.test.ts`).
 - **Mục tiêu kiểm thử tối thiểu:**
   - Kiểm thử thuật toán tính điểm CPS và đổi màu cảnh báo đỏ khi CPS > 20.
   - Kiểm thử bộ phím tắt 1-chạm đổi màu nhân vật (Phím 1 -> Vedal `#98FB98`, Phím 2 -> Neuro `#FFB6C1`, Phím 3 -> Evil `#FF0055`, Phím 4 -> Guest `#FFD700`, Phím 5 -> Chat `#87CEEB`).
@@ -730,10 +735,10 @@ tracing::info!(
   # Build production Vite + TypeScript check
   npm run build             # tsc --noEmit && vite build
 
-  # Chạy Vitest unit & component tests (28 files)
+  # Chạy Vitest unit & component tests (36 files, 667 tests)
   npm run test:vitest       # hoặc: npm run test:run
 
-  # Chạy Node Native contract & AST test runner (49 suites)
+  # Chạy Node Native contract & AST test runner (52 suites, 135 tests)
   npm test                  # node --experimental-strip-types --test src/test/suite.node.test.ts
   ```
 
@@ -741,12 +746,12 @@ tracing::info!(
 
 Mọi Pull Request / Task thực hiện trong Phase 4 phải vượt qua Checklist 6 điểm sau trước khi bàn giao cho `@qa-reviewer`:
 
-- [ ] **Lint & Format Clean:** `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `npm run lint` và `npm run format:check` đều pass với 0 warning.
+- [ ] **Lint & Format Clean:** `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`, `npm run lint` và `npm run format:check` đều pass với 0 warning.
 - [ ] **Type Safe & Build Clean:** `npm run typecheck` và `npm run build` đạt 0 lỗi; không chứa bất kỳ type `any` nào trong frontend.
 - [ ] **Panic Free:** Không có `.unwrap()` hoặc `.expect()` trong source code Rust backend (`clippy::unwrap_used` đã deny).
 - [ ] **Data Contract Adherence:** Khớp 100% các trường dữ liệu và kiểu với Section 5 của `docs/ARCHITECTURE.md` và 48 mã lỗi trong `codes.rs` / `error.ts`.
 - [ ] **Privacy Redaction Confirmed:** Không in bất kỳ token hoặc API key nào ra console hay log file.
-- [ ] **All Tests Passed:** 100% `cargo test --all-targets`, `npm run test:vitest` (`test:run`) và `npm test` đều chuyển màu xanh (PASS).
+- [ ] **All Tests Passed:** 100% `cargo test --manifest-path src-tauri/Cargo.toml --all-targets`, `npm run test:vitest` (`test:run`) và `npm test` đều chuyển màu xanh (PASS).
 
 ---
 *Tài liệu này là Quy chuẩn kỹ thuật chính thức của dự án NeuroClip, đã được `@tech-lead` hoàn thiện trong Phase 3 và đệ trình Product Owner phê duyệt ban hành.*

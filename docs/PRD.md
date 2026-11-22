@@ -2,11 +2,17 @@
 # Dự án: NeuroClip — Desktop App Tự Động Hóa Highlight & Vietsub cho Cộng Đồng Neuro-Sama Vietnam
 
 **Mã tài liệu:** `docs/PRD.md`  
-**Phiên bản:** 1.2.0 (Phase 1: Inception & Discovery — PO Approved & Onboarding Wizard Added)  
+**Phiên bản:** 1.3.0 (Phase 4 Doc Sync — PO Approved Scope Refinements)  
 **Tác giả:** `@product-owner-proxy` & `@lead-architect`  
-**Ngày cập nhật:** 2026-11-05  
-**Trạng thái:** ĐÃ ĐƯỢC PRODUCT OWNER (PO) PHÊ DUYỆT 7/7 NGÃ RẼ KỸ THUẬT TẠI RFC-001; Bổ sung First-Run Onboarding Wizard & Khảo sát Phần cứng thông minh; Sẵn sàng cho Phase 2 (Architecture Design)  
+**Ngày cập nhật:** 2026-11-21 *(gốc PO duyệt Phase 1: 2026-11-05)*  
+**Trạng thái:** ĐÃ ĐƯỢC PRODUCT OWNER (PO) PHÊ DUYỆT 7/7 NGÃ RẼ KỸ THUẬT TẠI RFC-001; Cập nhật phạm vi v1.3.0 theo phê duyệt PO ngày 2026-11-20–2026-11-21 (FCP7 XML `<xmeml version="4">`, defer MP4 Hardsub sang v2, post-roll +15s, `youtube_chat.rs` In-Scope & `twitch_gql.rs`)  
 **Nguyên tắc chỉ đạo:** Single Source of Truth (SSOT) & Zero-Guesswork Policy (`AGENTS.md`)
+
+### Lịch sử Thay đổi (Changelog v1.3.0 — 2026-11-21)
+- **Chuẩn xuất NLE XML:** Chuẩn hóa định dạng xuất sang **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)** tương thích Premiere Pro 2022–2025 và DaVinci Resolve 18–19.
+- **Phạm vi FFmpeg MP4 Hardsub:** Chuyển tính năng render burn-in **FFmpeg MP4 Hardsub** sang **Hậu MVP / v2 (Post-MVP Deferred)**; v1 MVP giữ FFmpeg lossless range slicing (`-c copy`) và xuất CapCut PC Draft JSON (Dual Export `.ass`/`.srt`), `.ass`/`.srt` độc lập, và Premiere Pro XML / FCP7 XML (`<xmeml version="4">`).
+- **Highlight Post-Roll Buffer:** Cập nhật phần mở rộng sau đỉnh chat từ `+8s` lên **`+15s` (`DEFAULT_POST_ROLL_SEC = 15.0`)**.
+- **Phân tích Chat Replay:** Đưa **YouTube Live Chat Replay** (`youtube_chat.rs` qua `yt-dlp`) vào phạm vi **MVP In-Scope**, đồng thời sử dụng module Rust nội bộ **`twitch_gql.rs`** (truy vấn trực tiếp Twitch GQL endpoint thay cho công cụ ngoài).
 
 ---
 
@@ -48,7 +54,7 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 - **Tự động hóa phát hiện Highlight:** Giảm 95% thời gian tìm kiếm khoảnh khắc nhờ phân tích tương quan nhịp độ chat Twitch (Chat Velocity Z-Score), mật độ emote văn hóa và đỉnh năng lượng âm thanh.
 - **Bóc băng & Gán vai chuẩn xác:** Tích hợp mô hình Whisper tối ưu kèm VAD lọc tạp âm, gán nhãn nhân vật (Neuro, Evil, Vedal, Khách) trực quan.
 - **Vietsub chuẩn văn hóa Streamer:** Ứng dụng LLM theo ngữ cảnh khối thoại kết hợp Từ điển Neuro Lore độc quyền và Ma trận đại từ xưng hô, mang lại bản dịch đậm chất giải trí Việt Nam.
-- **Tích hợp sâu với NLE:** Xuất file phụ đề chuyên nghiệp (`.ass`, `.srt`) và xuất thẳng dự án **CapCut PC Draft JSON** / **Premiere XML** một chạm.
+- **Tích hợp sâu với NLE:** Xuất file phụ đề chuyên nghiệp (`.ass`, `.srt`) và xuất thẳng dự án **CapCut PC Draft JSON** / **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)** một chạm.
 
 ---
 
@@ -96,7 +102,8 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
     ├── Nhánh Twitch VOD: Thử tải Chat Replay JSON (~5MB-15MB) & Bóc tách Audio AAC (~400MB)
     │     └── Nếu Chat Replay lỗi (404/rate limit/deleted): Tự động chuyển cấp sang Quét Âm Thanh
     │         kèm Banner: "Chat replay không khả dụng. Đang tự động quét theo Năng lượng Âm thanh..."
-    └── Nhánh YouTube / File Cục Bộ: Tự động bỏ qua Chat, bóc tách audio và chuyển thẳng sang Quét Âm Thanh
+    ├── Nhánh YouTube URL: Thử tải YouTube Live Chat Replay (`youtube_chat.rs` qua `yt-dlp`); nếu video không có live chat replay, tự động fallback sang Quét Âm Thanh không gián đoạn
+    └── Nhánh File Cục Bộ: Tự động bỏ qua Chat, bóc tách audio và chuyển thẳng sang Quét Âm Thanh
                  ↓
 [3. Quét Highlight Đa Phương Thức]
     ├── Nhánh Chat: Chat Velocity (Z-Score hiệu chỉnh + ε smoothing) kèm Message Floor (X ≥ 15 msgs/5s),
@@ -122,9 +129,10 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
         (Ủy quyền toàn bộ bố cục phức tạp tùy biến sang CapCut PC Draft)
                  ↓
 [8. Xuất Bản 1-Chạm]
-    ├── Tùy chọn A: Render MP4 Hardsub dùng FFmpeg (sẵn sàng up TikTok ngay)
-    └── Tùy chọn B: Tạo dự án CapCut PC Draft kèm Chiến Lược Phòng Thủ Kép (Dual Export Strategy:
-        luôn tự động xuất kèm file .ass và .srt độc lập vào thư mục dự án)
+    ├── Tùy chọn A: Tạo dự án CapCut PC Draft kèm Chiến Lược Phòng Thủ Kép (Dual Export Strategy:
+    │   luôn tự động xuất kèm file .ass và .srt độc lập vào thư mục dự án)
+    ├── Tùy chọn B: Xuất file .ASS (đủ Styles màu nhân vật) / .SRT độc lập hoặc Premiere Pro XML / FCP7 XML (<xmeml version="4">)
+    └── (Hậu MVP / v2 Deferred: Render MP4 Hardsub burn-in dùng FFmpeg)
 ```
 
 ### 3.2 Luồng 2: Làm Phụ Đề Chuyên Nghiệp Cho Video Dài (Long-form Subbing Pipeline — Persona Linh)
@@ -149,7 +157,7 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
                  ↓
 [6. Xuất Bản Định Dạng Chuyên Nghiệp]
     ├── Xuất file .ASS (đầy đủ Style màu, Font chữ cho Aegisub)
-    └── Xuất file Premiere Pro XML / FCPXML đồng bộ timeline
+    └── Xuất file Premiere Pro XML / FCP7 XML (<xmeml version="4">) đồng bộ timeline
 ```
 
 ### 3.3 Luồng 3: Xử Lý File Video Ngoại Tuyến (Offline Local Ingestion — Persona Huy / All)
@@ -165,13 +173,13 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 | STT | Phân hệ / Tính năng | MVP (In-Scope) | Hậu MVP / v2 (Out-of-Scope) | Rationale & Trade-off |
 |:---:|:---|:---:|:---:|:---|
 | 1 | **Nền tảng Hệ điều hành** | **Windows 10 & Windows 11 (64-bit)**. Tối ưu cho cấu hình máy tính phổ thông tại Việt Nam. | macOS, Linux, Web SaaS. | 98% clipper/subber trong cộng đồng dùng Windows để dựng video (CapCut PC, Premiere, Aegisub). |
-| 2 | **Nguồn Video Đầu vào** | Hỗ trợ URL Twitch VOD, YouTube Video URL, và Kéo thả file video nội bộ (`.mp4`, `.mkv`, `.mov`, `.ts`). Cơ chế Smart Ingestion tự động phân tuyến: YouTube và file cục bộ tự chuyển sang quét âm thanh; Twitch VOD mất chat tự động chuyển cấp không gián đoạn. | Thu phát trực tiếp (Live Stream Recording) thời gian thực đa kênh. | MVP tập trung vào xử lý VOD sau stream để tối ưu độ ổn định và giảm tải tài nguyên mạng. |
-| 3 | **Thu Thập & Phân Tích Chat** | Tải và phân tích Twitch Chat Replay JSON qua GQL endpoint / `TwitchDownloaderCLI` (tin nhắn, tần suất, emote spikes). | Phân tích YouTube Live Chat hoặc Kick Chat. | Kênh `vedal987` trên Twitch là nền tảng livestream chính (>95% nội dung và emote độc quyền). |
+| 2 | **Nguồn Video Đầu vào** | Hỗ trợ URL Twitch VOD, YouTube Video URL, và Kéo thả file video nội bộ (`.mp4`, `.mkv`, `.mov`, `.ts`). Cơ chế Smart Ingestion tự động phân tuyến: Twitch VOD dùng `twitch_gql.rs`; YouTube VOD thử trích xuất YouTube Live Chat qua `youtube_chat.rs`; file cục bộ hoặc VOD không có chat replay tự động chuyển cấp sang quét âm thanh không gián đoạn. | Thu phát trực tiếp (Live Stream Recording) thời gian thực đa kênh. | MVP tập trung vào xử lý VOD sau stream để tối ưu độ ổn định và giảm tải tài nguyên mạng. |
+| 3 | **Thu Thập & Phân Tích Chat** | Tải và phân tích Twitch Chat Replay JSON trực tiếp qua Twitch GQL endpoint (`twitch_gql.rs`) và YouTube Live Chat replay qua `yt-dlp` (`youtube_chat.rs`) — tin nhắn, tần suất, emote spikes; tự động fallback sang Audio RMS khi không khả dụng. | Phân tích Kick Chat hoặc Live Stream Chat thời gian thực. | Kênh `vedal987` trên Twitch là nền tảng chính (>95% nội dung và emote độc quyền), hỗ trợ thêm clip/VOD archive trên YouTube bằng client Rust GQL thuần và `yt-dlp` tích hợp sẵn. |
 | 4 | **Thuật toán Highlight** | Đa phương thức: Tương quan Chat Velocity (Z-Score hiệu chỉnh với $\epsilon$ smoothing) kèm ngưỡng sàn tin nhắn ($X \ge 15$ msgs/5s, Emote Swarm $\ge 35\%$) loại bỏ báo động giả trong khoảng lặng + Đỉnh Năng lượng Âm thanh (Audio Energy RMS) + Bù độ trễ 4.5s. | Nhận diện biểu cảm gương mặt nhân vật 2D qua Computer Vision (CV) hoặc phân tích chuyển động video. | Xử lý Computer Vision ngốn GPU khổng lồ, không hiệu quả với avatar VTuber 2D vốn ít biểu cảm vật lý. |
 | 5 | **Công nghệ Bóc băng (STT)** | Kiến trúc lai (Hybrid): Ưu tiên Cloud Groq Whisper API (tốc độ 200x, phân đoạn Audio Chunking $< 25$MB tuân thủ payload limit) + Tùy chọn Local Faster-Whisper INT8 (<2GB VRAM). Tích hợp Silero VAD, tiền xử lý FFmpeg `loudnorm` limiter chống vỡ tiếng hét, và chế độ Karaoke / Music Mode (`condition_on_previous_text=False`, temperature fallback) phá vỡ lặp từ. | Tự huấn luyện (train from scratch) một mô hình STT mới. | Huấn luyện mô hình STT tốn hàng chục nghìn USD và dữ liệu mẫu khổng lồ; tận dụng base Whisper kèm domain prompting là tối ưu nhất. |
 | 6 | **Dịch thuật Vietsub** | LLM theo ngữ cảnh khối (Sliding Window 20-40 dòng) kết hợp Từ điển Neuro Lore độc quyền và Ma trận xưng hô (MVP v1 triển khai Google Gemini 1.5 Flash BYOK tại `TASK-M4-17`; Claude Haiku / Ollama Local là tùy chọn mở rộng hậu MVP). Tích hợp System Prompt Theatrical Framing, `safetySettings: BLOCK_NONE`, cơ chế Segment-level Defensive Fallback bảo lưu tiếng Anh khi gặp kiểm duyệt, và Prompt-Level AI Condensation cho câu thoại $<1.5$s. | Dịch thuật thời gian thực siêu trễ thấp (<1s) phát trực tiếp lên màn hình stream. | Bài toán làm phụ đề clip VOD cần độ chuẩn xác ngữ nghĩa cao, không yêu cầu độ trễ sub-second. |
 | 7 | **Trình Biên tập Video** | Trình biên tập phụ đề tinh gọn (Lean Subtitle Studio): Preview video, chỉnh sửa text, chỉnh mốc thời gian, gán màu nhân vật, chia layout 9:16 giới hạn ở đúng 2 Fixed Presets: Preset 1 (Center-Crop 9:16) và Preset 2 (Two-stack Top-Bottom 50/50). Tuyệt đối không xây dựng visual compositor/multi-box canvas tùy biến. | Trình dựng phi tuyến tính đa lớp (Full Multi-track NLE) với hàng trăm hiệu ứng chuyển cảnh, keyframe, chỉnh màu LUT như Premiere. | Giữ app siêu nhẹ. Tôn trọng thói quen người dùng sử dụng CapCut PC và Premiere Pro; ủy quyền các thao tác crop phức tạp cho CapCut. |
-| 8 | **Định dạng Xuất bản** | - File phụ đề: `.ass` (chuẩn Aegisub đầy đủ mã màu style nhân vật), `.srt` (UTF-8).<br>- Tích hợp NLE: Thư mục dự án **CapCut PC Draft JSON**, file **Premiere XML**.<br>- Chiến lược Phòng thủ Kép (Dual Export Strategy): Khi xuất CapCut Draft, luôn tự động xuất kèm file `.ass` và `.srt` vào thư mục dự án để dự phòng khi CapCut thay đổi cấu trúc schema.<br>- Xuất video cắt nhanh `.mp4` (FFmpeg lossless copy hoặc hardsub cơ bản). | Tự động đăng tải trực tiếp lên TikTok/YouTube qua API tài khoản người dùng. | Tránh nguy cơ bị khóa tài khoản người dùng do cơ chế chống spam/bản quyền của TikTok/YouTube. |
+| 8 | **Định dạng Xuất bản** | - File phụ đề: `.ass` (chuẩn Aegisub đầy đủ mã màu style nhân vật), `.srt` (UTF-8 with BOM).<br>- Tích hợp NLE: Thư mục dự án **CapCut PC Draft JSON**, file **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)**.<br>- Chiến lược Phòng thủ Kép (Dual Export Strategy): Khi xuất CapCut Draft, luôn tự động xuất kèm file `.ass` và `.srt` vào thư mục dự án để dự phòng khi CapCut thay đổi cấu trúc schema.<br>- Cắt phân đoạn video `.mp4` nhanh bằng FFmpeg lossless stream copy (`-c copy`) phục vụ CapCut Draft / Premiere XML. | - Render xuất video `.mp4` **FFmpeg Hardsub** (burn-in phụ đề trực tiếp — v2 Deferred).<br>- Tự động đăng tải trực tiếp lên TikTok/YouTube qua API tài khoản người dùng. | Tránh nguy cơ bị khóa tài khoản người dùng do cơ chế chống spam/bản quyền của TikTok/YouTube, đồng thời tập trung v1 vào luồng NLE nhẹ thay vì render hardsub. |
 
 ---
 
@@ -241,7 +249,7 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
   - **Scenario 1: Phát hiện đoạn chat bùng nổ emote tiếng cười với ngưỡng sàn (Message Count Floor)**
     - *Given:* Dữ liệu chat có một cửa sổ 5 giây ghi nhận $X(t) = 45 \ge X_{\text{floor}} = 15$ tin nhắn, Z-score hiệu chỉnh $Z_{\text{adj}}(t) = \frac{X(t) - \mu_W(t)}{\sigma_W(t) + \epsilon} \ge 3.0$ với hơn 60% tin nhắn chứa `KEKW`, `LUL`, `OMEGALUL`, `💀` tại mốc thời gian $t = 01:24:30$.
     - *When:* Thuật toán phát hiện highlight hoàn tất quét.
-    - *Then:* Điểm khởi đầu của highlight được tự động tính toán là $t_{\text{start}} = 01:24:30 - 4.5\text{s} - 10\text{s (pre-roll padding)} = 01:24:15.5$ và điểm kết thúc được mở rộng thêm 8 giây sau đỉnh chat.
+    - *Then:* Điểm khởi đầu của highlight được tự động tính toán là $t_{\text{start}} = 01:24:30 - 4.5\text{s} - 10\text{s (pre-roll padding)} = 01:24:15.5$ và điểm kết thúc được mở rộng thêm 15 giây (post-roll buffer, `DEFAULT_POST_ROLL_SEC = 15.0`) sau đỉnh chat.
   - **Scenario 2: Triệt tiêu cảnh báo giả trong giai đoạn yên ắng (Lull Period False Positive Suppression)**
     - *Given:* Stream đang trong khoảng lặng yên ắng, số tin nhắn trong cửa sổ 5 giây tăng nhẹ từ 1 lên 4 tin nhắn ($X(t) = 4$), khiến độ lệch chuẩn $\sigma_W(t) \approx 0.1$.
     - *When:* Thuật toán quét highlight tính toán điểm số.
@@ -252,10 +260,14 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 - **Tôi muốn:** Hệ thống tự động nhận diện và phân tuyến quét các đoạn âm lượng tăng vọt (tiếng Vedal hét, tiếng cười lớn của Neuro, nhạc dồn dập) mà không bắt buộc người dùng cấu hình thủ công,
 - **Để tôi:** Luôn trích xuất được highlight ngay cả khi không có dữ liệu chat mạng xã hội.
 - **Tiêu chí nghiệm thu:**
-  - **Scenario 1: Tự động chuyển tuyến quét âm thanh cho YouTube URL và file cục bộ (Zero-Prompt Auto-Routing)**
-    - *Given:* Video đầu vào là YouTube URL hoặc file video cục bộ (`.mp4`, `.mkv`, `.mov`, `.ts`) không có dữ liệu Twitch Chat Replay.
+  - **Scenario 1: Tự động phân tuyến cho file cục bộ và YouTube URL không cần cấu hình thủ công (Zero-Prompt Auto-Routing)**
+    - *Given:* Video đầu vào thuộc một trong hai nhánh:
+      - *Trường hợp A — File video cục bộ (`.mp4`, `.mkv`, `.mov`, `.ts`):* Tệp video ngoại tuyến trên máy người dùng (ví dụ bản ghi OBS), không có nguồn chat trực tuyến.
+      - *Trường hợp B — YouTube URL:* Liên kết video/VOD YouTube có thể có hoặc không có YouTube Live Chat Replay.
     - *When:* Người dùng nhấn "Bắt đầu Phân tích".
-    - *Then:* Hệ thống tự động bỏ qua công đoạn tải chat mà không cần hiển thị hộp thoại xác nhận hay yêu cầu người dùng bật thủ công; tự động kích hoạt bộ quét Audio Energy Peaks (RMS) và trả về danh sách các phân đoạn vượt ngưỡng 2.5 độ lệch chuẩn âm lượng kèm timestamp chính xác.
+    - *Then:*
+      - *Với file video cục bộ:* Hệ thống tự động bỏ qua công đoạn tải chat ngay lập tức mà không cần hiển thị hộp thoại xác nhận hay yêu cầu người dùng bật thủ công; kích hoạt thẳng bộ quét Audio Energy Peaks (RMS) và trả về danh sách các phân đoạn vượt ngưỡng 2.5 độ lệch chuẩn âm lượng kèm timestamp chính xác.
+      - *Với YouTube URL:* Hệ thống tự động thử tải YouTube Live Chat Replay thông qua `youtube_chat.rs` (`yt-dlp`); nếu video có live chat replay thì phân tích kết hợp bình thường, còn nếu video không có live chat replay (`ERR_INGEST_CHAT_UNAVAILABLE`) thì tự động fallback sang bộ quét Audio Energy Peaks (RMS) mà không cần hỏi người dùng, trả về danh sách các phân đoạn vượt ngưỡng 2.5 độ lệch chuẩn âm lượng kèm timestamp chính xác.
   - **Scenario 2: Tự động hạ cấp phòng vệ (Graceful Degradation) khi Twitch Chat Replay gặp sự cố**
     - *Given:* Người dùng nhập link Twitch VOD nhưng Chat Replay không khả dụng (gặp lỗi HTTP 404, VOD bị xóa chat replay, API Twitch bị rate-limit, hoặc file chat rỗng).
     - *When:* Module tải chat phát hiện lỗi và trả về mã lỗi hoặc dữ liệu chat rỗng.
@@ -329,7 +341,7 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 - **Để:** Câu từ ngắn gọn, hóm hỉnh, sử dụng các từ ngữ thịnh hành của giới trẻ Việt Nam mà vẫn an toàn với các API kiểm duyệt nội dung.
 - **Tiêu chí nghiệm thu:**
   - **Scenario 1: Áp dụng preset dịch TikTok Gen Z kèm Theatrical Framing**
-    - *Given:* Người dùng chọn Preset dịch `"TikTok Gen Z Trend"` (tham số `style_preset` và danh sách khách mời `cast_members` được lên lịch mở rộng trong `TranslateVietsubOptions` tại `TASK-M4-18`; định danh enum cụ thể trong Rust/TS sẽ được chốt khi triển khai `M4-18`).
+    - *Given:* Người dùng chọn Preset dịch `"TikTok Gen Z Trend"` (đã chốt và hoàn thành tại `TASK-M4-18`: TypeScript dùng `StylePreset` — `'TikTok Gen Z Trend' | 'Formal Subber' | 'tiktok_gen_z' | 'formal_subber'` — cùng `TranslateVietsubOptions.stylePreset` và `TranslateVietsubOptions.castMembers` tại `src/types/translation.ts`; Rust dùng enum `StylePreset` — `TikTokGenZ` / `FormalSubber` tại `src-tauri/src/translation/pronoun_matrix.rs` — cùng tham số `style_preset` và `cast_members` trong lệnh `translate_vietsub` tại `src-tauri/src/commands/translation_cmd.rs`).
     - *When:* Hệ thống gửi prompt kèm khai báo Theatrical Framing ("Satirical, comedic dialogue between fictional AI personas for an entertainment parody show") để dịch các câu châm biếm của Neuro.
     - *Then:* Bản dịch khéo léo lồng ghép các từ ngữ tự nhiên như "chê", "hết cứu", "bất lực", "toang", "cook rồi" mà không bị bộ lọc an toàn chặn nhầm.
 

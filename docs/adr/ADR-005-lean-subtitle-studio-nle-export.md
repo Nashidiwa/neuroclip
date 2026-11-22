@@ -25,9 +25,10 @@ NeuroClip định vị là **Cầu nối Tối ưu Hóa Quy Trình (Workflow Acc
 - **Xuất Bản Trực Tiếp:**
   - File `.ass` (Advanced SubStation Alpha): Chuẩn mực cao nhất cho Aegisub, lưu giữ 100% mã màu, font chữ, kích thước và viền đổ bóng cho từng nhân vật.
   - File `.srt` (SubRip UTF-8): Định dạng phổ thông tương thích với mọi nền tảng video.
-  - File **Premiere Pro XML / FCPXML**: Nhập trực tiếp timeline và các đoạn cắt vào Adobe Premiere Pro.
+  - File **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)**: Nhập trực tiếp timeline và các đoạn cắt vào Adobe Premiere Pro và DaVinci Resolve *(chuẩn định danh XML trao đổi NLE)*.
   - Thư mục dự án **CapCut PC Draft JSON**: Sinh ra cấu trúc thư mục `draft_content.json` của CapCut PC, cho phép người dùng mở CapCut lên là có sẵn video đã cắt kèm track phụ đề tương ứng.
 - **Chiến Lược Phòng Thủ Kép (Dual Export Strategy):** Do CapCut thường xuyên thay đổi cấu trúc schema nội bộ của file JSON qua các bản cập nhật, khi người dùng chọn xuất CapCut Draft, ứng dụng **luôn tự động xuất kèm file `.ass` và `.srt` độc lập** vào thư mục dự án để làm phương án dự phòng an toàn tuyệt đối.
+- **Phạm vi Xuất Video MP4 Hardsub (Cập nhật PO 2026-11-20):** Tính năng render burn-in **FFmpeg MP4 Hardsub** được chuyển sang **Hậu MVP / v2 (Post-MVP Deferred)**; v1 tập trung vào xuất CapCut PC Draft JSON (kèm Dual Export `.ass`/`.srt`), `.ass`/`.srt` độc lập, và Premiere Pro XML / FCP7 XML (`<xmeml version="4">`).
 
 ## Hệ quả & Đánh đổi
 - **Tích cực:** Giữ app siêu nhẹ, bàn giao nhanh giá trị cốt lõi (highlight + Vietsub chuẩn lore), tận dụng tối đa thế mạnh dựng phim của CapCut và Premiere.

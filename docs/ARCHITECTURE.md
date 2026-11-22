@@ -2,9 +2,9 @@
 # Dự án: NeuroClip — Windows Desktop Application
 
 **Mã tài liệu:** `docs/ARCHITECTURE.md`  
-**Phiên bản:** 1.0.0 (Phase 2: Architecture Design & Data Contracts)  
+**Phiên bản:** 1.0.0 (Phase 2: Architecture Design & Data Contracts — Đã đồng bộ Phase 4 `M4-01..M4-25`)  
 **Chủ trì:** `@lead-architect`  
-**Căn cứ pháp lý:** Phê duyệt của Product Owner ngày 2026-11-05 trên 7 quyết định kỹ thuật RFC-001 (`ADR-001` đến `ADR-007`), phê duyệt ngày 2026-11-16 cho Pure Rust `tract-onnx` Silero VAD (`RFC-002` $\rightarrow$ `ADR-008`), và `docs/PRD.md` (v1.2.0)  
+**Căn cứ pháp lý:** Phê duyệt của Product Owner ngày 2026-11-05 trên 7 quyết định kỹ thuật RFC-001 (`ADR-001` đến `ADR-007`), phê duyệt ngày 2026-11-16 cho Pure Rust `tract-onnx` Silero VAD (`RFC-002` $\rightarrow$ `ADR-008`), và `docs/PRD.md` (v1.3.0)  
 **Nguyên tắc chỉ đạo:** Single Source of Truth (SSOT), Zero-Guesswork Policy, Memory Safety, Defensive Fault-Tolerance  
 
 ---
@@ -77,7 +77,7 @@ graph TD
     end
 
     subgraph SIDECARS ["TẦNG CÔNG CỤ DÒNG LỆNH PHỤ TRỢ (Portable Binaries)"]
-        SC_FFmpeg["ffmpeg.exe (Audio Extract, RMS Energy, Range Slicing, Hardsub)"]
+        SC_FFmpeg["ffmpeg.exe (Audio Extract, RMS Energy, Range Slicing)"]
         SC_YtDlp["yt-dlp.exe (Stream URL Extractor, Chat Replay GQL Downloader)"]
         SC_Whisper["faster-whisper-worker (Local INT8 Fallback, Optional)"]
     end
@@ -113,25 +113,26 @@ graph TD
 
 ### 3.1 Tầng Giao diện Người dùng (Presentation Layer - React/TypeScript)
 - **Công nghệ nền tảng:** React 18.3, TypeScript 5.6 (Strict Mode, zero-any), Tailwind CSS 3.4, Lucide Icons, Vite 4.3.
-- **Trình quản lý Trạng thái (State Management):** Toàn bộ 7 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`) được xây dựng trên **`src/stores/createStore.ts`** (`React.useSyncExternalStore`) với **API tương thích Zustand** (`createStore`, `create`, `getState`, `getInitialState`, `setState`, `subscribe`, memoized selector + `equalityFn`), **sẵn sàng tương thích để chỉnh sửa và nâng cấp/triển khai `zustand` ở các task sau này (`TASK-M4-20+`) khi được chốt cài gói `zustand`**.
+- **Trình quản lý Trạng thái (State Management):** Toàn bộ 8 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`, `useStudioStore.ts`) được xây dựng trên **`src/stores/createStore.ts`** (`React.useSyncExternalStore`) với **API tương thích Zustand** (`createStore`, `create`, `getState`, `getInitialState`, `setState`, `subscribe`, memoized selector + `equalityFn`). Các task `M4-20..M4-25` chạy ổn định trực tiếp trên `createStore.ts` (không cài gói `zustand` rời); `useHardwareStore.ts` thuộc `Target M4-27`.
 - **Hiện trạng Shell & Lộ trình thành phần giao diện:**
-  - `main.tsx` bọc `<App />` trong `<GlobalErrorBoundary>`; `App.tsx` hiện tại render Acrylic Dark Theme cùng shell 3 tab tối giản (`overview`, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`) không gọi IPC lúc mount.
-  - Các màn hình Phase 4 kế tiếp (`M4-20..M4-28`):
-    1. `OnboardingWizardModal` (`M4-28`) & `HardwareRecommendation` (`M4-27`): Hiển thị ở lần khởi chạy đầu tiên; đề xuất chế độ (Cloud, Hybrid, Local) và bảng nhập/kiểm tra API key.
+  - `main.tsx` bọc `<App />` trong `<GlobalErrorBoundary>`; `App.tsx` hiện tại render Acrylic Dark Theme cùng shell 4 tab tối giản (`overview`, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`, `studio` gắn `SubtitleStudio`) không gọi IPC lúc mount.
+  - Các thành phần UI trọng tâm Phase 4 (`M4-06..M4-28`):
+    1. `OnboardingWizardModal` *(Target `M4-28`)* & `HardwareRecommendation` *(Target `M4-27`)*: Hiển thị ở lần khởi chạy đầu tiên; đề xuất chế độ (Cloud, Hybrid, Local) và bảng nhập/kiểm tra API key.
     2. `IngestionDashboard` & `DropZone` *(đã triển khai tại `M4-06`/`M4-07`)*: Hỗ trợ dán URL (Twitch/YouTube) kèm Audio-First hoặc kéo thả file video cục bộ.
-    3. `HighlightViewer` *(đã triển khai tại `M4-12`)*: Danh sách thẻ highlight xếp theo điểm số, lý do nổi bật và bookmark.
-    4. `SubtitleStudio` (`M4-20..M4-23`): Trình soạn thảo phụ đề tinh gọn với HTML5 Video/`asset://` canvas, danh sách ảo hóa, bàn phím số 1-chạm đổi màu theo chuẩn **PO Option 1** (`1`: Vedal `#98FB98`, `2`: Neuro `#FFB6C1`, `3`: Evil `#FF0055`, `4`: Guest `#FFD700`, `5`: Chat `#87CEEB`), và đèn cảnh báo CPS.
+    3. `HighlightViewer` *(đã triển khai tại `M4-12`)*: Danh sách thẻ highlight xếp theo điểm số, lý do nổi bật và bookmark *(nối end-to-end với `sliceVideoSegment` $\rightarrow$ `useStudioStore` tại `TASK-M4-29B`)*.
+    4. `SubtitleStudio` *(đã triển khai tại `M4-20..M4-23`, nối `ExportModal` tại `M4-25`)*: Trình soạn thảo phụ đề tinh gọn với HTML5 Video/`asset://` canvas, danh sách ảo hóa custom `useVirtualizer`, bàn phím số 1-chạm đổi màu theo chuẩn **PO Option 1** (`1`: Vedal `#98FB98`, `2`: Neuro `#FFB6C1`, `3`: Evil `#FF0055`, `4`: Guest `#FFD700`, `5`: Chat `#87CEEB`), và đèn cảnh báo CPS.
+    5. `ExportModal` *(đã triển khai tại `M4-25`, `src/components/export/ExportModal.tsx`)*: Giao diện xuất **CapCut PC Draft JSON** (kèm Dual Export `.ass`/`.srt`), `.ass` (UTF-8 with BOM), `.srt` (UTF-8 with BOM); xuất **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)** & export progress bar (`export:progress`) thuộc `Target M4-26`.
 
 ### 3.2 Tầng Lõi Điều phối Hệ thống (Tauri v2 Rust Core)
 Được viết bằng Rust để đảm bảo **an toàn bộ nhớ tuyệt đối** và **tốc độ thực thi tối đa**:
-1. **`HardwareProbeEngine` (`config/hardware.rs`):** Đọc thông số CPU, RAM khả dụng, tên card đồ họa và dung lượng VRAM thực tế qua Windows Registry (`qwMemorySize`) / `sysinfo` trong vòng dưới 200ms *(phần backend sớm của `M4-27`; UI onboarding thuộc `M4-27/M4-28`)*.
+1. **`HardwareProbeEngine` (`config/hardware.rs`):** Đọc thông số CPU, RAM khả dụng, tên card đồ họa và dung lượng VRAM thực tế qua Windows Registry (`qwMemorySize`) / Win32 `GlobalMemoryStatusEx` trong vòng dưới 200ms *(phần backend sớm của `M4-27`; UI onboarding thuộc `M4-27/M4-28`)*.
 2. **`SubprocessSupervisor` (`sidecar/{mod.rs, supervisor.rs, kill_switch.rs}`):** Quản lý vòng đời các tiến trình con (`ffmpeg`, `yt-dlp`, `whisper.cpp`, `faster-whisper-worker`) qua `tokio::process::Command` với `.kill_on_drop(true)`, Windows Job Objects (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`), bounded 1,000-line channels, và event `sidecar:progress`.
 3. **`LocalImporter` & `CustomProtocol` (`ingestion/local_importer.rs`, `core/custom_protocol.rs`):** Nạp file video nội bộ (`.mp4`, `.mkv`, `.webm`, `.mov`, `.ts`, `.flv`), trích xuất 16kHz PCM WAV không chạm mạng, và đăng ký giao thức bất đồng bộ `asset://` qua `register_asynchronous_uri_scheme_protocol` hỗ trợ HTTP `206 Partial Content` Range streaming.
 4. **`HighlightScoringEngine` (`highlight/*`):** Triển khai thuật toán Z-Score hiệu chỉnh kèm Message Floor (`X >= 15`), lọc Emote Swarm FNV-1a, Audio RMS 500ms, phân cụm NMS và bù độ trễ stream `-4.5s - 10s`.
 5. **`AudioSlicingCoordinator` (`ingestion/range_slicer.rs`, `stt/vad_bridge.rs`):** Điều phối HTTP Range slicing (`-ss / -to -c copy`) và cắt audio thành các block `< 20MB` tại khoảng nghỉ tự nhiên để gửi tới Groq Cloud API qua `reqwest`.
 
 ### 3.3 Tầng Công cụ Phụ trợ Giám sát (Managed Sidecars Subsystem)
-- Dữ liệu dự án, cache và logs lưu tại `%LOCALAPPDATA%/NeuroClip/`; cấu hình `app_config.json` lưu tại `%APPDATA%/NeuroClip/`. Các binary phụ trợ (`ffmpeg.exe`, `yt-dlp.exe`, tùy chọn `whisper.cpp` / `faster-whisper-worker`) được định vị qua PATH hoặc `%LOCALAPPDATA%/NeuroClip/bin/` / `%APPDATA%/NeuroClip/bin/`:
+- Dữ liệu dự án, cache và logs lưu tại `%LOCALAPPDATA%/NeuroClip/`; cấu hình `app_config.json` lưu tại `%APPDATA%/NeuroClip/`. Các binary phụ trợ (`ffmpeg.exe`, `yt-dlp.exe`, tùy chọn `whisper.cpp` / `faster-whisper-worker`) được định vị thống nhất qua các lớp fallback: biến môi trường override (`NEUROCLIP_FFMPEG_PATH`, `NEUROCLIP_FFPROBE_PATH`, `NEUROCLIP_YTDLP_PATH`, `NEUROCLIP_*`), `AppConfig.sidecar_paths`, thư mục sidecar cục bộ (`%APPDATA%/NeuroClip/bin/` và `%LOCALAPPDATA%/NeuroClip/bin/`, cùng `%LOCALAPPDATA%/NeuroClip/sidecars/<tool>/` cho local STT workers), thư mục đóng gói `resources/sidecars/`, và `PATH` hệ thống *(lưu ý: `src-tauri/tauri.conf.json` không dùng `externalBin` / `src-tauri/bin/`)*.
   - `ffmpeg.exe` (Static build): Trích xuất audio stream, áp dụng `loudnorm` limiter, tính toán RMS và cắt phân đoạn HTTP range request.
   - `yt-dlp.exe`: Trích xuất URL stream m3u8 và tải chat replay JSON (kèm cookie/UA anti-bot).
 - **Sidecar Auto-Updater *(Target `TASK-M4-29`)*:** Định kỳ kiểm tra GitHub Releases của `yt-dlp`, xác thực SHA256 và atomic swap khi YouTube/Twitch thay đổi thuật toán.
@@ -141,16 +142,17 @@ graph TD
 - **STT Pipeline (`TASK-M4-15`, `TASK-M4-16`):**
   - **Cloud BYOK (`stt/groq_client.rs`):** Groq Whisper Large-v3, tiền xử lý FFmpeg `loudnorm=I=-16:TP=-1.5:LRA=11` (`stt/audio_prep.rs`), Karaoke Mode (`condition_on_previous_text=false`), chunk `< 20MB`, phát `stt:progress` camelCase & `stt:chunk`.
   - **Local Offline (`stt/faster_whisper_worker.rs`, `stt/whisper_sidecar.rs`, `stt/model_manager.rs`):** Hỗ trợ `start_faster_whisper_transcription` kèm `GuardrailPolicy` (`"auto_downgrade" | "strict_reject"`, ngưỡng VRAM `< 2500MB`) và xác thực SHA-256 streaming (từ chối file rỗng).
-- **Translation & Diarization Pipeline (`TASK-M4-17` hiện hành & `TASK-M4-18` mục tiêu):**
-  - **Đã triển khai (`M4-17`, `translation/gemini_client.rs`, `prompt_builder.rs`):** Google Gemini 1.5 Flash BYOK, phân khối 25–35 dòng kèm Sliding Context Window, **Theatrical Framing System Prompt**, `safetySettings: BLOCK_NONE`, và Defensive Safety Fallback (`ERR-07`).
-  - **Kế hoạch `M4-18` (PO Approved Hybrid):** Tích hợp `lore_dictionary.rs` (12 thuật ngữ Lore), `pronoun_matrix.rs` (ma trận xưng hô chuẩn) và `diarization.rs` theo hướng **Hybrid** (LLM context reasoning + deterministic normalizer/validator + heuristic pre-hint/fallback).
+- **Translation & Diarization Pipeline *(Đã triển khai `M4-17..M4-19`)*:**
+  - **Core LLM (`M4-17`, `translation/gemini_client.rs`, `prompt_builder.rs`):** Google Gemini 1.5 Flash BYOK, phân khối 25–35 dòng kèm Sliding Context Window, **Theatrical Framing System Prompt**, `safetySettings: BLOCK_NONE`, và Defensive Safety Fallback (`ERR-07`).
+  - **Lore, Pronoun & Hybrid Diarization (`M4-18`, `translation/lore_dictionary.rs`, `pronoun_matrix.rs`, `diarization.rs`):** 12 thuật ngữ Swarm Lore (`PRD.md §6.2`), ma trận xưng hô 6 vai chuẩn + hồ sơ collab `cast_members`, và động cơ Hybrid Diarization 3 tầng (LLM context + deterministic normalizer + heuristic fallback).
+  - **Smart Line-Wrap & CPS Optimizer (`M4-19`, `translation/line_wrapper.rs`, `cps_optimizer.rs`):** Ngắt dòng bảo toàn từ ghép tiếng Việt ($\le 42$ ký tự 16:9 / $\le 26$ ký tự 9:16), tối ưu Time Borrowing ($\le 800\text{ms}$, khoảng đệm $\ge 50\text{ms}$) và parity với `src/utils/text_wrap.ts`.
 
 ### 3.5 Tầng Xuất bản & Tích hợp NLE (Export & Integration Subsystem)
-- **CapCut PC Draft Generator:** Sinh cấu trúc thư mục chuẩn của CapCut Windows:
+- **CapCut PC Draft Generator *(Đã triển khai `M4-25`: `export/capcut_draft.rs`, `export/capcut_schema.rs`, `commands/export_cmd.rs`)*:** Sinh cấu trúc thư mục chuẩn của CapCut Windows:
   - `draft_content.json`: Chứa timeline video đã cắt, track âm thanh, và track phụ đề văn bản hoàn chỉnh.
   - `draft_meta_info.json`: Metadata phiên làm việc của CapCut.
-- **Dual Export Safeguard:** Luôn tự động xuất kèm file phụ đề độc lập `.ass` (chuẩn màu style nhân vật cho Aegisub) và `.srt` (UTF-8) vào cùng thư mục dự án để người dùng không bao giờ mất dữ liệu nếu CapCut cập nhật phiên bản mới.
-- **Premiere Pro XML Exporter:** Sinh file XML chuẩn Final Cut Pro 7 / Premiere XML tương thích 100% với Adobe Premiere Pro và DaVinci Resolve.
+- **Dual Export Safeguard & `.ASS`/`.SRT` *(Đã triển khai `M4-24..M4-25`: `export/{mod.rs, ass_exporter.rs, srt_exporter.rs}`, facade `stt/subtitle_export.rs`)*:** Luôn tự động xuất kèm file phụ đề độc lập `.ass` (chuẩn màu style nhân vật cho Aegisub, `PlayResX`/`PlayResY` theo `target_layout`, UTF-8 with BOM) và `.srt` (UTF-8 with BOM) vào cùng thư mục dự án để người dùng không bao giờ mất dữ liệu nếu CapCut cập nhật phiên bản mới.
+- **Premiere Pro XML Exporter *(Target `M4-26`: `export/premiere_xml.rs`, `commands/export_cmd.rs`)*:** Sinh file XML chuẩn Final Cut Pro 7 / Premiere XML (`<xmeml version="4">`) tương thích 100% với Adobe Premiere Pro và DaVinci Resolve, kèm streaming tiến độ `export:progress` về `ExportModal.tsx`.
 
 ---
 
@@ -167,19 +169,20 @@ sequenceDiagram
     participant Sys as Windows OS / WMI
 
     User->>UI: Khởi động NeuroClip lần đầu
-    UI->>Rust: invoke("probe_hardware_capabilities")
-    Rust->>Sys: Truy vấn CPU Cores, RAM, GPU DXGI & VRAM
+    UI->>Rust: invoke("detect_hardware") / invoke("get_hardware_profile")
+    Rust->>Sys: Truy vấn CPU Cores, RAM, GPU Registry & VRAM
     Sys-->>Rust: Trả về thông số phần cứng
     Rust->>Rust: Tính toán đề xuất Profile (Cloud / Hybrid / Local)
     Rust-->>UI: hardware_profile.json
     UI->>User: Hiển thị Wizard + Gợi ý cấu hình tối ưu (vd: Hybrid)
     User->>UI: Nhập Groq Key & Gemini Key -> Bấm "Test Connection"
-    UI->>Rust: invoke("test_api_credentials", keys)
-    Rust->>Rust: Gửi request kiểm tra tới Groq & Gemini endpoint
+    UI->>Rust: invoke("test_gemini_connection", { apiKey })
+    Note over UI,Rust: (Groq API key test thuộc mở rộng M4-28 nếu bổ sung)
+    Rust->>Rust: Gửi request kiểm tra tới Gemini endpoint
     Rust-->>UI: Xác nhận thành công (Status 200 OK)
     User->>UI: Bấm "Hoàn tất & Bắt đầu Sáng tạo"
-    UI->>Rust: invoke("save_user_settings", profile)
-    Rust-->>UI: Lưu %APPDATA%/NeuroClip/config.json
+    UI->>Rust: invoke("save_app_config", { config })
+    Rust-->>UI: Lưu %APPDATA%/NeuroClip/app_config.json
     UI->>User: Chuyển vào Màn hình chính Dashboard
 ```
 
@@ -235,7 +238,7 @@ sequenceDiagram
         FFmpeg-->>Rust: Trả về RMS energy array
         Rust->>Rust: Nhận diện đỉnh biên độ âm lượng (Audio Spikes)
     end
-    Rust->>Rust: Tổng hợp điểm Score_final -> Xếp hạng top 15 highlight
+    Rust->>Rust: Tổng hợp điểm Score_final -> Xếp hạng top 20 highlight (DEFAULT_MAX_CLUSTERS = 20)
     Rust-->>UI: highlight_clusters.json
     UI->>UI: Render danh sách highlight cards kèm lý do và preview
 ```
@@ -302,13 +305,13 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Người dùng
-    participant UI as Export Dialog
+    participant UI as ExportModal (ExportModal.tsx)
     participant Rust as NLE Export Generator (Rust)
     participant Disk as Ổ đĩa máy tính (%LOCALAPPDATA%)
     participant CapCut as Ứng dụng CapCut PC
 
     User->>UI: Chọn "Xuất sang CapCut PC Draft"
-    UI->>Rust: invoke("export_capcut_draft", project_data)
+    UI->>Rust: invoke("export_capcut_draft", { project, options })
     Rust->>Disk: Tìm đường dẫn CapCut Draft: %LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft/
     Rust->>Disk: Tạo thư mục dự án mới: `NeuroClip_Highlight_20261105/`
     Rust->>Disk: Ghi file `draft_content.json` (Video track + Subtitle text track + Material styles)
@@ -326,19 +329,18 @@ sequenceDiagram
 
 Tất cả các giao tiếp giữa Rust Backend và TypeScript Frontend, cũng như các tệp lưu trữ trên đĩa, đều phải tuân thủ nghiêm ngặt các JSON Schemas có kiểu tĩnh dưới đây:
 
-### 5.0 Hợp đồng IPC Đã Chốt (`M1–M3`) & Mở rộng Mục tiêu (`M4-18`)
+### 5.0 Hợp đồng IPC Đã Chốt (`M4-01..M4-25`) & Mở rộng Mục tiêu (`M4-26+`)
 
-- **Các Tauri IPC Commands & Events trọng tâm đã triển khai (`M4-01..M4-17`):**
+- **Các Tauri IPC Commands & Events trọng tâm đã triển khai (`42` commands across `10` modules, `M4-01..M4-25`):**
   - `import_local_video(filePath, customCacheDir?, taskId?) -> VodManifest` (`commands/ingest_cmd.rs`, `services/ipc/ingestion.ts`) cùng giao thức `asset://` Range streaming (`206 Partial Content`, `core/custom_protocol.rs`).
   - `start_faster_whisper_transcription(clipId, audioPath, model?, quantization?, device?, guardrailPolicy?) -> TranscriptSegmentsContainer` (`commands/stt_cmd.rs`, `services/ipc/stt.ts`), với `GuardrailPolicy = "auto_downgrade" | "strict_reject"`.
   - `transcribe_highlight_clip(clipId, audioPath, apiKey?, isMusicMode) -> TranscriptSegmentsContainer` (`commands/stt_cmd.rs`, `stt/groq_client.rs`).
-  - `translate_vietsub(clipId, container, apiKey?, model?) -> TranscriptSegmentsContainer` (`commands/translation_cmd.rs`, `M4-17`) và `TranslateVietsubOptions` hiện hành trong `src/types/translation.ts`: `{ apiKey?, model?, chunkSize?, contextWindowSize? }`.
+  - `translate_vietsub(clipId, container, apiKey?, model?, stylePreset?, castMembers?) -> TranscriptSegmentsContainer` (`commands/translation_cmd.rs`, `M4-17..M4-18`), kèm `TranslateVietsubOptions` trong `src/types/translation.ts` đã triển khai đầy đủ `stylePreset` (`"TikTok Gen Z Trend"` | `"Formal Subber"`) và `castMembers` tại `TASK-M4-18`.
+  - `wrap_vietnamese_subtitles` & `optimize_transcript_cps` (`commands/translation_cmd.rs`, `M4-19`) cho ngắt dòng bảo toàn từ ghép tiếng Việt và tối ưu Time Borrowing.
+  - `export_subtitles_ass`, `export_subtitles_srt`, `export_subtitle_project`, `export_subtitles_project_ass`, `export_subtitles_project_srt`, và `export_capcut_draft(project, options)` (`commands/export_cmd.rs`, `services/ipc/export.ts`, `src/types/export.ts`, `M4-24..M4-25`).
   - **Kênh sự kiện đã nối (`CONVENTIONS.md` §4.2):** `sidecar:progress` (`{ task_id, percentage, current_fps, eta_sec }`), `ingest:progress`, `chat:progress`, `chat:fallback`, `slice:progress`, `stt:progress` (camelCase `{ taskId, stage, percent, etaSec?, currentChunk, totalChunks }`), `stt:chunk` (snake_case `{ clip_id, chunk_index, segment }`), `translation:progress` (camelCase `{ clipId, translatedCount, totalCount }`).
-- **Mở rộng Mục tiêu đã được PO phê duyệt cho `TASK-M4-18` (Vấn đề 3 Option 1 — chưa triển khai trước `M4-18`):**
-  - Bổ sung vào `TranslateVietsubOptions` / `translate_vietsub` tại `TASK-M4-18`:
-    - `cast_members`: cấu hình danh sách thành viên/khách mời tham gia stream (ví dụ `Anny`, `Camila`, `Filian`) phục vụ suy luận vai và ánh xạ đại từ xưng hô.
-    - `style_preset`: tùy chọn phong cách dịch tương ứng hai preset của `PRD.md` US4.2 (**`"TikTok Gen Z Trend"`** vs **`"Formal Subber"`**).
-  - *Lưu ý Zero-Guesswork:* Định danh chuỗi enum chính xác trong Rust/TypeScript và cấu trúc phần tử chi tiết của `cast_members` sẽ được chốt chính thức khi triển khai `TASK-M4-18`.
+- **Mục tiêu kế tiếp (`TASK-M4-26`):**
+  - Bổ sung `export_premiere_xml` (`export/premiere_xml.rs`, chuẩn FCP7 XML `<xmeml version="4">`) và event streaming **`export:progress`** (`{ projectId, percent, currentStep }`) kết nối progress bar trên `ExportModal.tsx`.
 
 ### 5.1 `hardware_profile.json`
 Mô tả thông số phần cứng được phát hiện và đề xuất cấu hình của Onboarding Wizard:
@@ -528,7 +530,7 @@ Danh sách các cụm khoảnh khắc highlight được phát hiện và xếp 
 *(Ghi chú: Trong `WordTiming`, trường `probability` hỗ trợ alias `confidence` khi deserialize; trường `words` được bỏ qua khi rỗng qua `skip_serializing_if = "Vec::is_empty"`.)*
 
 ### 5.6 `subtitle_project.json`
-Dự án phụ đề tổng thể được lưu trên máy của người dùng (`src-tauri/src/stt/subtitle_export.rs`):
+Dự án phụ đề tổng thể được lưu trên máy của người dùng (nguồn chính: `src-tauri/src/export/mod.rs`; facade tương thích ngược: `src-tauri/src/stt/subtitle_export.rs`):
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -566,7 +568,7 @@ Dự án phụ đề tổng thể được lưu trên máy của người dùng 
 }
 ```
 
-**Bảng màu `speaker_styles` chuẩn (PO Option 1 — đồng bộ `subtitle_export.rs`, `theme.ts`, `tailwind.config.js`, `PRD.md` §6.1 & `ADR-006`):**
+**Bảng màu `speaker_styles` chuẩn (PO Option 1 — đồng bộ `export/mod.rs` [facade `stt/subtitle_export.rs`], `export/ass_exporter.rs`, `theme.ts`, `tailwind.config.js`, `PRD.md` §6.1 & `ADR-006`):**
 - `neuro`: `#FFB6C1` (ASS `&H00C1B6FF&`)
 - `vedal`: `#98FB98` (ASS `&H0098FB98&`)
 - `evil`: `#FF0055` (ASS `&H005500FF&`)

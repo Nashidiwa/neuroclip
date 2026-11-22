@@ -2,8 +2,8 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
-**Phiên bản:** 2.2.0 (Phase 4: Implementation & Verification — M4.1–M4.6 Completed: TASK-M4-01..M4-23)  
-**Ngày cập nhật:** 2026-11-20  
+**Phiên bản:** 2.3.0 (Phase 4: Implementation & Verification — M4.1–M4.6 + M4.7 [2/3] Completed: TASK-M4-01..M4-25; Stabilization P0–P2 Done)  
+**Ngày cập nhật:** 2026-11-21  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`.
 
@@ -15,8 +15,8 @@
 |:---:|:---|:---:|:---|:---|:---:|
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
-| **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (23 / 32 Tasks Completed: TASK-M4-01..M4-23)** |
+| **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 *(+1 task tích hợp `TASK-M4-29B` bổ sung tại Phase 4 theo Quyết định 4 của PO)* kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (25 / 33 Tasks Completed [75.8%]: TASK-M4-01..M4-25; M4.7 2/3 Completed; +1 integration task TASK-M4-29B)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -43,11 +43,11 @@
 - [x] **TASK-M3-01:** Ban hành bộ quy chuẩn lập trình `docs/CONVENTIONS.md` (Rust backend Edition 2021, clippy lint profile, TypeScript frontend strict mode, Tauri IPC commands/events, Error Codes, Logging standard, Secret Redaction).
 - [x] **TASK-M3-02:** Thiết kế cấu trúc thư mục mã nguồn chi tiết (Source Tree Architecture: `src-tauri/`, `src/`, `installer/`, `tests/`).
 - [x] **TASK-M3-03:** Xây dựng ma trận kiểm thử tự động toàn diện do `@qa-reviewer` chủ trì (Unit Test, Integration Test, E2E Synthetic Test, Low-end PC Stress Test, Quality Gates & Veto Criteria).
-- [x] **TASK-M3-04:** Phân rã 32 task kỹ thuật chi tiết kèm tiêu chí nghiệm thu định lượng (AC) và tích hợp QA Test Checklists cho từng task trong Phase 4 vào `docs/TASK_BOARD.md`.
+- [x] **TASK-M3-04:** Phân rã 32 task kỹ thuật chi tiết kèm tiêu chí nghiệm thu định lượng (AC) và tích hợp QA Test Checklists cho từng task trong Phase 4 vào `docs/TASK_BOARD.md` *(Phase 4 bổ sung thêm `TASK-M4-29B` nâng tổng số lên 33 tasks)*.
 
 ---
 
-## 3. BẢNG PHÂN RÃ CHI TIẾT 32 TASKS KỸ THUẬT PHASE 4 (TASK-M4-01 ĐẾN TASK-M4-32)
+## 3. BẢNG PHÂN RÃ CHI TIẾT 33 TASKS KỸ THUẬT PHASE 4 (TASK-M4-01 ĐẾN TASK-M4-32 + TASK-M4-29B)
 
 ---
 
@@ -72,7 +72,7 @@
   - Cấu hình cửa sổ ứng dụng: kích thước mặc định 1280x800, min 1024x640, hỗ trợ Windows Mica/Acrylic material.
   - Thiết lập bảng màu Dark Theme phong cách VTuber Neuro-sama (PO Option 1): Nền chính `#12131C`, Nền phụ `#1A1C28`, Accent Pink `#FFB6C1` (Neuro), Accent Red `#FF0055` (Evil), Accent Green `#98FB98` (Vedal), Accent Gold `#FFD700` (Guest), Accent Sky `#87CEEB` (Chat).
   - Tích hợp font chữ tối ưu hóa cho hiển thị phụ đề và giao diện tiếng Việt: `Be Vietnam Pro` hoặc `Inter`.
-  - *(M3 Shell Wiring)* `App.tsx` cung cấp shell 3 tab tối giản (`overview` giữ nguyên showcase/SLA M4-01, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`) không gọi IPC lúc mount; `main.tsx` bọc `<GlobalErrorBoundary><App /></GlobalErrorBoundary>`.
+  - *(Shell Wiring)* `App.tsx` khởi tạo với các tab cơ bản rồi mở rộng thành shell 4 tab tối giản (`overview` giữ nguyên showcase/SLA M4-01, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`, `studio` gắn `SubtitleStudio`) không gọi IPC lúc mount; `main.tsx` bọc `<GlobalErrorBoundary><App /></GlobalErrorBoundary>`.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Không có.
   - Đầu ra: Cửa sổ desktop hoạt động, render React 18 SPA với hiệu năng cao.
@@ -576,7 +576,7 @@
       $$\text{Post-roll Buffer} = \max\left(0.0,\; \text{duration\_seconds} - t_{\text{chat\_peak}}\right)$$
       đồng thời tự động bù phần thời lượng thiếu hụt sang Pre-roll Buffer (tăng từ 10s lên tối đa 20s nếu $t_{\text{start}} > 0$) để bảo đảm độ dài đoạn highlight đạt tối thiểu $\ge 15\text{s}$ mà tuyệt đối không vượt quá mốc kết thúc stream (`duration_seconds`), ngăn ngừa triệt để lỗi invalid range slicing cho FFmpeg ở TASK-M4-13.
   - Gom các đỉnh lân cận trong khoảng $30\text{s}$ thành một cụm duy nhất (Clustering & Deduplication).
-  - Xếp hạng và trích xuất top 15–20 cụm điểm cao nhất, lưu vào tệp `highlight_clusters.json` theo Schema 5.4 trong `ARCHITECTURE.md`.
+  - Xếp hạng và trích xuất tối đa 20 cụm điểm cao nhất (`DEFAULT_MAX_CLUSTERS = 20`), lưu vào tệp `highlight_clusters.json` theo Schema 5.4 trong `ARCHITECTURE.md`.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: `chat_velocity_series`, `emote_density_series`, `audio_rms_series`, `vod_manifest.duration_seconds`.
   - Đầu ra: `highlight_clusters.json` (Tuân thủ Schema 5.4: `vod_id`, `clusters: [{ cluster_id, start_sec, end_sec, peak_sec, score, primary_reason, top_emotes }]`).
@@ -601,7 +601,7 @@
     - [x] **IT-12.2:** Xuất ra tệp `highlight_clusters.json` tuân thủ 100% JSON Schema 5.4 trong `ARCHITECTURE.md`.
   - *Boundary & Edge Cases (Clamping & Clustered Range Bounds):*
     - [x] **ED-12.1:** Nếu $t_{\text{start}}$ tính ra $< 0$, tự động ép về $0.0\text{s}$ (không sinh timecode âm).
-    - [x] **ED-12.2:** Xếp hạng trích xuất đúng top 15–20 cụm điểm cao nhất, thời gian xử lý toàn bộ $\le 500\text{ms}$.
+    - [x] **ED-12.2:** Xếp hạng trích xuất tối đa 20 cụm điểm cao nhất (`DEFAULT_MAX_CLUSTERS = 20`), thời gian xử lý toàn bộ $\le 500\text{ms}$.
     - [x] **ED-12.3 (Clamp End Timecode to VOD Duration & Dynamic Padding):** Cho VOD có tổng thời lượng $10,000.0\text{s}$, giả lập đỉnh chat xảy ra sát cuối stream tại $t_{\text{peak}} = 9,992.0\text{s}$. Khẳng định $t_{\text{end}}$ được clamp chính xác tại $10,000.0\text{s}$ (không vượt quá `duration_seconds`); Pre-roll Buffer tự động bù thêm để clip đạt độ dài $22.5\text{s}$; khẳng định không sinh timecode vượt quá EOF gây lỗi cho FFmpeg ở TASK-M4-13.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
@@ -944,8 +944,8 @@
     - [x] **ED-19.1 (Collision Avoidance):** Phép mượn thời gian không bao giờ kéo dài `end_sec` đè lên hoặc vượt quá `start_sec` của câu thoại tiếp theo (khoảng cách tối thiểu $50\text{ms}$).
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib translation::line_wrapper::tests
-    cargo test --lib translation::cps_optimizer::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib translation::line_wrapper::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib translation::cps_optimizer::tests
     ```
     *Khẳng định: Không ngắt đôi từ ghép tiếng Việt, `transcript_segments.json` schema valid.*
 
@@ -969,7 +969,7 @@
   - Đồng bộ hai chiều (Bi-directional Sync): Khi video chạy, tự động cuộn đến dòng phụ đề tương ứng; khi click dòng phụ đề, video tự nhảy đến mốc thời gian đó.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: `clip_slice.mp4` và `transcript_segments.json`.
-  - Đầu ra: Trạng thái playback đồng bộ trong `useStudioStore` *(lưu ý kiến trúc: 7 stores hiện có sử dụng `src/stores/createStore.ts` trên nền `React.useSyncExternalStore` với API tương thích Zustand, sẵn sàng tương thích để chỉnh sửa và triển khai `zustand` ở task `M4-20+` khi chốt cài gói `zustand`)*.
+  - Đầu ra: Trạng thái playback, layout (`aspectRatio`, `preset916`) và đường dẫn video (`videoSrc`, `videoPath`) đồng bộ trong `useStudioStore` *(store thứ 8 trong `src/stores/`, xây dựng trên `src/stores/createStore.ts` dùng `React.useSyncExternalStore` với API tương thích Zustand — không cài gói `zustand` rời)*.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-01, TASK-M4-07, TASK-M4-13, TASK-M4-19.
   - Blocks: TASK-M4-21, TASK-M4-22, TASK-M4-23.
@@ -998,17 +998,19 @@
 - **Lead Persona:** Senior Frontend Dev
 - **Target Files:**
   - `src/components/studio/VirtualizedSegmentList.tsx`
+  - `src/components/studio/VirtualizedSegmentList.test.tsx`
   - `src/components/studio/SegmentRow.tsx`
   - `src/components/studio/TimecodeNudge.tsx`
+  - `src/stores/createStore.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Sử dụng thư viện ảo hóa `@tanstack/react-virtual` để hiển thị danh sách hàng trăm dòng phụ đề mà không gây tụt FPS hay lag trình duyệt.
+  - Sử dụng custom `useVirtualizer` hook (`src/components/studio/VirtualizedSegmentList.tsx`, không cần cài thư viện ảo hóa rời) để hiển thị danh sách hàng trăm dòng phụ đề mà không gây tụt FPS hay lag trình duyệt.
   - Mỗi hàng phụ đề (`SegmentRow`) hiển thị:
     - Badge Người nói (Speaker) có màu sắc tương ứng.
     - Mốc thời gian In/Out (phút:giây.mili-giây).
     - Ô chỉnh sửa nhanh Text tiếng Anh và Text tiếng Việt (Inline Textarea tự co giãn).
     - Nút Nudge thời gian nhanh: Phím tắt `A` lùi $100\text{ms}$, `D` tiến $100\text{ms}$ cho mốc bắt đầu/kết thúc.
 - **Giao kèo dữ liệu (Data Contracts):**
-  - Đầu vào: Danh sách `segments` từ store *(dùng `createStore.ts` API tương thích Zustand, sẵn sàng nâng cấp `zustand` khi chốt cài đặt ở `M4-20+`)*.
+  - Đầu vào: Danh sách `segments` từ `useStudioStore` (`src/stores/createStore.ts` — `React.useSyncExternalStore` với API tương thích Zustand).
   - Đầu ra: Cập nhật trực tiếp `segments` trong bộ nhớ và lưu vào `subtitle_project.json`.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-20.
@@ -1021,9 +1023,9 @@
   - *Phân loại kiểm thử:* Frontend Virtualization & State Management Test
   - *Unit Test Cases:*
     - [x] **UT-21.1 (Timecode Nudge):** Bấm phím tắt `Shift + A` giảm mốc thời gian $100\text{ms}$, `Shift + D` tăng mốc thời gian $100\text{ms}$ chính xác vào store.
-    - [x] **UT-21.2 (Inline Edit):** Gõ sửa nội dung trong ô Textarea tiếng Việt cập nhật giá trị `text_vi` vào Zustand store tức thì.
+    - [x] **UT-21.2 (Inline Edit):** Gõ sửa nội dung trong ô Textarea tiếng Việt cập nhật giá trị `text_vi` vào `useStudioStore` (`createStore.ts`) tức thì.
   - *Integration & Contract Verification:*
-    - [x] **IT-21.1:** Render danh sách chứa 1,000 dòng phụ đề bằng `@tanstack/react-virtual`. Kiểm tra DOM chỉ render số lượng DOM nodes tương ứng với viewport (15–20 rows).
+    - [x] **IT-21.1:** Render danh sách chứa 1,000 dòng phụ đề bằng custom `useVirtualizer` (`VirtualizedSegmentList.tsx`). Kiểm tra DOM chỉ render số lượng DOM nodes tương ứng với viewport (15–20 rows).
   - *Boundary & Performance Limits:*
     - [x] **ED-21.1:** Cuộn danh sách 1,000 dòng với tốc độ cao đạt $60\text{ FPS}$; độ trễ phản hồi khi gõ phím sửa text $\le 16\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
@@ -1119,22 +1121,31 @@
 
 #### TASK-M4-24: Bộ Xuất Phụ Đề Chuẩn Màu Aegisub (.ASS) & Phụ Đề Quốc Tế (.SRT) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & `@tech-lead`
-- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `e372200` (gắn nhầm nhãn `M4-08`) đã tạo sớm phần lõi backend tại `src-tauri/src/stt/subtitle_export.rs` (`generate_ass_script`, `generate_srt_script`, `create_subtitle_project`, `default_speaker_styles`), `src-tauri/src/commands/stt_cmd.rs` (`export_subtitles_ass`, `export_subtitles_srt`), `src/services/ipc/stt.ts` và `src-tauri/tests/subtitle_export_test.rs`. Trong Milestone M2, bug byte-order BGR của Neuro (`&H00B6B6FF` $\rightarrow$ `&H00C1B6FF`) và bảng màu **PO Option 1** (`Vedal #98FB98`, `Neuro #FFB6C1`, `Evil #FF0055`, `Guest #FFD700`, `Chat #87CEEB`, `Unknown #FFFFFF`) đã được sửa và pass test. **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-24`:** refactor sang `src-tauri/src/export/{ass_exporter.rs, srt_exporter.rs}`, `src-tauri/src/commands/export_cmd.rs`, `src/services/ipc/export.ts`, ghi **UTF-8 with BOM** (`AC-24.1`, `IT-24.2`), và tích hợp đầy đủ `subtitle_project.json` Schema 5.6 + UI export.
+- **Ghi chú Trạng thái Hiện tại (Completed & Stabilized P1):** Đã hoàn tất refactor sang `src-tauri/src/export/{mod.rs, ass_exporter.rs, srt_exporter.rs}` (giữ `src-tauri/src/stt/subtitle_export.rs` làm facade tương thích ngược cho `suite.node.test.ts`), `src-tauri/src/commands/export_cmd.rs`, `src/services/ipc/export.ts`, ghi **UTF-8 with BOM** (`write_file_with_bom`), tích hợp Schema 5.6 + `ExportModal.tsx`, và hoàn tất `PATCH-P1-01`/`PATCH-P1-02` (`PlayResX`/`PlayResY` động theo `project.target_layout` qua `capcut_schema::canvas_config_for_layout`, `Vedal` `Outline = 2.5` ở cả 2 hàm, `Chat` `Bold=0, Outline=2`, `SubtitleStudio.tsx` truyền raw OS `video_file_path` & `target_layout`).
 - **Target Files:**
+  - `src-tauri/src/export/mod.rs`
   - `src-tauri/src/export/ass_exporter.rs`
   - `src-tauri/src/export/srt_exporter.rs`
+  - `src-tauri/src/stt/subtitle_export.rs` *(backward-compatibility facade)*
   - `src-tauri/src/commands/export_cmd.rs`
-  - `src/services/ipc/export.ts`
+  - `src-tauri/src/commands/mod.rs` & `src-tauri/src/lib.rs`
+  - `src-tauri/tests/subtitle_export_test.rs`
+  - `src/types/export.ts` & `src/types/transcript.ts`
+  - `src/services/ipc/export.ts` & `src/services/ipc/export.test.ts`
+  - `src/components/studio/SubtitleStudio.tsx` & `src/components/studio/SubtitleStudio.test.tsx`
+  - `src/components/export/ExportModal.tsx` & `src/components/export/ExportModal.test.tsx`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng module sinh tệp `.ass` (Advanced SubStation Alpha v4.00+):
-    - Khởi tạo khối `[V4+ Styles]` với định nghĩa màu sắc, viền, bóng đổ riêng cho từng nhân vật theo bảng màu chuẩn:
-      - `Style: Vedal`: Màu chữ `#98FB98`, Outline đen 2.5px.
-      - `Style: Neuro`: Màu chữ `#FFB6C1`, Outline đen đậm 3.0px.
-      - `Style: Evil`: Màu chữ `#FF0055`, Outline đen sắc nét 3.0px.
-      - `Style: Guest`: Màu chữ `#FFD700`.
-      - `Style: Chat`: Màu chữ `#87CEEB`.
+    - Phân giải `PlayResX`/`PlayResY` động theo `project.target_layout` qua `capcut_schema::canvas_config_for_layout` (`1920x1080` cho `original_16_9`, `1080x1920` cho 9:16 presets).
+    - Khởi tạo khối `[V4+ Styles]` với định nghĩa màu sắc, viền, bóng đổ riêng cho từng nhân vật theo bảng màu chuẩn **PO Option 1**:
+      - `Style: Vedal`: Màu chữ `#98FB98`, Outline đen `2.5px` (nhất quán ở cả `generate_ass_script` & `generate_ass_script_from_project`).
+      - `Style: Neuro`: Màu chữ `#FFB6C1`, `Bold=-1`, Outline đen đậm `3.0px`.
+      - `Style: Evil`: Màu chữ `#FF0055`, `Bold=-1`, Outline đen sắc nét `3.0px`.
+      - `Style: Guest`: Màu chữ `#FFD700`, `Bold=-1`, Outline `3.0px`.
+      - `Style: Chat`: Màu chữ `#87CEEB`, `Bold=0`, Outline `2.0px`.
+      - `Style: Default`: Màu chữ `#FFFFFF`, `Bold=-1`, Outline `3.0px`.
     - Sinh khối `[Events]` chứa các dòng hội thoại với timecode chuẩn `0:00:00.00`.
-  - Xây dựng module sinh tệp `.srt` chuẩn UTF-8 (hỗ trợ đầy đủ dấu thanh tiếng Việt).
+  - Xây dựng module sinh tệp `.srt` chuẩn UTF-8 with BOM (`write_file_with_bom`, hỗ trợ đầy đủ dấu thanh tiếng Việt).
   - Tích hợp và lưu vào tệp tổng thể `subtitle_project.json` tuân thủ Schema 5.6 trong `ARCHITECTURE.md`.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: `subtitle_project.json` (danh sách segments, styles, project metadata).
@@ -1159,8 +1170,9 @@
     - [x] **ED-24.2:** Thời gian sinh file `.ass` và `.srt` cho dự án 300 câu $\le 200\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib export::ass_exporter::tests
-    cargo test --lib export::srt_exporter::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib export::ass_exporter::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib export::srt_exporter::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --test subtitle_export_test
     ```
     *Khẳng định: File .ass và .srt chuẩn format, mở trên Aegisub chuẩn màu và tiếng Việt 100%.*
 
@@ -1171,7 +1183,14 @@
 - **Target Files:**
   - `src-tauri/src/export/capcut_draft.rs`
   - `src-tauri/src/export/capcut_schema.rs`
-  - `src/components/export/ExportModal.tsx`
+  - `src-tauri/src/export/mod.rs`
+  - `src-tauri/src/commands/export_cmd.rs`
+  - `src-tauri/src/commands/mod.rs` & `src-tauri/src/lib.rs`
+  - `src-tauri/tests/capcut_draft_integration_test.rs`
+  - `src/types/export.ts`
+  - `src/services/ipc/export.ts` & `src/services/ipc/export.test.ts`
+  - `src/components/export/ExportModal.tsx` & `src/components/export/ExportModal.test.tsx`
+  - `src/components/studio/SubtitleStudio.tsx` & `src/components/studio/SubtitleStudio.test.tsx`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Tự động dò tìm thư mục dự án CapCut PC trên Windows:
     `%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft/`.
@@ -1205,44 +1224,55 @@
     - [x] **ED-25.3:** Thời gian sinh toàn bộ thư mục CapCut Draft $\le 200\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test capcut_draft_integration_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test capcut_draft_integration_test -- --nocapture
     ```
     *Khẳng định: 100% thư mục CapCut Draft có chứa kèm file `subtitle.ass` và `subtitle.srt`.*
 
 ---
 
-#### TASK-M4-26: Bộ Xuất Dòng Thời Gian Premiere Pro XML & FCP7 XML
-- **Lead Persona:** Senior Backend Dev (Rust)
+#### TASK-M4-26: Bộ Xuất Dòng Thời Gian Premiere Pro XML (FCP7 XML) & Tiến Độ Xuất NLE (`export:progress`)
+- **Lead Persona:** Senior Backend Dev (Rust) & Senior Frontend Dev
 - **Target Files:**
   - `src-tauri/src/export/premiere_xml.rs`
+  - `src-tauri/src/export/mod.rs`
+  - `src-tauri/src/commands/export_cmd.rs` *(IPC `export_premiere_xml` + phát event `export:progress`)*
+  - `src-tauri/src/commands/mod.rs` & `src-tauri/src/lib.rs`
+  - `src/services/ipc/export.ts` & `src/services/ipc/export.test.ts`
+  - `src/types/export.ts`
+  - `src/components/export/ExportModal.tsx` & `src/components/export/ExportModal.test.tsx` *(tùy chọn Premiere XML + export progress bar lắng nghe `export:progress`)*
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Sinh tệp XML theo chuẩn định dạng Final Cut Pro 7 / Premiere XML Interchange Format:
-    - Thẻ `<sequence>`: Cấu hình tỷ lệ khung hình $1920\times 1080$ hoặc $1080\times 1920$ (nếu chọn preset dọc 9:16).
-    - Thẻ `<track>`: Video track chứa các clip đã cắt và Audio track tương ứng.
-    - Đặt các Marker chứa nội dung phụ đề tiếng Việt đồng bộ mốc thời gian.
-  - Đảm bảo tương thích hoàn hảo khi kéo thả file XML vào Adobe Premiere Pro 2022–2025 và DaVinci Resolve 18–19.
+  - Sinh tệp XML theo chuẩn định dạng **FCP7 XML (`<xmeml version="4">`)** / Premiere XML Interchange Format (tương thích hoàn hảo Adobe Premiere Pro 2022–2025 và DaVinci Resolve 18–19):
+    - Thẻ `<sequence>`: Cấu hình tỷ lệ khung hình $1920\times 1080$ hoặc $1080\times 1920$ theo `project.target_layout`.
+    - Thẻ `<track>`: Video track chứa danh sách clip đã cắt và Audio track tương ứng.
+    - Đặt các `<marker>` chứa nội dung phụ đề tiếng Việt đồng bộ mốc thời gian.
+  - **Yêu cầu chính thức theo Quyết định 3 của PO (`export:progress` + Export Progress Bar):**
+    - Triển khai sự kiện streaming **`export:progress`** (`{ projectId: string, percent: number, currentStep: string }` khớp `CONVENTIONS.md` §4.2) trong backend xuất NLE (`export_cmd.rs`).
+    - Bổ sung **export progress bar** trên `ExportModal.tsx` lắng nghe `export:progress` và hiển thị phần trăm + bước xuất đang thực thi theo thời gian thực.
 - **Giao kèo dữ liệu (Data Contracts):**
-  - Đầu vào: `subtitle_project.json` và danh sách video clips.
-  - Đầu ra: Tệp `project_timeline.xml`.
+  - Đầu vào: `SubtitleProject` (`subtitle_project.json`) và danh sách clip video (`clips` / `video_file_path`).
+  - Đầu ra: Tệp `project_timeline.xml` (`<xmeml version="4">`) và event stream `export:progress` `{ projectId, percent, currentStep }`.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-13, TASK-M4-24.
   - Blocks: TASK-M4-30.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
   - [ ] **AC-26.1:** Import file XML vào Premiere Pro không bị báo lỗi "The project appears to be damaged" hoặc mất liên kết media.
   - [ ] **AC-26.2:** Thời gian sinh file XML $\le 100\text{ms}$.
+  - [ ] **AC-26.3:** Luồng xuất NLE phát sự kiện `export:progress` (`{ projectId, percent, currentStep }`) và `ExportModal.tsx` hiển thị export progress bar cập nhật theo tiến độ thực tế.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
-  - *Phân loại kiểm thử:* NLE Interchange XML Test
+  - *Phân loại kiểm thử:* NLE Interchange XML & Export Progress Streaming Test
   - *Unit Test Cases:*
     - [ ] **UT-26.1 (XML Schema Compliance):** Sinh thẻ `<xmeml version="4">`, sequence 1920x1080 (hoặc 1080x1920 nếu chọn preset dọc 9:16), frame rate 60fps, đồng bộ video/audio tracks và markers.
   - *Integration & Contract Verification:*
     - [ ] **IT-26.1:** Import file `project_timeline.xml` vào Adobe Premiere Pro và DaVinci Resolve không bị báo lỗi cú pháp XML hay mất liên kết media clips.
+    - [ ] **IT-26.2 (`export:progress` & Progress Bar):** Kiểm tra `export_cmd.rs` phát event `export:progress` (`{ projectId, percent, currentStep }`) và `ExportModal.test.tsx` xác minh thanh tiến trình export progress bar render & cập nhật khi xuất.
   - *Boundary & Speed Limits:*
     - [ ] **ED-26.1:** Thời gian sinh file XML cho clip highlight $\le 100\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib export::premiere_xml::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib export::premiere_xml::tests
+    npm run test:vitest -- src/components/export/ExportModal.test.tsx src/services/ipc/export.test.ts
     ```
-    *Khẳng định: XML schema valid, import mượt mà trên Premiere Pro.*
+    *Khẳng định: XML schema `<xmeml version="4">` valid, `export:progress` + export progress bar hoạt động chuẩn xác.*
 
 ---
 
@@ -1250,15 +1280,15 @@
 
 #### TASK-M4-27: Động Cơ Thăm Dò Năng Lực Phần Cứng & Đề Xuất Cấu Hình Thông Minh
 - **Lead Persona:** Senior Backend Dev (Rust) & Systems Dev
-- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần backend tại `src-tauri/src/config/hardware.rs` (`probe_system_hardware`, `evaluate_recommended_mode`, `HardwareProfile` Schema 5.1), `src-tauri/src/commands/config_cmd.rs` (`get_hardware_profile`, `detect_hardware`) và `src/services/config/hardware.ts`. **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-27`:** refactor/alias sang `hardware/{probe.rs, wmi.rs}` / `hardware_cmd.rs` (nếu áp dụng) và toàn bộ Frontend UI (`src/components/onboarding/HardwareRecommendation.tsx`, `src/stores/useHardwareStore.ts`).
+- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần backend tại `src-tauri/src/config/hardware.rs` (`probe_system_hardware`, `evaluate_recommended_mode`, `HardwareProfile` Schema 5.1 dùng Win32 `GlobalMemoryStatusEx` + Windows Registry `qwMemorySize`, không phụ thuộc `sysinfo`), `src-tauri/src/commands/config_cmd.rs` (`get_hardware_profile`, `detect_hardware`) và `src/services/config/hardware.ts`. **Phần còn lại `[ ]` Pending cho `TASK-M4-27`:** tinh chỉnh DXGI/WMI nếu cần (hoặc refactor tùy chọn `hardware/{probe.rs, wmi.rs}` / `hardware_cmd.rs`) và toàn bộ Frontend UI (`src/components/onboarding/HardwareRecommendation.tsx`, `src/stores/useHardwareStore.ts`).
 - **Target Files:**
-  - `src-tauri/src/hardware/probe.rs`
-  - `src-tauri/src/hardware/wmi.rs`
-  - `src-tauri/src/commands/hardware_cmd.rs`
+  - `src-tauri/src/config/hardware.rs` *(backend hiện hành; tùy chọn tách `hardware/{probe.rs, wmi.rs}`)*
+  - `src-tauri/src/commands/config_cmd.rs` *(tùy chọn `hardware_cmd.rs`)*
+  - `src/services/config/hardware.ts`
   - `src/components/onboarding/HardwareRecommendation.tsx`
   - `src/stores/useHardwareStore.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Xây dựng module `HardwareProbeEngine` sử dụng crate `sysinfo` và Windows Win32 API / DirectX DXGI để đọc thông số máy tính:
+  - Xây dựng/hoàn thiện module `HardwareProbeEngine` sử dụng Windows Win32 Registry (`qwMemorySize`) / `GlobalMemoryStatusEx` (và tùy chọn DirectX DXGI / WMI) để đọc thông số máy tính:
     - Số nhân/luồng CPU, Model CPU.
     - Dung lượng RAM tổng cộng và RAM khả dụng (MB).
     - Card màn hình: Vendor, Model, Dung lượng VRAM thực tế (MB), Hỗ trợ CUDA.
@@ -1290,7 +1320,7 @@
     - [ ] **ED-27.1:** Nhận diện chính xác 100% Dedicated VRAM của card NVIDIA rời (không bị nhầm lẫn với Shared Memory của Windows).
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --lib hardware::probe::tests
+    cargo test --manifest-path src-tauri/Cargo.toml --lib config::hardware::tests
     ```
     *Khẳng định: Thời gian probe $\le 200\text{ms}$, `hardware_profile.json` schema valid.*
 
@@ -1298,12 +1328,16 @@
 
 #### TASK-M4-28: Giao Diện Wizard Khởi Chạy Lần Đầu & Lưu Trữ API Key Vào Két Sắt Windows Credential
 - **Lead Persona:** Senior Frontend Dev & Senior Backend Dev (Rust)
-- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần config persistence tại `src-tauri/src/config/app_config.rs`, `src-tauri/src/config/atomic.rs`, `src/services/config/settings.ts` và `src/stores/settingsStore.ts` (hiện vẫn lưu `groq_api_key` / `gemini_api_key` trong JSON). **Phần còn lại giữ `[ ]` Pending cho `TASK-M4-28`:** `src-tauri/src/core/keyring.rs` (Windows Credential Locker + Headless CI In-memory fallback), loại bỏ plaintext API keys khỏi `app_config.json`, `src/components/onboarding/OnboardingWizardModal.tsx` và `src/components/onboarding/ApiKeyTester.tsx`.
+- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần config persistence tại `src-tauri/src/config/app_config.rs`, `src-tauri/src/config/atomic.rs`, `src/services/config/settings.ts` và `src/stores/settingsStore.ts` (hiện vẫn lưu `groq_api_key` / `gemini_api_key` trong JSON). **Phần còn lại `[ ]` Pending cho `TASK-M4-28`:** `src-tauri/src/core/keyring.rs` (Windows Credential Locker + Headless CI In-memory fallback), loại bỏ plaintext API keys khỏi `app_config.json`, `src/components/onboarding/OnboardingWizardModal.tsx` và `src/components/onboarding/ApiKeyTester.tsx`.
 - **Target Files:**
-  - `src/components/onboarding/OnboardingWizardModal.tsx`
-  - `src/components/onboarding/ApiKeyTester.tsx`
+  - `src-tauri/src/config/app_config.rs`
+  - `src-tauri/src/config/atomic.rs`
   - `src-tauri/src/core/keyring.rs`
   - `src-tauri/src/commands/config_cmd.rs`
+  - `src/services/config/settings.ts`
+  - `src/stores/settingsStore.ts`
+  - `src/components/onboarding/OnboardingWizardModal.tsx`
+  - `src/components/onboarding/ApiKeyTester.tsx`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Hiển thị `OnboardingWizardModal` ở lần khởi động đầu tiên (kiểm tra cờ `is_first_run` trong config).
   - Hiển thị bảng tóm tắt cấu hình máy tính và gợi ý chế độ làm việc tối ưu từ TASK-M4-27.
@@ -1317,7 +1351,7 @@
       * Cho phép lưu và đọc tạm thời API key trong suốt vòng đời phiên làm việc mà không văng lỗi unhandled, đảm bảo 100% các bài test tự động trên CI/CD pipeline và môi trường sandbox chạy thông suốt mà không crash.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Khóa API người dùng nhập vào form.
-  - Đầu ra: Cập nhật Windows Credential (hoặc In-memory Session Provider) và lưu cài đặt chung vào `%APPDATA%/NeuroClip/config.json`.
+  - Đầu ra: Cập nhật Windows Credential (hoặc In-memory Session Provider) và lưu cài đặt chung vào `%APPDATA%/NeuroClip/app_config.json`.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: TASK-M4-01, TASK-M4-04, TASK-M4-27.
   - Blocks: TASK-M4-15, TASK-M4-17.
@@ -1335,7 +1369,7 @@
     - [ ] **IT-28.1:** Lưu Groq Key và Gemini Key qua `keyring-rs` vào Windows Credential Locker; đọc lại thành công khi backend cần gọi API.
     - [ ] **IT-28.2 (Test Connection Button):** Click "Kiểm tra kết nối" gửi request siêu nhẹ tới Groq/Gemini, hiển thị tích xanh `[Sẵn sàng]` trong $\le 2.0\text{ giây}$.
   - *Boundary & Security Limits (Zero Plaintext Secrets Invariant):**
-    - [ ] **ED-28.1 (Plaintext Audit):** Quét toàn bộ file cấu hình `%APPDATA%/NeuroClip/config.json` và file tạm: khẳng định TUYỆT ĐỐI KHÔNG chứa plain text của bất kỳ API Key nào.
+    - [ ] **ED-28.1 (Plaintext Audit):** Quét toàn bộ file cấu hình `%APPDATA%/NeuroClip/app_config.json` và file tạm: khẳng định TUYỆT ĐỐI KHÔNG chứa plain text của bất kỳ API Key nào.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --lib core::keyring::tests
@@ -1352,7 +1386,7 @@
   - `src-tauri/src/sidecar/manifest.rs`
   - `src-tauri/src/commands/updater_cmd.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
-  - Quản lý các file thực thi trong `%APPDATA%/NeuroClip/bin/`: `yt-dlp.exe` và `ffmpeg.exe`.
+  - Quản lý các file thực thi phụ trợ (`yt-dlp.exe`, `ffmpeg.exe`) tại thư mục chuẩn `%APPDATA%/NeuroClip/bin/` và `%LOCALAPPDATA%/NeuroClip/bin/` (cùng `%LOCALAPPDATA%/NeuroClip/sidecars/<tool>/` cho local STT workers), đồng bộ thứ tự fallback với `resources/sidecars/`, `AppConfig.sidecar_paths` / biến môi trường (`NEUROCLIP_*_PATH`) và `PATH` hệ thống *(lưu ý: `src-tauri/tauri.conf.json` không dùng `externalBin` / `src-tauri/bin/`)*.
   - Triển khai cơ chế kiểm tra cập nhật `yt-dlp` (`ADR-007`):
     - Gửi request tới GitHub Releases API: `https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest`.
     - Kích hoạt kiểm tra: 1) Mỗi tuần 1 lần khi mở app, hoặc 2) Khi phát hiện lệnh `yt-dlp` trả về lỗi HTTP 403 / Bot Blocked (`ERR_INGEST_BOT_BLOCKED`).
@@ -1382,9 +1416,44 @@
     - [ ] **ED-29.1 (Bot Block Trigger & Multi-layer Defense):** Khi lệnh `yt-dlp` trả về mã lỗi HTTP 403 Bot Blocked (`ERR_INGEST_BOT_BLOCKED`), hệ thống tự động kích hoạt tiến trình update ngầm không làm gián đoạn UI; nếu bản mới nhất vẫn bị chặn, kích hoạt luân chuyển User-Agent và hướng dẫn nạp cookie xác thực.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test sidecar_updater_test -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test sidecar_updater_test -- --nocapture
     ```
     *Khẳng định: Xác thực SHA256 chuẩn xác 100%, atomic swap an toàn, phòng vệ đa tầng chống bot HTTP 403.*
+
+---
+
+#### TASK-M4-29B: Tích Hợp Luồng End-to-End HighlightViewer → Range Slicer → Subtitle Studio (App Pipeline Wiring)
+- **Lead Persona:** `Senior Frontend Dev` & `@tech-lead`
+- **Ghi chú Nguồn gốc:** Bổ sung tại Phase 4 theo **Quyết định 4 của PO (`2026-11-20`)** nhằm nối hoàn chỉnh luồng chọn clip trên UI sang `SubtitleStudio` trước khi chạy E2E (`TASK-M4-30`).
+- **Target Files:**
+  - `src/App.tsx`
+  - `src/components/highlight/HighlightViewer.tsx`
+  - `src/services/ipc/slice.ts`
+  - `src/services/ipc/ingestion.ts` *(`toLocalAssetUrl`)*
+  - `src/stores/useStudioStore.ts`
+  - `src/stores/useTranscriptStore.ts`
+  - `src/App.test.tsx`
+- **Mô tả & Phạm vi Kỹ thuật:**
+  - Nối hành động chọn/cắt clip trên `HighlightViewer.tsx` trong `App.tsx` với lệnh IPC `sliceVideoSegment` (`src/services/ipc/slice.ts`), hiển thị tiến độ qua `slice:progress` và hỗ trợ hủy (`cancelSliceVideoSegment`).
+  - Khi cắt hoàn tất (`SliceResult.clipPath`), gọi `useStudioStore.getState().setVideoSrc(toLocalAssetUrl(clipPath), clipPath)` để nạp đồng thời `asset://` stream URL (`videoSrc`) và raw OS `videoPath` (`video_file_path`), đồng bộ segments từ `useTranscriptStore` vào `useStudioStore`, và chuyển sang tab `studio` (`<SubtitleStudio />`).
+- **Giao kèo dữ liệu (Data Contracts):**
+  - Đầu vào: `HighlightCluster` + `VodManifest`.
+  - Đầu ra: `SliceResult` (`clipPath`) $\rightarrow$ `useStudioStore` (`videoSrc`, `videoPath`, `segments`).
+- **Quan hệ phụ thuộc (Dependencies):**
+  - Prerequisites: TASK-M4-12, TASK-M4-13, TASK-M4-20.
+  - Blocks: TASK-M4-30.
+- **Tiêu chí Nghiệm thu Định lượng (AC):**
+  - [ ] **AC-29B.1:** Click "Cắt Clip" trên `HighlightViewer` gọi đúng `sliceVideoSegment`, nhận `SliceResult.clipPath`, cập nhật `useStudioStore` (`videoSrc = asset://...`, `videoPath = OS path`) và mở tab `SubtitleStudio` mà không cần thao tác thủ công.
+  - [ ] **AC-29B.2:** Mở `ExportModal` từ `SubtitleStudio` sau khi cắt từ `HighlightViewer` truyền đúng raw OS `video_file_path` (tuyệt đối không truyền `asset://` URL).
+- **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
+  - *Phân loại kiểm thử:* Frontend Pipeline Integration Test
+  - *Unit & Integration Test Cases:*
+    - [ ] **UT-29B.1 / IT-29B.1:** Kiểm thử tích hợp trong `src/App.test.tsx` (mock `sliceVideoSegment` & `useTranscriptStore`) xác nhận luồng `HighlightViewer` → `sliceVideoSegment` → `useStudioStore` → `SubtitleStudio` → `ExportModal`.
+  - *Lệnh thực thi & Tiêu chí xác minh:*
+    ```bash
+    npm run test:vitest -- src/App.test.tsx src/components/studio/SubtitleStudio.test.tsx
+    ```
+    *Khẳng định: Luồng HighlightViewer → Range Slicer → SubtitleStudio → ExportModal nối thông suốt, đúng OS path.*
 
 ---
 
@@ -1393,9 +1462,9 @@
 #### TASK-M4-30: Bộ Kiểm Thử Tự Động Tích Hợp Toàn Tuyến (E2E Synthetic Pipeline Harness)
 - **Lead Persona:** `@qa-reviewer` & `@tech-lead`
 - **Target Files:**
-  - `tests/e2e/synthetic_vod_pipeline.rs`
-  - `tests/fixtures/synthetic_chat.json`
-  - `tests/fixtures/synthetic_audio.wav`
+  - `src-tauri/tests/synthetic_vod_pipeline_e2e.rs`
+  - `src-tauri/tests/fixtures/synthetic_chat.json`
+  - `src-tauri/tests/fixtures/synthetic_audio.wav`
   - `src-tauri/src/commands/test_harness_cmd.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng kịch bản kiểm thử tự động toàn tuyến (End-to-End Synthetic Pipeline) không phụ thuộc mạng ngoài:
@@ -1409,7 +1478,7 @@
   - Đầu vào: Fixture test files.
   - Đầu ra: Báo cáo kết quả kiểm thử E2E Pipeline (Pass/Fail).
 - **Quan hệ phụ thuộc (Dependencies):**
-  - Prerequisites: Hoàn thành toàn bộ các tasks từ TASK-M4-01 đến TASK-M4-26.
+  - Prerequisites: Hoàn thành toàn bộ các tasks từ TASK-M4-01 đến TASK-M4-26 và TASK-M4-29B (tích hợp HighlightViewer → Range Slicer → useStudioStore).
   - Blocks: TASK-M4-32.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
   - [ ] **AC-30.1:** Toàn bộ chu trình E2E chạy tự động hoàn tất trong vòng $\le 45\text{ giây}$.
@@ -1428,7 +1497,7 @@
     - [ ] **AC-30.2:** 100% assertions về tính toàn vẹn của 6 Data Contracts (Schemas 5.1 đến 5.6) đều PASS.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test synthetic_vod_pipeline_e2e -- --nocapture
+    cargo test --manifest-path src-tauri/Cargo.toml --test synthetic_vod_pipeline_e2e -- --nocapture
     ```
     *Khẳng định: E2E Pipeline chạy xanh hoàn toàn trong $\le 45\text{s}$.*
 
@@ -1437,8 +1506,8 @@
 #### TASK-M4-31: Bộ Đánh Giá Hiệu Năng & Kiểm Thử Tải Trên Máy Cấu Hình Yếu (Low-End PC Stress Benchmark)
 - **Lead Persona:** `@qa-reviewer` & Senior Backend Dev (Rust)
 - **Target Files:**
-  - `tests/stress/low_end_benchmark.rs`
-  - `tests/stress/memory_leak_check.rs`
+  - `src-tauri/tests/low_end_pc_stress_benchmark.rs`
+  - `src-tauri/tests/memory_leak_check.rs` *(hoặc module con dưới `src-tauri/tests/`)*
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng bài kiểm tra tải mô phỏng môi trường máy tính cấu hình tối thiểu (8GB RAM, iGPU, CPU 4 nhân):
     - Bơm 500,000 dòng chat để kiểm tra thuật toán Z-score và Emote filter.
@@ -1466,7 +1535,7 @@
     - [ ] **AC-31.3 (UI Thread Unresponsiveness):** Không có thời điểm nào giao diện chính bị đơ quá $100\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
-    cargo test --test low_end_pc_stress_benchmark -- --nocapture --release
+    cargo test --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture --release
     ```
     *Khẳng định: Peak RAM $\le 500\text{MB}$, RAM sau xử lý $\le 100\text{MB}$, 0 memory leak.*
 
@@ -1516,7 +1585,7 @@
 
 ## 4. BIỂU ĐỒ PHỤ THUỘC & ĐƯỜNG GĂNG TIẾN ĐỘ (DEPENDENCY GRAPH & CRITICAL PATH)
 
-### 4.1 Bảng Ma Trận Phụ Thuộc Của Toàn Bộ 32 Tasks
+### 4.1 Bảng Ma Trận Phụ Thuộc Của Toàn Bộ 33 Tasks
 
 ```
 [M4.1] TASK-M4-01 (Tauri Shell)
@@ -1566,6 +1635,9 @@
        │    │    │                                     TASK-M4-25 (CapCut Draft JSON)
        │    │    │                                                 │
        │    │    │                                                 ▼
+       │    │    │                                     TASK-M4-29B (HighlightViewer → Slicer → useStudioStore)
+       │    │    │                                                 │
+       │    │    │                                                 ▼
        │    │    │                                     TASK-M4-30 (E2E Integration Test)
        │    │    │                                                 │
        │    │    │                                                 ▼
@@ -1580,8 +1652,8 @@
 ```
 
 ### 4.2 Đường Găng Kỹ Thuật (Critical Path Analysis)
-Đường găng xuyên suốt của dự án kéo dài qua chuỗi 18 tasks tuần tự:
-$$\text{TASK-M4-01} \rightarrow \text{M4-02} \rightarrow \text{M4-03} \rightarrow \text{M4-05} \rightarrow \text{M4-06} \rightarrow \text{M4-08} \rightarrow \text{M4-09} \rightarrow \text{M4-12} \rightarrow \text{M4-13} \rightarrow \text{M4-14} \rightarrow \text{M4-15} \rightarrow \text{M4-17} \rightarrow \text{M4-18} \rightarrow \text{M4-19} \rightarrow \text{M4-20} \rightarrow \text{M4-24} \rightarrow \text{M4-25} \rightarrow \text{M4-30} \rightarrow \text{M4-32}$$
+Đường găng xuyên suốt của dự án kéo dài qua chuỗi 20 tasks tuần tự (`M4-25` và nhánh tích hợp `M4-29B` hội tụ vào `M4-30`):
+$$\text{TASK-M4-01} \rightarrow \text{M4-02} \rightarrow \text{M4-03} \rightarrow \text{M4-05} \rightarrow \text{M4-06} \rightarrow \text{M4-08} \rightarrow \text{M4-09} \rightarrow \text{M4-12} \rightarrow \text{M4-13} \rightarrow \text{M4-14} \rightarrow \text{M4-15} \rightarrow \text{M4-17} \rightarrow \text{M4-18} \rightarrow \text{M4-19} \rightarrow \text{M4-20} \rightarrow \text{M4-24} \rightarrow \text{M4-25} \rightarrow \text{M4-29B} \rightarrow \text{M4-30} \rightarrow \text{M4-32}$$
 
 Các nhánh công việc có thể triển khai song song (Parallel Tracks):
 - **Nhánh Track A (Phần cứng & Wizard):** TASK-M4-27 $\rightarrow$ TASK-M4-28 (song song với Nhóm Ingestion M4.2).
@@ -1625,12 +1697,12 @@ npm run lint
 npm run typecheck
 npm run build
 
-# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (23 binaries, song song)
+# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (25 active test binaries [1 lib + 24 integration; [[bin]] test = false], 409 tests, song song)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
 # 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend
-npm run test:vitest   # (hoặc npm run test:run — 28 files Vitest)
-npm test              # Node Native Test Runner (49 suites: src/test/suite.node.test.ts)
+npm run test:vitest   # (hoặc npm run test:run — 36 files Vitest, 667 tests)
+npm test              # Node Native Test Runner (52 suites, 135 tests: src/test/suite.node.test.ts)
 
 # 6. (Target M4-30) Chạy bài kiểm thử tích hợp & E2E Pipeline giả lập
 cargo test --manifest-path src-tauri/Cargo.toml --test synthetic_vod_pipeline_e2e -- --nocapture
