@@ -1,7 +1,7 @@
 /**
  * Supported subtitle and project export formats.
  */
-export type SubtitleExportFormat = 'ass' | 'srt' | 'project_json';
+export type SubtitleExportFormat = 'ass' | 'srt' | 'project_json' | 'premiere_xml';
 
 /**
  * Validated target video aspect ratio / layout presets per Schema 5.6.
@@ -57,7 +57,8 @@ export const VTUBER_PALETTE_ASS_BGR = Object.freeze({
  */
 export function isSubtitleExportFormat(value: unknown): value is SubtitleExportFormat {
   return (
-    typeof value === 'string' && (value === 'ass' || value === 'srt' || value === 'project_json')
+    typeof value === 'string' &&
+    (value === 'ass' || value === 'srt' || value === 'project_json' || value === 'premiere_xml')
   );
 }
 
@@ -207,5 +208,175 @@ export function normalizeCapCutExportResult(raw: unknown): CapCutExportResult {
     srt_backup_path: srtBackupPath,
     dual_safeguard_files: dualSafeguardFiles,
     duration_ms: durationMs,
+  };
+}
+
+/**
+ * Individual clip entry for multi-clip Premiere Pro FCP7 XML timeline export.
+ */
+export interface PremiereClipInput {
+  readonly clipId?: string | undefined;
+  readonly name?: string | undefined;
+  readonly filePath: string;
+  readonly startSec?: number | undefined;
+  readonly endSec?: number | undefined;
+  readonly durationSec?: number | undefined;
+}
+
+/**
+ * Optional configuration for Premiere Pro FCP7 XML (`<xmeml version="4">`) export.
+ */
+export interface PremiereXmlExportOptions {
+  readonly videoFilePath?: string | undefined;
+  readonly clips?: readonly PremiereClipInput[] | undefined;
+  readonly fps?: number | undefined;
+}
+
+/**
+ * Result metadata returned from Premiere Pro FCP7 XML timeline export.
+ */
+export interface PremiereExportResult {
+  readonly xmlPath: string;
+  readonly sequenceName: string;
+  readonly width: number;
+  readonly height: number;
+  readonly fps: number;
+  readonly markerCount: number;
+  readonly clipCount: number;
+  readonly durationMs: number;
+}
+
+/**
+ * Wire payload emitted on Tauri event `export:progress`.
+ */
+export interface ExportProgressPayloadJson {
+  readonly projectId?: string | undefined;
+  readonly project_id?: string | undefined;
+  readonly percent?: number | undefined;
+  readonly currentStep?: string | undefined;
+  readonly current_step?: string | undefined;
+}
+
+/**
+ * Normalized frontend domain model for `export:progress` events.
+ */
+export interface ExportProgressPayload {
+  readonly projectId: string;
+  readonly percent: number;
+  readonly currentStep: string;
+}
+
+/**
+ * Runtime type guard validating raw `export:progress` payloads.
+ */
+export function isExportProgressPayload(value: unknown): value is ExportProgressPayloadJson {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const rec = value as Record<string, unknown>;
+  const rawProjectId = rec['projectId'] !== undefined ? rec['projectId'] : rec['project_id'];
+  const rawPercent = rec['percent'];
+  const rawStep = rec['currentStep'] !== undefined ? rec['currentStep'] : rec['current_step'];
+
+  const hasValidProjectId = rawProjectId === undefined || typeof rawProjectId === 'string';
+  const hasValidPercent = typeof rawPercent === 'number' && Number.isFinite(rawPercent);
+  const hasValidStep = typeof rawStep === 'string';
+
+  return hasValidProjectId && hasValidPercent && hasValidStep;
+}
+
+/**
+ * Normalizes raw `export:progress` wire payload into validated camelCase domain model.
+ */
+export function normalizeExportProgressPayload(raw: unknown): ExportProgressPayload {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('Invalid ExportProgressPayload: expected an object');
+  }
+
+  const rec = raw as Record<string, unknown>;
+  const projectId =
+    typeof rec['projectId'] === 'string'
+      ? rec['projectId']
+      : typeof rec['project_id'] === 'string'
+        ? rec['project_id']
+        : '';
+
+  const rawPercent = typeof rec['percent'] === 'number' ? rec['percent'] : 0;
+  const percent = Number.isFinite(rawPercent) ? Math.min(100, Math.max(0, rawPercent)) : 0;
+
+  const currentStep =
+    typeof rec['currentStep'] === 'string'
+      ? rec['currentStep']
+      : typeof rec['current_step'] === 'string'
+        ? rec['current_step']
+        : '';
+
+  return {
+    projectId,
+    percent,
+    currentStep,
+  };
+}
+
+/**
+ * Normalizes raw Premiere XML export result from Tauri IPC into validated domain model.
+ */
+export function normalizePremiereExportResult(raw: unknown): PremiereExportResult {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('Invalid PremiereExportResult payload: expected an object');
+  }
+
+  const rec = raw as Record<string, unknown>;
+
+  const xmlPath =
+    typeof rec['xmlPath'] === 'string'
+      ? rec['xmlPath']
+      : typeof rec['xml_path'] === 'string'
+        ? rec['xml_path']
+        : '';
+
+  const sequenceName =
+    typeof rec['sequenceName'] === 'string'
+      ? rec['sequenceName']
+      : typeof rec['sequence_name'] === 'string'
+        ? rec['sequence_name']
+        : '';
+
+  const width =
+    typeof rec['width'] === 'number' && Number.isFinite(rec['width']) ? rec['width'] : 0;
+  const height =
+    typeof rec['height'] === 'number' && Number.isFinite(rec['height']) ? rec['height'] : 0;
+  const fps = typeof rec['fps'] === 'number' && Number.isFinite(rec['fps']) ? rec['fps'] : 60;
+
+  const markerCount =
+    typeof rec['markerCount'] === 'number' && Number.isFinite(rec['markerCount'])
+      ? rec['markerCount']
+      : typeof rec['marker_count'] === 'number' && Number.isFinite(rec['marker_count'])
+        ? rec['marker_count']
+        : 0;
+
+  const clipCount =
+    typeof rec['clipCount'] === 'number' && Number.isFinite(rec['clipCount'])
+      ? rec['clipCount']
+      : typeof rec['clip_count'] === 'number' && Number.isFinite(rec['clip_count'])
+        ? rec['clip_count']
+        : 0;
+
+  const durationMs =
+    typeof rec['durationMs'] === 'number' && Number.isFinite(rec['durationMs'])
+      ? rec['durationMs']
+      : typeof rec['duration_ms'] === 'number' && Number.isFinite(rec['duration_ms'])
+        ? rec['duration_ms']
+        : 0;
+
+  return {
+    xmlPath,
+    sequenceName,
+    width,
+    height,
+    fps,
+    markerCount,
+    clipCount,
+    durationMs,
   };
 }

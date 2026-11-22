@@ -7,6 +7,7 @@
 pub mod ass_exporter;
 pub mod capcut_draft;
 pub mod capcut_schema;
+pub mod premiere_xml;
 pub mod srt_exporter;
 
 use std::collections::HashMap;
@@ -34,6 +35,12 @@ pub use capcut_schema::{
     DraftMetaMaterials, DraftSegment, DraftStoreItem, DraftTextMaterial, DraftTrack,
     DraftVideoMaterial, RootMetaInfo, TimeRange, DEFAULT_SUBTITLE_TRANSFORM_X,
     DEFAULT_SUBTITLE_TRANSFORM_Y, MICROS_PER_SEC, MIN_CLIP_DURATION_MICROS,
+};
+pub use premiere_xml::{
+    escape_xml_text, export_premiere_xml_file, generate_premiere_xml, path_to_file_url,
+    sec_to_frames, PremiereClipInput, PremiereExportResult, PremiereXmlExportOptions,
+    DEFAULT_PREMIERE_FPS, PREMIERE_AUDIO_BIT_DEPTH, PREMIERE_AUDIO_CHANNELS,
+    PREMIERE_AUDIO_SAMPLE_RATE,
 };
 pub use srt_exporter::{
     export_srt_file, export_srt_project_file, format_srt_timecode, generate_srt_script,

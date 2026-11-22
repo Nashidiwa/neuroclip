@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
+  EXPORT_PROGRESS_EVENT,
   exportSubtitlesAss,
   exportSubtitlesSrt,
   exportSubtitleProject,
   exportSubtitlesDual,
   exportCapCutDraft,
+  exportPremiereXml,
   exportSubtitlesProjectAss,
   exportSubtitlesProjectSrt,
+  listenExportProgress,
   normalizeCapCutExportResult,
+  normalizePremiereExportResult,
+  isExportProgressPayload,
+  normalizeExportProgressPayload,
   VTUBER_PALETTE_HEX,
   VTUBER_PALETTE_ASS_BGR,
   isSubtitleExportFormat,
@@ -24,6 +31,10 @@ import {
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(),
 }));
 
 describe('TASK-M4-24: Subtitle Export Engine IPC Client', () => {
@@ -395,5 +406,147 @@ describe('TASK-M4-24: Subtitle Export Engine IPC Client', () => {
     // Rejection on non-object
     expect(() => normalizeCapCutExportResult(null)).toThrow('expected an object');
     expect(() => normalizeCapCutExportResult('invalid')).toThrow('expected an object');
+  });
+
+  it('UT-26-TS.1: exportPremiereXml transforms SubtitleProject & options and normalizes result', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockResolvedValueOnce({
+      xmlPath: 'C:\\NeuroClip\\export\\project_timeline.xml',
+      sequenceName: 'Vedal and Neuro Banter',
+      width: 1080,
+      height: 1920,
+      fps: 60,
+      markerCount: 1,
+      clipCount: 2,
+      durationMs: 9,
+    });
+
+    const result = await exportPremiereXml(
+      sampleProject,
+      'C:\\NeuroClip\\export\\project_timeline.xml',
+      {
+        videoFilePath: 'D:\\Clips\\main.mp4',
+        clips: [
+          {
+            clipId: 'c1',
+            name: 'Part 1',
+            filePath: 'D:\\Clips\\part1.mp4',
+            startSec: 0,
+            endSec: 5,
+          },
+          {
+            filePath: 'D:\\Clips\\part2.mp4',
+            durationSec: 4,
+          },
+        ],
+        fps: 60,
+      },
+    );
+
+    expect(result).toEqual({
+      xmlPath: 'C:\\NeuroClip\\export\\project_timeline.xml',
+      sequenceName: 'Vedal and Neuro Banter',
+      width: 1080,
+      height: 1920,
+      fps: 60,
+      markerCount: 1,
+      clipCount: 2,
+      durationMs: 9,
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith('export_premiere_xml', {
+      project: expect.objectContaining({ project_id: 'subproj_clip_sample_export' }),
+      outputPath: 'C:\\NeuroClip\\export\\project_timeline.xml',
+      options: {
+        video_file_path: 'D:\\Clips\\main.mp4',
+        clips: [
+          {
+            clip_id: 'c1',
+            name: 'Part 1',
+            file_path: 'D:\\Clips\\part1.mp4',
+            start_sec: 0,
+            end_sec: 5,
+            duration_sec: null,
+          },
+          {
+            clip_id: null,
+            name: null,
+            file_path: 'D:\\Clips\\part2.mp4',
+            start_sec: null,
+            end_sec: null,
+            duration_sec: 4,
+          },
+        ],
+        fps: 60,
+      },
+    });
+  });
+
+  it('UT-26-TS.2: exportPremiereXml normalizes ERR_EXPORT_INVALID_LAYOUT and ERR_EXPORT_FILE_WRITE_FAILED', async () => {
+    const mockInvoke = vi.mocked(invoke);
+    mockInvoke.mockRejectedValueOnce({
+      code: ERROR_CODES.ERR_EXPORT_INVALID_LAYOUT,
+      message: 'Layout xuất bản không hợp lệ',
+      recoverable: false,
+    });
+
+    await expect(
+      exportPremiereXml(sampleProject, 'C:\\NeuroClip\\export\\timeline.xml'),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.ERR_EXPORT_INVALID_LAYOUT,
+      recoverable: false,
+    });
+  });
+
+  it('UT-26-TS.3: listenExportProgress validates & normalizes camelCase and snake_case events', async () => {
+    const mockListen = vi.mocked(listen);
+    const unlistenStub = vi.fn();
+    let capturedHandler: ((event: { payload: unknown }) => void) | undefined;
+
+    mockListen.mockImplementationOnce(async (_eventName, handler) => {
+      capturedHandler = handler as (event: { payload: unknown }) => void;
+      return unlistenStub;
+    });
+
+    const received: unknown[] = [];
+    const unlisten = await listenExportProgress((payload) => {
+      received.push(payload);
+    });
+
+    expect(mockListen).toHaveBeenCalledWith(EXPORT_PROGRESS_EVENT, expect.any(Function));
+    expect(isSubtitleExportFormat('premiere_xml')).toBe(true);
+
+    // Emit camelCase payload, snake_case payload, and malformed payload
+    capturedHandler?.({
+      payload: { projectId: 'proj_1', percent: 45, currentStep: 'Building XML' },
+    });
+    capturedHandler?.({
+      payload: { project_id: 'proj_1', percent: 150, current_step: 'Writing disk' },
+    });
+    capturedHandler?.({ payload: { invalid: true } });
+
+    expect(received).toEqual([
+      { projectId: 'proj_1', percent: 45, currentStep: 'Building XML' },
+      { projectId: 'proj_1', percent: 100, currentStep: 'Writing disk' },
+    ]);
+
+    expect(isExportProgressPayload({ projectId: 'p1', percent: 10, currentStep: 'Init' })).toBe(
+      true,
+    );
+    expect(isExportProgressPayload({ percent: 'bad' })).toBe(false);
+    expect(() => normalizePremiereExportResult(null)).toThrow('expected an object');
+    expect(() => normalizeExportProgressPayload('bad')).toThrow('expected an object');
+
+    unlisten();
+    expect(unlistenStub).toHaveBeenCalledTimes(1);
+  });
+
+  it('UT-26-TS.4: listenExportProgress degrades gracefully when Tauri event API throws', async () => {
+    const mockListen = vi.mocked(listen);
+    mockListen.mockRejectedValueOnce(new Error('Tauri runtime unavailable'));
+
+    const unlisten = await listenExportProgress(() => {});
+    expect(typeof unlisten).toBe('function');
+    expect(() => unlisten()).not.toThrow();
   });
 });

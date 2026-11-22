@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Share2,
@@ -11,18 +11,25 @@ import {
   Check,
   Film,
   Layers,
+  Clapperboard,
 } from 'lucide-react';
 import {
   exportCapCutDraft,
+  exportPremiereXml,
   exportSubtitlesProjectAss,
   exportSubtitlesProjectSrt,
+  listenExportProgress,
 } from '../../services/ipc/export.ts';
 import { parseIpcError, type IpcErrorResponse } from '../../services/ipc/error.ts';
 import { ErrorBanner } from '../common/ErrorBanner.tsx';
 import type { SubtitleProject } from '../../types/transcript.ts';
-import type { CapCutExportResult } from '../../types/export.ts';
+import type {
+  CapCutExportResult,
+  PremiereExportResult,
+  ExportProgressPayload,
+} from '../../types/export.ts';
 
-export type ExportFormat = 'capcut' | 'ass' | 'srt';
+export type ExportFormat = 'capcut' | 'premiere_xml' | 'ass' | 'srt';
 
 export interface ExportModalProps {
   readonly isOpen: boolean;
@@ -31,6 +38,44 @@ export interface ExportModalProps {
   readonly videoFilePath?: string | undefined;
   readonly defaultDraftRoot?: string | undefined;
   readonly onExportSuccess?: ((result: CapCutExportResult | string) => void) | undefined;
+}
+
+function stripUnsafeFilenameChars(value: string): string {
+  let replaced = '';
+  for (const ch of value) {
+    const code = ch.charCodeAt(0);
+    if (code < 0x20 || '<>:"/\\|?*'.includes(ch)) {
+      replaced += '_';
+    } else {
+      replaced += ch;
+    }
+  }
+  return replaced.replace(/\.{2,}/g, '').replace(/^[\s.]+|[\s.]+$/g, '');
+}
+
+export function sanitizeFilenameSegment(rawName: string, fallback = 'neuroclip_subtitles'): string {
+  const primary = stripUnsafeFilenameChars(rawName);
+  if (primary.length > 0) {
+    return primary;
+  }
+
+  const secondary = stripUnsafeFilenameChars(fallback);
+  if (secondary.length > 0) {
+    return secondary;
+  }
+
+  return 'neuroclip_subtitles';
+}
+
+function resolveDefaultOutputPath(defaultName: string, format: ExportFormat): string {
+  const safeName = sanitizeFilenameSegment(defaultName);
+  if (format === 'premiere_xml') {
+    return `C:\\NeuroClip\\export\\${safeName}_timeline.xml`;
+  }
+  if (format === 'ass') {
+    return `C:\\NeuroClip\\export\\${safeName}.ass`;
+  }
+  return `C:\\NeuroClip\\export\\${safeName}.srt`;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -45,27 +90,113 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [customDraftRoot, setCustomDraftRoot] = useState<string>(defaultDraftRoot ?? '');
   const [customOutputPath, setCustomOutputPath] = useState<string>('');
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgressPayload | null>(null);
   const [exportError, setExportError] = useState<IpcErrorResponse | null>(null);
   const [capcutResult, setCapcutResult] = useState<CapCutExportResult | null>(null);
+  const [premiereResult, setPremiereResult] = useState<PremiereExportResult | null>(null);
   const [standaloneResultPath, setStandaloneResultPath] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
-  // Sync default paths
+  const mountedRef = useRef<boolean>(true);
+  const isOpenRef = useRef<boolean>(isOpen);
+  const exportRunIdRef = useRef<number>(0);
+  const prevIsOpenRef = useRef<boolean>(false);
+  const prevProjectIdRef = useRef<string>(project.projectId);
+  const prevFormatRef = useRef<ExportFormat>(format);
+
+  isOpenRef.current = isOpen;
+
   useEffect(() => {
-    if (isOpen) {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      exportRunIdRef.current += 1;
+    };
+  }, []);
+
+  // Reset modal session state only when opening or switching projectId
+  useEffect(() => {
+    const wasOpen = prevIsOpenRef.current;
+    const prevProjectId = prevProjectIdRef.current;
+    prevIsOpenRef.current = isOpen;
+    prevProjectIdRef.current = project.projectId;
+
+    if (!isOpen) {
+      if (wasOpen) {
+        exportRunIdRef.current += 1;
+        setIsExporting(false);
+      }
+      return;
+    }
+
+    const justOpened = !wasOpen;
+    const projectChanged = prevProjectId !== project.projectId;
+    if (justOpened || projectChanged) {
+      if (projectChanged) {
+        exportRunIdRef.current += 1;
+      }
+      setIsExporting(false);
       setExportError(null);
+      setExportProgress(null);
       setCapcutResult(null);
+      setPremiereResult(null);
       setStandaloneResultPath(null);
       setIsCopied(false);
       if (defaultDraftRoot !== undefined) {
         setCustomDraftRoot(defaultDraftRoot);
       }
-      const defaultName = project.projectName || project.projectId || 'neuroclip_subtitles';
-      setCustomOutputPath(
-        `C:\\NeuroClip\\export\\${defaultName}.${format === 'ass' ? 'ass' : 'srt'}`,
-      );
+      const safeName = sanitizeFilenameSegment(project.projectName, project.projectId);
+      setCustomOutputPath(resolveDefaultOutputPath(safeName, format));
+      prevFormatRef.current = format;
     }
-  }, [isOpen, defaultDraftRoot, project, format]);
+  }, [isOpen, defaultDraftRoot, project.projectId, project.projectName, format]);
+
+  // Update default output path suffix when format changes while modal is open
+  useEffect(() => {
+    if (!isOpen) {
+      prevFormatRef.current = format;
+      return;
+    }
+    if (prevFormatRef.current !== format) {
+      prevFormatRef.current = format;
+      const safeName = sanitizeFilenameSegment(project.projectName, project.projectId);
+      setCustomOutputPath(resolveDefaultOutputPath(safeName, format));
+    }
+  }, [isOpen, format, project.projectName, project.projectId]);
+
+  // Subscribe to real-time export:progress events while modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    let unlistenFn: (() => void) | undefined;
+
+    void Promise.resolve(
+      listenExportProgress((payload) => {
+        if (!isMounted) return;
+        const trimmedProjectId = project.projectId.trim();
+        const matchesProject =
+          trimmedProjectId.length > 0
+            ? payload.projectId === project.projectId
+            : payload.projectId.length === 0;
+        if (matchesProject) {
+          setExportProgress(payload);
+        }
+      }),
+    ).then((unlisten) => {
+      if (typeof unlisten !== 'function') return;
+      if (!isMounted) {
+        unlisten();
+      } else {
+        unlistenFn = unlisten;
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unlistenFn?.();
+    };
+  }, [isOpen, project.projectId]);
 
   // Handle escape key
   useEffect(() => {
@@ -91,40 +222,76 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   };
 
   const handleExport = useCallback(async (): Promise<void> => {
+    const runId = exportRunIdRef.current + 1;
+    exportRunIdRef.current = runId;
+    const isStaleRun = (): boolean =>
+      !mountedRef.current || !isOpenRef.current || exportRunIdRef.current !== runId;
+
     setIsExporting(true);
     setExportError(null);
+    setExportProgress({
+      projectId: project.projectId,
+      percent: 0,
+      currentStep: 'Đang chuẩn bị xuất bản...',
+    });
+
+    const effectiveVideoPath =
+      propVideoFilePath?.trim() || project.videoFilePath?.trim() || undefined;
+    const fallbackName = sanitizeFilenameSegment(project.projectName, project.projectId);
 
     try {
       if (format === 'capcut') {
         const result = await exportCapCutDraft(project, {
-          videoFilePath: propVideoFilePath ?? project.videoFilePath ?? undefined,
+          videoFilePath: effectiveVideoPath,
           customDraftRoot: customDraftRoot.trim() ? customDraftRoot.trim() : undefined,
         });
+        if (isStaleRun()) return;
         setCapcutResult(result);
         onExportSuccess?.(result);
-      } else if (format === 'ass') {
+      } else if (format === 'premiere_xml') {
         const targetPath =
-          customOutputPath.trim() ||
-          `C:\\NeuroClip\\export\\${project.projectName || 'subtitles'}.ass`;
+          customOutputPath.trim() || resolveDefaultOutputPath(fallbackName, 'premiere_xml');
+        const result = await exportPremiereXml(
+          project,
+          targetPath,
+          effectiveVideoPath ? { videoFilePath: effectiveVideoPath } : undefined,
+        );
+        if (isStaleRun()) return;
+        setPremiereResult(result);
+        onExportSuccess?.(result.xmlPath);
+      } else if (format === 'ass') {
+        const targetPath = customOutputPath.trim() || resolveDefaultOutputPath(fallbackName, 'ass');
         const resultPath = await exportSubtitlesProjectAss(project, targetPath);
+        if (isStaleRun()) return;
         setStandaloneResultPath(resultPath);
         onExportSuccess?.(resultPath);
       } else if (format === 'srt') {
-        const targetPath =
-          customOutputPath.trim() ||
-          `C:\\NeuroClip\\export\\${project.projectName || 'subtitles'}.srt`;
+        const targetPath = customOutputPath.trim() || resolveDefaultOutputPath(fallbackName, 'srt');
         const resultPath = await exportSubtitlesProjectSrt(project, targetPath);
+        if (isStaleRun()) return;
         setStandaloneResultPath(resultPath);
         onExportSuccess?.(resultPath);
       }
     } catch (err: unknown) {
+      if (isStaleRun()) return;
       setExportError(parseIpcError(err));
     } finally {
-      setIsExporting(false);
+      if (!isStaleRun()) {
+        setIsExporting(false);
+      }
     }
   }, [format, project, propVideoFilePath, customDraftRoot, customOutputPath, onExportSuccess]);
 
   if (!isOpen) return null;
+
+  const hasResult = Boolean(capcutResult || premiereResult || standaloneResultPath);
+  const displayedResultPath =
+    capcutResult?.projectPath || premiereResult?.xmlPath || standaloneResultPath || '';
+  const rawPercent = exportProgress?.percent;
+  const progressPercent =
+    rawPercent !== undefined && Number.isFinite(rawPercent)
+      ? Math.min(100, Math.max(0, Math.round(rawPercent)))
+      : 0;
 
   return (
     <div
@@ -183,8 +350,42 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </div>
         )}
 
+        {/* Real-time Export Progress Bar (export:progress) */}
+        {isExporting && (
+          <div
+            data-testid="export-progress-container"
+            className="flex flex-col gap-2 rounded-lg border border-accent-neuro/30 bg-bg-tertiary/40 p-3.5"
+          >
+            <div className="flex items-center justify-between text-xs">
+              <span data-testid="export-progress-step" className="font-medium text-slate-200">
+                {exportProgress?.currentStep || 'Đang xử lý xuất bản...'}
+              </span>
+              <span
+                data-testid="export-progress-percent"
+                className="font-mono font-semibold text-accent-neuro"
+              >
+                {progressPercent}%
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Tiến độ xuất bản"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPercent}
+              data-testid="export-progress-bar"
+              className="h-2 w-full overflow-hidden rounded-full bg-bg-primary"
+            >
+              <div
+                className="h-full rounded-full bg-accent-neuro transition-all duration-200"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Success Banner */}
-        {(capcutResult || standaloneResultPath) && (
+        {hasResult && (
           <div
             data-testid="export-success-banner"
             className="flex flex-col gap-3 rounded-lg border border-accent-vedal/40 bg-accent-vedal/10 p-4 text-slate-100"
@@ -196,25 +397,22 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <p className="mt-0.5 text-xs text-slate-300">
                   {capcutResult
                     ? 'Dự án đã sẵn sàng trong CapCut PC. Mở CapCut lên để thấy ngay dự án hiển thị trên trang chủ.'
-                    : 'Tệp phụ đề đã được ghi thành công với encoding UTF-8 có BOM.'}
+                    : premiereResult
+                      ? 'Timeline FCP7 XML (<xmeml version="4">) đã sẵn sàng để import trực tiếp vào Adobe Premiere Pro hoặc DaVinci Resolve.'
+                      : 'Tệp phụ đề đã được ghi thành công với encoding UTF-8 có BOM.'}
                 </p>
               </div>
             </div>
 
             {/* Path Display with Copy */}
             <div className="flex items-center justify-between rounded border border-border-dark bg-bg-primary/80 px-3 py-2 font-mono text-xs">
-              <span
-                className="truncate text-slate-200"
-                title={capcutResult?.projectPath || standaloneResultPath || ''}
-              >
-                {capcutResult?.projectPath || standaloneResultPath}
+              <span className="truncate text-slate-200" title={displayedResultPath}>
+                {displayedResultPath}
               </span>
               <button
                 type="button"
                 data-testid="copy-export-path-button"
-                onClick={() =>
-                  handleCopyPath(capcutResult?.projectPath || standaloneResultPath || '')
-                }
+                onClick={() => handleCopyPath(displayedResultPath)}
                 className="ml-2 flex shrink-0 items-center space-x-1 text-accent-neuro hover:text-white"
               >
                 {isCopied ? (
@@ -225,6 +423,27 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <span className="text-[11px]">{isCopied ? 'Đã chép' : 'Sao chép'}</span>
               </button>
             </div>
+
+            {/* Premiere XML Metadata Summary */}
+            {premiereResult && (
+              <div
+                data-testid="premiere-export-metadata"
+                className="mt-1 flex flex-wrap gap-2 border-t border-accent-vedal/20 pt-2 font-mono text-[11px]"
+              >
+                <span className="rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 text-slate-200">
+                  {premiereResult.width}&times;{premiereResult.height}
+                </span>
+                <span className="rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 text-slate-200">
+                  {premiereResult.fps}fps
+                </span>
+                <span className="rounded border border-accent-neuro/40 bg-accent-neuro/20 px-2 py-0.5 font-semibold text-accent-neuro">
+                  {premiereResult.markerCount} markers
+                </span>
+                <span className="rounded border border-border-dark bg-bg-tertiary px-2 py-0.5 text-slate-300">
+                  {premiereResult.clipCount} clips
+                </span>
+              </div>
+            )}
 
             {/* CapCut Dual Safeguard Confirmation */}
             {capcutResult && (
@@ -259,11 +478,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         )}
 
         {/* Format Selector */}
-        {!capcutResult && !standaloneResultPath && (
+        {!hasResult && (
           <div className="flex flex-col gap-4">
             <label className="text-xs font-medium text-slate-300">Chọn định dạng xuất bản:</label>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {/* Option 1: CapCut PC Draft */}
               <button
                 type="button"
@@ -293,7 +512,34 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </p>
               </button>
 
-              {/* Option 2: Standalone ASS */}
+              {/* Option 2: Premiere Pro FCP7 XML */}
+              <button
+                type="button"
+                data-testid="export-format-premiere"
+                disabled={isExporting}
+                onClick={() => setFormat('premiere_xml')}
+                className={`flex flex-col rounded-lg border p-3.5 text-left transition-all ${
+                  format === 'premiere_xml'
+                    ? 'border-accent-neuro bg-accent-neuro/10 shadow-sm'
+                    : 'border-border-dark bg-bg-tertiary/40 text-slate-400 hover:bg-bg-tertiary/70'
+                }`}
+              >
+                <div className="mb-1 flex w-full items-center justify-between">
+                  <span className="flex items-center space-x-1.5 text-xs font-semibold text-white">
+                    <Clapperboard className="h-4 w-4 text-accent-neuro" />
+                    <span>Premiere Pro XML (.xml)</span>
+                  </span>
+                  <span className="py-0.2 rounded border border-accent-vedal/40 bg-accent-vedal/20 px-1.5 font-mono text-[10px] font-bold uppercase text-accent-vedal">
+                    FCP7 XML
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-[11px] text-slate-400">
+                  Timeline &lt;xmeml version=&quot;4&quot;&gt; 60fps kèm marker phụ đề cho Premiere
+                  Pro &amp; DaVinci Resolve
+                </p>
+              </button>
+
+              {/* Option 3: Standalone ASS */}
               <button
                 type="button"
                 data-testid="export-format-ass"
@@ -314,7 +560,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </p>
               </button>
 
-              {/* Option 3: Standalone SRT */}
+              {/* Option 4: Standalone SRT */}
               <button
                 type="button"
                 data-testid="export-format-srt"
@@ -380,7 +626,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </div>
             )}
 
-            {/* Standalone Path Option */}
+            {/* Standalone / Premiere Path Option */}
             {format !== 'capcut' && (
               <div className="flex flex-col gap-1.5 rounded-lg border border-border-dark bg-bg-tertiary/30 p-3.5">
                 <label
@@ -399,6 +645,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   onChange={(e) => setCustomOutputPath(e.target.value)}
                   className="rounded border border-border-dark bg-bg-primary px-3 py-1.5 font-mono text-xs text-white focus:border-accent-neuro focus:outline-none"
                 />
+                {format === 'premiere_xml' && (
+                  <span className="text-[10px] text-slate-400">
+                    Xuất timeline FCP7 XML 60fps kèm video/audio tracks và sequence markers tiếng
+                    Việt (UTF-8 không BOM).
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -406,7 +658,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Footer Actions */}
         <div className="flex items-center justify-end space-x-3 border-t border-border-dark pt-4">
-          {capcutResult || standaloneResultPath ? (
+          {hasResult ? (
             <button
               type="button"
               data-testid="export-done-button"

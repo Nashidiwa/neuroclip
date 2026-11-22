@@ -4047,4 +4047,74 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(wireJson.speaker_styles.neuro?.color_hex, '#FFB6C1');
     });
   });
+
+  describe('TASK-M4-26 Test Suite: Premiere Pro FCP7 XML Exporter & export:progress', () => {
+    it('should verify premiere_xml.rs & export_cmd.rs enforce zero-panic invariant and register export_premiere_xml', () => {
+      const targetRustFiles = [
+        'src-tauri/src/export/premiere_xml.rs',
+        'src-tauri/src/export/mod.rs',
+        'src-tauri/src/commands/export_cmd.rs',
+        'src-tauri/src/commands/mod.rs',
+        'src-tauri/src/lib.rs',
+      ];
+
+      for (const relPath of targetRustFiles) {
+        const fullPath = path.resolve(relPath);
+        assert.ok(fs.existsSync(fullPath), `File must exist: ${relPath}`);
+        const content = fs.readFileSync(fullPath, 'utf8');
+        const nonTestCode = content.split('#[cfg(test)]')[0] ?? content;
+        assert.ok(
+          !nonTestCode.includes('.unwrap()'),
+          `No .unwrap() allowed in production code in ${relPath}`,
+        );
+        assert.ok(
+          !nonTestCode.includes('.expect('),
+          `No .expect() allowed in production code in ${relPath}`,
+        );
+        assert.ok(
+          !nonTestCode.includes('panic!'),
+          `No panic! allowed in production code in ${relPath}`,
+        );
+      }
+
+      const libRs = fs.readFileSync(path.resolve('src-tauri/src/lib.rs'), 'utf8');
+      assert.ok(
+        libRs.includes('commands::export_premiere_xml'),
+        'lib.rs must register commands::export_premiere_xml in invoke_handler!',
+      );
+
+      const exportCmdRs = fs.readFileSync(
+        path.resolve('src-tauri/src/commands/export_cmd.rs'),
+        'utf8',
+      );
+      assert.ok(
+        exportCmdRs.includes('"export:progress"'),
+        'export_cmd.rs must define export:progress event constant',
+      );
+      assert.ok(
+        exportCmdRs.includes('project_id') && exportCmdRs.includes('current_step'),
+        'ExportProgressPayload must serialize projectId, percent, currentStep',
+      );
+    });
+
+    it('should verify TypeScript Premiere XML & export:progress IPC contracts', async () => {
+      const exportIpc = await import('../services/ipc/export.ts');
+      assert.strictEqual(typeof exportIpc.exportPremiereXml, 'function');
+      assert.strictEqual(typeof exportIpc.listenExportProgress, 'function');
+      assert.strictEqual(exportIpc.EXPORT_PROGRESS_EVENT, 'export:progress');
+      assert.strictEqual(exportIpc.isSubtitleExportFormat('premiere_xml'), true);
+      assert.strictEqual(exportIpc.isSubtitleExportFormat('invalid_fmt'), false);
+
+      const normalized = exportIpc.normalizeExportProgressPayload({
+        projectId: 'proj_abc',
+        percent: 50,
+        currentStep: 'Building XML',
+      });
+      assert.deepStrictEqual(normalized, {
+        projectId: 'proj_abc',
+        percent: 50,
+        currentStep: 'Building XML',
+      });
+    });
+  });
 });

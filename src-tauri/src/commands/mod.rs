@@ -33,15 +33,16 @@ pub use config_cmd::{
     get_app_config, get_hardware_profile, ping, save_app_config, AppState,
 };
 pub use export_cmd::{
-    __cmd__export_capcut_draft, __cmd__export_subtitle_project, __cmd__export_subtitles_ass,
-    __cmd__export_subtitles_project_ass, __cmd__export_subtitles_project_srt,
-    __cmd__export_subtitles_srt, __tauri_command_name_export_capcut_draft,
+    __cmd__export_capcut_draft, __cmd__export_premiere_xml, __cmd__export_subtitle_project,
+    __cmd__export_subtitles_ass, __cmd__export_subtitles_project_ass,
+    __cmd__export_subtitles_project_srt, __cmd__export_subtitles_srt,
+    __tauri_command_name_export_capcut_draft, __tauri_command_name_export_premiere_xml,
     __tauri_command_name_export_subtitle_project, __tauri_command_name_export_subtitles_ass,
     __tauri_command_name_export_subtitles_project_ass,
     __tauri_command_name_export_subtitles_project_srt, __tauri_command_name_export_subtitles_srt,
-    export_capcut_draft, export_subtitle_project, export_subtitles_ass,
+    export_capcut_draft, export_premiere_xml, export_subtitle_project, export_subtitles_ass,
     export_subtitles_project_ass, export_subtitles_project_srt, export_subtitles_srt,
-    CapCutExportOptions,
+    CapCutExportOptions, ExportProgressPayload, EXPORT_PROGRESS_EVENT,
 };
 pub use ingest_cmd::{
     __cmd__cancel_vod_ingestion, __cmd__extract_pcm_stream, __cmd__get_vod_manifest,

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { parseIpcError } from './error.ts';
 import {
   type TranscriptSegmentsContainer,
@@ -10,10 +11,21 @@ import {
   type DualExportResult,
   type CapCutExportOptions,
   type CapCutExportResult,
+  type PremiereXmlExportOptions,
+  type PremiereExportResult,
+  type ExportProgressPayload,
   normalizeCapCutExportResult,
+  normalizePremiereExportResult,
+  isExportProgressPayload,
+  normalizeExportProgressPayload,
 } from '../../types/export.ts';
 
 export * from '../../types/export.ts';
+
+/**
+ * Canonical Tauri event channel for NLE export progress streaming.
+ */
+export const EXPORT_PROGRESS_EVENT = 'export:progress' as const;
 
 /**
  * Export transcript segments to an Advanced SubStation Alpha (.ass) file with UTF-8 BOM.
@@ -141,6 +153,51 @@ export async function exportCapCutDraft(
 }
 
 /**
+ * Export a SubtitleProject as an FCP7 XML (`<xmeml version="4">`) timeline compatible with
+ * Adobe Premiere Pro 2022–2025 and DaVinci Resolve 18–19.
+ *
+ * @param project Subtitle project to export.
+ * @param outputPath Target `.xml` destination path on disk.
+ * @param options Optional video clip list, path override, and fps configuration.
+ * @returns PremiereExportResult containing XML path, sequence dimensions, fps, and marker count.
+ */
+export async function exportPremiereXml(
+  project: SubtitleProject,
+  outputPath: string,
+  options?: PremiereXmlExportOptions,
+): Promise<PremiereExportResult> {
+  try {
+    const wireProject = toSubtitleProjectJson(project);
+    const wireOptions = options
+      ? {
+          video_file_path: options.videoFilePath ?? null,
+          clips: options.clips
+            ? options.clips.map((clip) => ({
+                clip_id: clip.clipId ?? null,
+                name: clip.name ?? null,
+                file_path: clip.filePath,
+                start_sec: clip.startSec ?? null,
+                end_sec: clip.endSec ?? null,
+                duration_sec: clip.durationSec ?? null,
+              }))
+            : null,
+          fps: options.fps ?? null,
+        }
+      : null;
+
+    const raw = await invoke<Record<string, unknown>>('export_premiere_xml', {
+      project: wireProject,
+      outputPath,
+      options: wireOptions,
+    });
+
+    return normalizePremiereExportResult(raw);
+  } catch (err: unknown) {
+    throw parseIpcError(err);
+  }
+}
+
+/**
  * Export an existing SubtitleProject directly to an Advanced SubStation Alpha (.ass) file with UTF-8 BOM.
  */
 export async function exportSubtitlesProjectAss(
@@ -173,5 +230,24 @@ export async function exportSubtitlesProjectSrt(
     });
   } catch (err: unknown) {
     throw parseIpcError(err);
+  }
+}
+
+/**
+ * Subscribe to real-time `export:progress` events emitted by the Rust NLE export backend.
+ *
+ * Gracefully degrades to a no-op unlisten function in non-Tauri / Vitest environments.
+ */
+export async function listenExportProgress(
+  callback: (payload: ExportProgressPayload) => void,
+): Promise<UnlistenFn> {
+  try {
+    return await listen<unknown>(EXPORT_PROGRESS_EVENT, (event) => {
+      if (isExportProgressPayload(event.payload)) {
+        callback(normalizeExportProgressPayload(event.payload));
+      }
+    });
+  } catch {
+    return () => {};
   }
 }
