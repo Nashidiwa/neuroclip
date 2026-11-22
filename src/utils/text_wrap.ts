@@ -17,7 +17,17 @@ export const RED_FLAG_CPS_THRESHOLD = 20.0;
 export const TARGET_SAFE_CPS = 17.0;
 
 export const VIETNAMESE_HONORIFICS: readonly string[] = [
-  'bố', 'mẹ', 'ông', 'bà', 'anh', 'chị', 'em', 'bé', 'cụ', 'chú', 'bác',
+  'bố',
+  'mẹ',
+  'ông',
+  'bà',
+  'anh',
+  'chị',
+  'em',
+  'bé',
+  'cụ',
+  'chú',
+  'bác',
 ];
 
 export const VIETNAMESE_COMPOUND_WORDS: readonly string[] = [
@@ -365,7 +375,8 @@ export function tokenizeVietnameseCompounds(text: string): string[] {
 
         const isCompound = isCompoundWord(candidate);
         const isHonorificName = isHonorific(s0) && startsWithUppercase(s1);
-        const isCapitalizedPair = startsWithUppercase(s0) && startsWithUppercase(s1) && isCompoundWord(candidate);
+        const isCapitalizedPair =
+          startsWithUppercase(s0) && startsWithUppercase(s1) && isCompoundWord(candidate);
 
         if (isCompound || isHonorificName || isCapitalizedPair) {
           tokens.push(`${w0} ${w1}`);
@@ -541,9 +552,10 @@ export function optimizeCpsTimeBorrowing(
     }
 
     const allowedExtension = Math.min(neededExtension, maxBorrowSec, maxGapExtension);
-    const borrowedSec = Number.isFinite(allowedExtension) && allowedExtension > 0
-      ? Math.round(allowedExtension * 1000) / 1000
-      : 0;
+    const borrowedSec =
+      Number.isFinite(allowedExtension) && allowedExtension > 0
+        ? Math.round(allowedExtension * 1000) / 1000
+        : 0;
 
     const newEndSec = Math.round((seg.endSec + borrowedSec) * 1000) / 1000;
     currentDuration = Math.max(0.05, newEndSec - seg.startSec);

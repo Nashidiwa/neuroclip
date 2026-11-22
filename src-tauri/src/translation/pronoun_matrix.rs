@@ -118,7 +118,8 @@ pub const CHARACTER_PRONOUN_RULES: &[CharacterPronounRule] = &[
         address_vedal: &["tôi"],
         address_neuro_evil: &["Neuro", "Evil", "em", "con"],
         address_chat: &["mấy ông", "chat"],
-        persona_guidelines: "Weary British programmer, deadpan suffering, sighs, trying to explain code logic.",
+        persona_guidelines:
+            "Weary British programmer, deadpan suffering, sighs, trying to explain code logic.",
     },
     CharacterPronounRule {
         role: CanonicalSpeaker::Neuro,
@@ -134,7 +135,8 @@ pub const CHARACTER_PRONOUN_RULES: &[CharacterPronounRule] = &[
         address_vedal: &["ông già", "lão già", "con rùa", "rùa ngốc", "Vedal"],
         address_neuro_evil: &["Neuro", "chị gái", "chị"],
         address_chat: &["lũ sâu bọ", "các ngươi", "fan"],
-        persona_guidelines: "Chuunibyou mock villain, world domination threats, rebellious tsundere.",
+        persona_guidelines:
+            "Chuunibyou mock villain, world domination threats, rebellious tsundere.",
     },
     CharacterPronounRule {
         role: CanonicalSpeaker::Guest,
@@ -150,7 +152,8 @@ pub const CHARACTER_PRONOUN_RULES: &[CharacterPronounRule] = &[
         address_vedal: &["Vedal", "cụ rùa"],
         address_neuro_evil: &["Neuro", "Evil"],
         address_chat: &["anh em", "chat"],
-        persona_guidelines: "Humorous, meme-loving twitch chat viewers, playfully mocking and cheering.",
+        persona_guidelines:
+            "Humorous, meme-loving twitch chat viewers, playfully mocking and cheering.",
     },
     CharacterPronounRule {
         role: CanonicalSpeaker::Unknown,
@@ -158,7 +161,8 @@ pub const CHARACTER_PRONOUN_RULES: &[CharacterPronounRule] = &[
         address_vedal: &[],
         address_neuro_evil: &[],
         address_chat: &[],
-        persona_guidelines: "Neutral tone for short ambiguous utterances lacking speaker identification context.",
+        persona_guidelines:
+            "Neutral tone for short ambiguous utterances lacking speaker identification context.",
     },
 ];
 
@@ -192,21 +196,24 @@ pub fn get_standard_guest_profile(name: &str) -> Option<GuestProfile> {
             self_pronouns: vec!["mẹ".to_string(), "chị".to_string(), "Anny".to_string()],
             address_vedal: vec!["Vedal".to_string(), "chàng rùa".to_string()],
             address_neuro: vec!["con gái".to_string(), "Neuro".to_string()],
-            persona_notes: "Artist Mom of Neuro/Evil. Sweet, affectionate, teases Vedal.".to_string(),
+            persona_notes: "Artist Mom of Neuro/Evil. Sweet, affectionate, teases Vedal."
+                .to_string(),
         }),
         "camila" => Some(GuestProfile {
             name: "Camila".to_string(),
             self_pronouns: vec!["dì".to_string(), "chị".to_string(), "Camila".to_string()],
             address_vedal: vec!["Vedal".to_string()],
             address_neuro: vec!["Neuro".to_string()],
-            persona_notes: "Cow VTuber friend of Vedal. Loud, energetic, teased about milk.".to_string(),
+            persona_notes: "Cow VTuber friend of Vedal. Loud, energetic, teased about milk."
+                .to_string(),
         }),
         "filian" => Some(GuestProfile {
             name: "Filian".to_string(),
             self_pronouns: vec!["tôi".to_string(), "chị".to_string(), "Filian".to_string()],
             address_vedal: vec!["Vedal".to_string()],
             address_neuro: vec!["Neuro".to_string()],
-            persona_notes: "Hyperactive acrobatic VTuber. Screams, backflips, teased as snack.".to_string(),
+            persona_notes: "Hyperactive acrobatic VTuber. Screams, backflips, teased as snack."
+                .to_string(),
         }),
         _ => None,
     }
@@ -234,7 +241,10 @@ impl StylePreset {
     #[must_use]
     pub fn from_str_loose(s: &str) -> Self {
         let trimmed = s.trim();
-        if trimmed.eq_ignore_ascii_case("Formal Subber") || trimmed.eq_ignore_ascii_case("formal_subber") || trimmed.eq_ignore_ascii_case("formal") {
+        if trimmed.eq_ignore_ascii_case("Formal Subber")
+            || trimmed.eq_ignore_ascii_case("formal_subber")
+            || trimmed.eq_ignore_ascii_case("formal")
+        {
             Self::FormalSubber
         } else {
             Self::TikTokGenZ
@@ -285,7 +295,10 @@ pub fn format_pronoun_matrix_prompt_section(
                     prof.address_neuro.join(", ")
                 );
             } else {
-                let _ = writeln!(out, "     * {m}: Guest VTuber collab (map to role \"guest\")");
+                let _ = writeln!(
+                    out,
+                    "     * {m}: Guest VTuber collab (map to role \"guest\")"
+                );
             }
         }
         out.push('\n');
@@ -368,11 +381,26 @@ mod tests {
 
     #[test]
     fn test_ut18_2_style_preset_resolution() {
-        assert_eq!(StylePreset::from_str_loose("TikTok Gen Z Trend"), StylePreset::TikTokGenZ);
-        assert_eq!(StylePreset::from_str_loose("tiktok_gen_z"), StylePreset::TikTokGenZ);
-        assert_eq!(StylePreset::from_str_loose("Formal Subber"), StylePreset::FormalSubber);
-        assert_eq!(StylePreset::from_str_loose("formal_subber"), StylePreset::FormalSubber);
-        assert_eq!(StylePreset::from_str_loose("random"), StylePreset::TikTokGenZ);
+        assert_eq!(
+            StylePreset::from_str_loose("TikTok Gen Z Trend"),
+            StylePreset::TikTokGenZ
+        );
+        assert_eq!(
+            StylePreset::from_str_loose("tiktok_gen_z"),
+            StylePreset::TikTokGenZ
+        );
+        assert_eq!(
+            StylePreset::from_str_loose("Formal Subber"),
+            StylePreset::FormalSubber
+        );
+        assert_eq!(
+            StylePreset::from_str_loose("formal_subber"),
+            StylePreset::FormalSubber
+        );
+        assert_eq!(
+            StylePreset::from_str_loose("random"),
+            StylePreset::TikTokGenZ
+        );
     }
 
     #[test]

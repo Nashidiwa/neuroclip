@@ -9,11 +9,11 @@ use crate::config::hardware::{probe_system_hardware, HardwareProfile};
 use crate::error::{AppError, SttError};
 use crate::stt::whisper_sidecar::ProgressCallback;
 use crate::stt::{
-    evaluate_hardware_guardrail_from_profile,
-    prepare_audio_to_buffer, run_faster_whisper_worker, run_whisper_transcription, verify_model,
-    AudioPrepConfig, FasterWhisperConfig, GroqClient, GroqClientConfig, GuardrailPolicy, ModelInfo,
-    PreparedAudioBuffer, SttProgressPayload, TranscriptSegment, TranscriptSegmentsContainer,
-    WhisperSidecarConfig, DEFAULT_FASTER_WHISPER_DEVICE, DEFAULT_FASTER_WHISPER_MODEL,
+    evaluate_hardware_guardrail_from_profile, prepare_audio_to_buffer, run_faster_whisper_worker,
+    run_whisper_transcription, verify_model, AudioPrepConfig, FasterWhisperConfig, GroqClient,
+    GroqClientConfig, GuardrailPolicy, ModelInfo, PreparedAudioBuffer, SttProgressPayload,
+    TranscriptSegment, TranscriptSegmentsContainer, WhisperSidecarConfig,
+    DEFAULT_FASTER_WHISPER_DEVICE, DEFAULT_FASTER_WHISPER_MODEL,
     DEFAULT_FASTER_WHISPER_QUANTIZATION,
 };
 

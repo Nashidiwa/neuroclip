@@ -113,12 +113,7 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
 
     it('rates CPS > 20.0 as Red pulsating ("Quá nhanh!")', () => {
       // 35 characters in 1.0s = 35.0 CPS (PRD Scenario 2)
-      const seg = createSegment(
-        'seg_red',
-        0,
-        1.0,
-        'Đây là một câu thoại rất dài đọc nhanh',
-      );
+      const seg = createSegment('seg_red', 0, 1.0, 'Đây là một câu thoại rất dài đọc nhanh');
       expect(seg.cpsScore).toBeGreaterThan(CPS_RED_THRESHOLD);
 
       render(<CPSIndicator segment={seg} />);
@@ -150,21 +145,12 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
     it('calls onBorrowSilence with stopPropagation when borrow button clicked', () => {
       // Current: 0.0 - 1.0s (35 chars -> 35 CPS)
       // Next: 2.0 - 4.0s (1.0s silence gap)
-      const seg1 = createSegment(
-        'seg_1',
-        0.0,
-        1.0,
-        'Đây là một câu thoại rất dài đọc nhanh',
-      );
+      const seg1 = createSegment('seg_1', 0.0, 1.0, 'Đây là một câu thoại rất dài đọc nhanh');
       const seg2 = createSegment('seg_2', 2.0, 4.0, 'Câu tiếp theo');
       const onBorrowSilenceMock = vi.fn();
 
       render(
-        <CPSIndicator
-          segment={seg1}
-          nextSegment={seg2}
-          onBorrowSilence={onBorrowSilenceMock}
-        />,
+        <CPSIndicator segment={seg1} nextSegment={seg2} onBorrowSilence={onBorrowSilenceMock} />,
       );
 
       const borrowBtn = screen.getByTestId('borrow-silence-btn-seg_1');
@@ -189,12 +175,7 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
       const text35 = 'Câu thoại dài ba mươi lăm ký tự này';
       expect(getUnicodeCharCount(text35)).toBe(35);
 
-      const seg1 = createSegment(
-        'seg_1',
-        0.0,
-        1.0,
-        text35,
-      );
+      const seg1 = createSegment('seg_1', 0.0, 1.0, text35);
       const seg2 = createSegment('seg_2', 2.0, 4.0, 'Câu tiếp theo');
 
       useStudioStore.getState().setSegments([seg1, seg2]);
@@ -222,9 +203,7 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
       expect(rateCps(currentSeg1.cpsScore)).toBe('yellow');
 
       // Now re-render CPSIndicator with updated store segment
-      const { rerender } = render(
-        <CPSIndicator segment={currentSeg1} nextSegment={currentSeg2} />,
-      );
+      const { rerender } = render(<CPSIndicator segment={currentSeg1} nextSegment={currentSeg2} />);
 
       const indicator = screen.getByTestId('cps-indicator-seg_1');
       expect(indicator).toHaveAttribute('data-rating', 'yellow');
@@ -277,12 +256,7 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
     });
 
     it('triggers borrowSilence via Shift + E hotkey on selected segment (PRD US5.2 Scenario 2)', () => {
-      const seg1 = createSegment(
-        'seg_hotkey',
-        0.0,
-        1.0,
-        'Câu thoại dài ba mươi lăm ký tự này',
-      );
+      const seg1 = createSegment('seg_hotkey', 0.0, 1.0, 'Câu thoại dài ba mươi lăm ký tự này');
       const seg2 = createSegment('seg_next', 3.0, 5.0, 'Đoạn tiếp theo');
 
       useStudioStore.getState().setSegments([seg1, seg2]);
@@ -331,7 +305,9 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
       const t0 = performance.now();
       // Type a very long phrase that pushes CPS > 20
       fireEvent.change(textarea, {
-        target: { value: 'Một câu thoại tiếng Việt rất dài khiến tốc độ đọc vượt ngưỡng hai mươi CPS!' },
+        target: {
+          value: 'Một câu thoại tiếng Việt rất dài khiến tốc độ đọc vượt ngưỡng hai mươi CPS!',
+        },
       });
       const elapsedMs = performance.now() - t0;
 
@@ -371,23 +347,14 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
       expect(allowable).toBe(0);
 
       const onBorrowMock = vi.fn();
-      render(
-        <CPSIndicator
-          segment={seg1}
-          nextSegment={seg2}
-          onBorrowSilence={onBorrowMock}
-        />,
-      );
+      render(<CPSIndicator segment={seg1} nextSegment={seg2} onBorrowSilence={onBorrowMock} />);
 
       // Button is rendered because CPS > 20, but it is DISABLED
       const btn = screen.getByTestId('borrow-silence-btn-seg_close_1');
       expect(btn).toBeInTheDocument();
       expect(btn).toBeDisabled();
       expect(btn.className).toContain('cursor-not-allowed');
-      expect(btn).toHaveAttribute(
-        'title',
-        'Không có khoảng lặng khả dụng để mượn thời gian',
-      );
+      expect(btn).toHaveAttribute('title', 'Không có khoảng lặng khả dụng để mượn thời gian');
 
       // Clicking disabled button must NOT trigger borrow
       fireEvent.click(btn);

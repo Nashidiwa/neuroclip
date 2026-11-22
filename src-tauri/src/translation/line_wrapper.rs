@@ -462,11 +462,7 @@ pub fn wrap_vietnamese_text(
 
 /// Convenience helper to return wrapped subtitle joined with newline `\n`.
 #[must_use]
-pub fn wrap_vietnamese_subtitle(
-    text: &str,
-    max_chars_per_line: usize,
-    max_lines: usize,
-) -> String {
+pub fn wrap_vietnamese_subtitle(text: &str, max_chars_per_line: usize, max_lines: usize) -> String {
     wrap_vietnamese_text(text, max_chars_per_line, max_lines).join("\n")
 }
 

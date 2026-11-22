@@ -264,8 +264,10 @@ describe('TASK-M4-24: Subtitle Export Engine IPC Client', () => {
       projectDir: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000',
       projectPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000',
       draftName: 'NeuroClip_Highlight_20261120_100000',
-      draftContentPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\draft_content.json',
-      draftMetaInfoPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\draft_meta_info.json',
+      draftContentPath:
+        'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\draft_content.json',
+      draftMetaInfoPath:
+        'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\draft_meta_info.json',
       assBackupPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\subtitle.ass',
       srtBackupPath: 'C:\\CapCut\\Projects\\NeuroClip_Highlight_20261120_100000\\subtitle.srt',
       dualSafeguardFiles: [

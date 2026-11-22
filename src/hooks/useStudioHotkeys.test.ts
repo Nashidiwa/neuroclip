@@ -17,11 +17,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import {
-  useStudioStore,
-  getSpeakerColor,
-  SPEAKER_COLORS,
-} from '../stores/useStudioStore.ts';
+import { useStudioStore, getSpeakerColor, SPEAKER_COLORS } from '../stores/useStudioStore.ts';
 import {
   useStudioHotkeys,
   isInputFocused,

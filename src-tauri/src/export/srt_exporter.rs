@@ -103,7 +103,9 @@ pub fn export_srt_project_file(
 )]
 pub mod tests {
     use super::*;
-    use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer, WordTiming};
+    use crate::stt::transcript_parser::{
+        TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
+    };
     use chrono::Utc;
     use std::time::Instant;
 
@@ -121,14 +123,12 @@ pub mod tests {
                     confidence: 0.97,
                     cps_score: 11.0,
                     is_flagged_for_review: false,
-                    words: vec![
-                        WordTiming {
-                            word: "Testing".to_string(),
-                            start_sec: 83.45,
-                            end_sec: 84.50,
-                            probability: 0.99,
-                        },
-                    ],
+                    words: vec![WordTiming {
+                        word: "Testing".to_string(),
+                        start_sec: 83.45,
+                        end_sec: 84.50,
+                        probability: 0.99,
+                    }],
                 },
                 TranscriptSegment {
                     segment_id: "seg_0002".to_string(),
@@ -179,7 +179,10 @@ pub mod tests {
     #[test]
     fn test_it_24_2_srt_bom_disk_export() {
         let container = sample_container();
-        let temp_dir = std::env::temp_dir().join(format!("neuroclip_srt_test_{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_srt_test_{}",
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
         let output_path = temp_dir.join("subtitles_test.srt");
 
         let exported_path = export_srt_file(&container, &output_path).unwrap();

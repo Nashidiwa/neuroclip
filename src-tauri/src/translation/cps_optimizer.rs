@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 use crate::stt::transcript_parser::{
-    TranscriptSegment, TranscriptSegmentsContainer, CONFIDENCE_FLAG_THRESHOLD,
-    CPS_FLAG_THRESHOLD, MIN_SEGMENT_DURATION_SEC,
+    TranscriptSegment, TranscriptSegmentsContainer, CONFIDENCE_FLAG_THRESHOLD, CPS_FLAG_THRESHOLD,
+    MIN_SEGMENT_DURATION_SEC,
 };
 
 /// Target reading speed in characters per second (safe green threshold).
@@ -216,13 +216,8 @@ pub fn optimize_cps_with_config(
         };
 
         let text = effective_segment_text(seg);
-        let borrow_sec = calculate_borrow_duration(
-            text,
-            seg.start_sec,
-            seg.end_sec,
-            next_start,
-            config,
-        );
+        let borrow_sec =
+            calculate_borrow_duration(text, seg.start_sec, seg.end_sec, next_start, config);
 
         if borrow_sec > 0.0 {
             seg.end_sec = round_to_millis(seg.end_sec + borrow_sec);
@@ -335,7 +330,10 @@ mod tests {
 
         let cps = calculate_cps(vi_text_40, 1.5);
         assert!((cps - 26.6667).abs() < 0.01, "CPS must be ~26.7, got {cps}");
-        assert!(cps > CPS_RED_THRESHOLD, "CPS must exceed red threshold 20.0");
+        assert!(
+            cps > CPS_RED_THRESHOLD,
+            "CPS must exceed red threshold 20.0"
+        );
         assert_eq!(rate_cps(cps), CpsRating::Red);
     }
 
@@ -381,7 +379,10 @@ mod tests {
             "New CPS must be ~17.4, got {}",
             seg0.cps_score
         );
-        assert!(seg0.cps_score <= CPS_RED_THRESHOLD, "New CPS must be <= 20.0");
+        assert!(
+            seg0.cps_score <= CPS_RED_THRESHOLD,
+            "New CPS must be <= 20.0"
+        );
         assert!(
             !seg0.is_flagged_for_review,
             "Red flag must be cleared when CPS <= 20 and confidence >= 0.6"
@@ -397,14 +398,7 @@ mod tests {
         // Time borrowing must NOT extend by 800ms; it must cap at 1.6 - 1.5 - 0.05 = 50ms!
         let vi_text_40 = "Một hai ba bốn năm sáu bảy tám chín mười";
         let mut segments = vec![
-            create_test_segment(
-                "seg_0001",
-                0.0,
-                1.5,
-                "English text",
-                Some(vi_text_40),
-                0.95,
-            ),
+            create_test_segment("seg_0001", 0.0, 1.5, "English text", Some(vi_text_40), 0.95),
             create_test_segment(
                 "seg_0002",
                 1.6,
@@ -437,14 +431,7 @@ mod tests {
         // Borrowing must be 0ms.
         let vi_text_40 = "Một hai ba bốn năm sáu bảy tám chín mười";
         let mut segments = vec![
-            create_test_segment(
-                "seg_0001",
-                0.0,
-                1.5,
-                "English text",
-                Some(vi_text_40),
-                0.95,
-            ),
+            create_test_segment("seg_0001", 0.0, 1.5, "English text", Some(vi_text_40), 0.95),
             create_test_segment(
                 "seg_0002",
                 1.53,
@@ -497,7 +484,14 @@ mod tests {
         let mut segments = vec![
             create_test_segment("seg_0001", 0.0, 1.0, "Fast line 1", Some(text), 0.95), // 40 CPS
             create_test_segment("seg_0002", 2.0, 3.0, "Fast line 2", Some(text), 0.95), // 40 CPS
-            create_test_segment("seg_0003", 5.0, 6.0, "Normal line", Some("Bình thường"), 0.95),
+            create_test_segment(
+                "seg_0003",
+                5.0,
+                6.0,
+                "Normal line",
+                Some("Bình thường"),
+                0.95,
+            ),
         ];
 
         let report = optimize_cps_time_borrowing(&mut segments, 800, 50, 17.0);
@@ -536,7 +530,10 @@ mod tests {
 
         // Validate deserialization roundtrip
         let roundtrip_res: Result<TranscriptSegmentsContainer, _> = serde_json::from_str(&json_str);
-        assert!(roundtrip_res.is_ok(), "Must deserialize back into TranscriptSegmentsContainer");
+        assert!(
+            roundtrip_res.is_ok(),
+            "Must deserialize back into TranscriptSegmentsContainer"
+        );
         let roundtrip = roundtrip_res.unwrap_or(container);
 
         assert_eq!(roundtrip.clip_id, "clip_m4_19_test");

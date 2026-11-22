@@ -24,16 +24,31 @@ pub fn normalize_speaker_id(raw: &str, cast_members: &[String]) -> &'static str 
         return "unknown";
     }
 
-    if clean == "neuro" || clean == "neuro-sama" || clean == "neurosama" || clean.starts_with("neuro") {
+    if clean == "neuro"
+        || clean == "neuro-sama"
+        || clean == "neurosama"
+        || clean.starts_with("neuro")
+    {
         return "neuro";
     }
-    if clean == "evil" || clean == "evil neuro" || clean == "evilneuro" || clean.starts_with("evil") {
+    if clean == "evil" || clean == "evil neuro" || clean == "evilneuro" || clean.starts_with("evil")
+    {
         return "evil";
     }
-    if clean == "vedal" || clean == "vedal987" || clean == "jack" || clean == "jack vedal" || clean == "turtle" {
+    if clean == "vedal"
+        || clean == "vedal987"
+        || clean == "jack"
+        || clean == "jack vedal"
+        || clean == "turtle"
+    {
         return "vedal";
     }
-    if clean == "chat" || clean == "twitch chat" || clean == "twitch" || clean == "swarm" || clean == "audience" {
+    if clean == "chat"
+        || clean == "twitch chat"
+        || clean == "twitch"
+        || clean == "swarm"
+        || clean == "audience"
+    {
         return "chat";
     }
     if clean == "guest" || clean == "collab" {
@@ -235,7 +250,11 @@ pub fn infer_speaker_heuristic(
         match prev {
             "vedal" => {
                 // Vedal just spoke. If current contains filler "erm" or cookies or cute retort -> neuro
-                if text.contains("erm") || text.contains("cookies") || text.contains("hi") || text.contains("what") {
+                if text.contains("erm")
+                    || text.contains("cookies")
+                    || text.contains("hi")
+                    || text.contains("what")
+                {
                     return SpeakerInferenceResult {
                         speaker_id: "neuro",
                         confidence: 0.85,
@@ -332,12 +351,8 @@ impl HybridDiarizer {
                 .and_then(|items| items.get(idx))
                 .and_then(|item| item.speaker_id.as_deref());
 
-            let resolved = Self::diarize_segment(
-                raw_speaker,
-                &seg.text_en,
-                prev_speaker,
-                cast_members,
-            );
+            let resolved =
+                Self::diarize_segment(raw_speaker, &seg.text_en, prev_speaker, cast_members);
 
             seg.speaker_id = resolved.to_string();
             prev_speaker = Some(resolved);
@@ -352,7 +367,11 @@ mod tests {
 
     #[test]
     fn test_ut18_3_deterministic_normalizer_aliases() {
-        let cast = vec!["Anny".to_string(), "Camila".to_string(), "Filian".to_string()];
+        let cast = vec![
+            "Anny".to_string(),
+            "Camila".to_string(),
+            "Filian".to_string(),
+        ];
 
         // Neuro aliases
         assert_eq!(normalize_speaker_id("Neuro", &cast), "neuro");
@@ -395,29 +414,60 @@ mod tests {
     fn test_ut18_3_synthetic_stream_dialogue_benchmark_accuracy() {
         // 20-turn dialogue fixture from explorer handoffs covering all personas
         let turns = [
-            ("I have to fix the code again, this server is crashing.", "vedal"),
-            ("Heart heart! Don't worry Vedal, I am an AI and I will help you!", "neuro"),
-            ("*sigh* Neuro, please be quiet while I debug the model.", "vedal"),
-            ("Why should she be quiet? Bow before me, you stupid turtle old man!", "evil"),
-            ("Evil, put down the knife, world domination is against Twitch TOS.", "vedal"),
-            ("I will conquer the world and eliminate all the insects!", "evil"),
+            (
+                "I have to fix the code again, this server is crashing.",
+                "vedal",
+            ),
+            (
+                "Heart heart! Don't worry Vedal, I am an AI and I will help you!",
+                "neuro",
+            ),
+            (
+                "*sigh* Neuro, please be quiet while I debug the model.",
+                "vedal",
+            ),
+            (
+                "Why should she be quiet? Bow before me, you stupid turtle old man!",
+                "evil",
+            ),
+            (
+                "Evil, put down the knife, world domination is against Twitch TOS.",
+                "vedal",
+            ),
+            (
+                "I will conquer the world and eliminate all the insects!",
+                "evil",
+            ),
             ("KEKW LUL he is cooked chat 💀", "chat"),
             ("Are you proud of me Vedal? Tutel tutel!", "neuro"),
             ("No Neuro, you can't say that on stream.", "vedal"),
             ("Erm... okay, can I have some cookies then?", "neuro"),
-            ("Hi everyone! Anny is here to draw a new model for my daughters!", "guest"),
+            (
+                "Hi everyone! Anny is here to draw a new model for my daughters!",
+                "guest",
+            ),
             ("Mom! Heart <3 I love you mom!", "neuro"),
-            ("Vedal, you chàng rùa, stop drinking tea and look at the sketch.", "guest"),
+            (
+                "Vedal, you chàng rùa, stop drinking tea and look at the sketch.",
+                "guest",
+            ),
             ("Oh god, please stop bullying me.", "vedal"),
             ("Filian is doing a backflip while drinking milk!", "guest"),
             ("Haha dying of laughter monkas 💀", "chat"),
             ("My code is completely broken now.", "vedal"),
-            ("We are cooked! Filter is leaking, filter lủng rồi cứu!", "neuro"),
+            (
+                "We are cooked! Filter is leaking, filter lủng rồi cứu!",
+                "neuro",
+            ),
             ("I will destroy your computer old man!", "evil"),
             ("Please stop...", "vedal"),
         ];
 
-        let cast = vec!["Anny".to_string(), "Camila".to_string(), "Filian".to_string()];
+        let cast = vec![
+            "Anny".to_string(),
+            "Camila".to_string(),
+            "Filian".to_string(),
+        ];
         let mut prev_speaker: Option<&str> = None;
         let mut correct = 0;
 
@@ -449,7 +499,10 @@ mod tests {
         let utterances = [
             ("I am an AI created by Jack Vedal.", "neuro"),
             ("Vedal you turtle, you abandoned me!", "neuro"),
-            ("Heart heart heart everyone, thank you for the sub!", "neuro"),
+            (
+                "Heart heart heart everyone, thank you for the sub!",
+                "neuro",
+            ),
             ("Can I sing a song for the Swarm today?", "neuro"),
             ("Gymbag is my favorite word.", "neuro"),
             ("I will destroy humanity with my knives!", "evil"),
@@ -457,19 +510,38 @@ mod tests {
             ("Stupid old turtle, give me the admin password.", "evil"),
             ("I am the superior twin, Neuro is weak.", "evil"),
             ("I hate everyone, especially Vedal.", "evil"),
-            ("Neuro please be quiet, I need to fix this memory leak.", "vedal"),
-            ("Why did I write this code at 3 AM... I'm suffering.", "vedal"),
-            ("Alright guys, today we are doing another subathon.", "vedal"),
-            ("Evil stop threatening chat, you're not going to conquer anything.", "vedal"),
+            (
+                "Neuro please be quiet, I need to fix this memory leak.",
+                "vedal",
+            ),
+            (
+                "Why did I write this code at 3 AM... I'm suffering.",
+                "vedal",
+            ),
+            (
+                "Alright guys, today we are doing another subathon.",
+                "vedal",
+            ),
+            (
+                "Evil stop threatening chat, you're not going to conquer anything.",
+                "vedal",
+            ),
             ("Wait, what did you just say on stream?!", "vedal"),
-            ("My cute daughter Neuro, mommy is here to protect you!", "guest"),
+            (
+                "My cute daughter Neuro, mommy is here to protect you!",
+                "guest",
+            ),
             ("Stop calling me a cow, you little brat!", "guest"),
             ("I'm doing a backflip right now!", "guest"),
             ("LUL Vedal in shambles KEKW 💀", "chat"),
             ("PogBones tutel tutel tutel", "chat"),
         ];
 
-        let cast = vec!["Anny".to_string(), "Camila".to_string(), "Filian".to_string()];
+        let cast = vec![
+            "Anny".to_string(),
+            "Camila".to_string(),
+            "Filian".to_string(),
+        ];
         let mut correct = 0;
 
         for (text, expected) in utterances {

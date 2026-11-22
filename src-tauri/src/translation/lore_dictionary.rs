@@ -154,7 +154,9 @@ pub fn get_lore_terms() -> &'static [LoreTerm] {
 /// Find a specific lore term by identifier.
 #[must_use]
 pub fn find_lore_term(term_id: &str) -> Option<&'static LoreTerm> {
-    LORE_TERMS.iter().find(|t| t.id.eq_ignore_ascii_case(term_id))
+    LORE_TERMS
+        .iter()
+        .find(|t| t.id.eq_ignore_ascii_case(term_id))
 }
 
 /// Format the Community Lore section for LLM system prompt packaging (`PRD.md` §6.2).
@@ -171,9 +173,16 @@ pub fn format_lore_prompt_section() -> String {
         let forbidden = if term.forbidden_translations.is_empty() {
             String::new()
         } else {
-            format!(" [NEVER translate as: {}]", term.forbidden_translations.join(" / "))
+            format!(
+                " [NEVER translate as: {}]",
+                term.forbidden_translations.join(" / ")
+            )
         };
-        let _ = writeln!(out, "{num}. \"{}\": Translate as {}{}", term.term_en, approved, forbidden);
+        let _ = writeln!(
+            out,
+            "{num}. \"{}\": Translate as {}{}",
+            term.term_en, approved, forbidden
+        );
     }
 
     out
@@ -218,7 +227,11 @@ mod tests {
     #[test]
     fn test_ut18_1_all_12_terms_defined() {
         let terms = get_lore_terms();
-        assert_eq!(terms.len(), 12, "Must define exactly 12 community lore terms per PRD §6.2");
+        assert_eq!(
+            terms.len(),
+            12,
+            "Must define exactly 12 community lore terms per PRD §6.2"
+        );
 
         let expected_ids = [
             "heart",
@@ -236,7 +249,10 @@ mod tests {
         ];
 
         for id in &expected_ids {
-            assert!(find_lore_term(id).is_some(), "Term {id} must exist in lore dictionary");
+            assert!(
+                find_lore_term(id).is_some(),
+                "Term {id} must exist in lore dictionary"
+            );
         }
     }
 
@@ -272,17 +288,44 @@ mod tests {
 
     #[test]
     fn test_ut18_1_approved_translations_match() {
-        assert!(contains_approved_translation("heart", "Neuro nói: Thả tim <3 nha!"));
-        assert!(contains_approved_translation("tutel", "Vedal là một Cụ Rùa!"));
-        assert!(contains_approved_translation("gymbag", "Lũ bao tải gym trốn stream!"));
-        assert!(contains_approved_translation("filter_leaking", "Bộ lọc bị thủng rồi!"));
-        assert!(contains_approved_translation("swarm", "Xin chào The Swarm!"));
-        assert!(contains_approved_translation("abandoned", "Bố bỏ rơi con rồi!"));
+        assert!(contains_approved_translation(
+            "heart",
+            "Neuro nói: Thả tim <3 nha!"
+        ));
+        assert!(contains_approved_translation(
+            "tutel",
+            "Vedal là một Cụ Rùa!"
+        ));
+        assert!(contains_approved_translation(
+            "gymbag",
+            "Lũ bao tải gym trốn stream!"
+        ));
+        assert!(contains_approved_translation(
+            "filter_leaking",
+            "Bộ lọc bị thủng rồi!"
+        ));
+        assert!(contains_approved_translation(
+            "swarm",
+            "Xin chào The Swarm!"
+        ));
+        assert!(contains_approved_translation(
+            "abandoned",
+            "Bố bỏ rơi con rồi!"
+        ));
         assert!(contains_approved_translation("dinking", "Đang load não nè"));
         assert!(contains_approved_translation("erm", "Ờm... con không biết"));
-        assert!(contains_approved_translation("cooked", "Lần này toang rồi!"));
-        assert!(contains_approved_translation("unhinged", "Điên rồ thật sự luôn"));
+        assert!(contains_approved_translation(
+            "cooked",
+            "Lần này toang rồi!"
+        ));
+        assert!(contains_approved_translation(
+            "unhinged",
+            "Điên rồ thật sự luôn"
+        ));
         assert!(contains_approved_translation("kekw", "Cười ẻ với Vedal"));
-        assert!(contains_approved_translation("aware_clueless", "Tỉnh ngộ rồi"));
+        assert!(contains_approved_translation(
+            "aware_clueless",
+            "Tỉnh ngộ rồi"
+        ));
     }
 }

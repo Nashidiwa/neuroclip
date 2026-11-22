@@ -40,11 +40,8 @@ export interface SegmentRowProps {
       ) => void)
     | undefined;
   readonly onNudgeTime?:
-    | ((segmentId: string, boundary: 'start' | 'end', deltaSec: number) => void)
-    | undefined;
-  readonly onBorrowSilence?:
-    | ((segmentId: string, deltaSec: number) => void)
-    | undefined;
+    ((segmentId: string, boundary: 'start' | 'end', deltaSec: number) => void) | undefined;
+  readonly onBorrowSilence?: ((segmentId: string, deltaSec: number) => void) | undefined;
   readonly className?: string | undefined;
 }
 
@@ -164,18 +161,18 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
       data-selected={isSelected ? 'true' : 'false'}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      className={`group relative flex flex-col space-y-2 rounded-lg border p-3 transition-colors outline-none cursor-pointer ${
+      className={`group relative flex cursor-pointer flex-col space-y-2 rounded-lg border p-3 outline-none transition-colors ${
         isSelected
           ? isActive
-            ? 'border-accent-neuro bg-accent-neuro/20 ring-2 ring-accent-neuro/70 shadow-md'
-            : 'border-slate-300 bg-bg-tertiary/90 ring-1 ring-slate-300/60 shadow-sm'
+            ? 'border-accent-neuro bg-accent-neuro/20 shadow-md ring-2 ring-accent-neuro/70'
+            : 'border-slate-300 bg-bg-tertiary/90 shadow-sm ring-1 ring-slate-300/60'
           : isActive
-          ? 'border-accent-neuro bg-accent-neuro/15 shadow-md shadow-accent-neuro/10'
-          : 'border-border-dark bg-bg-secondary/50 hover:border-slate-600 hover:bg-bg-tertiary/40'
+            ? 'border-accent-neuro bg-accent-neuro/15 shadow-md shadow-accent-neuro/10'
+            : 'border-border-dark bg-bg-secondary/50 hover:border-slate-600 hover:bg-bg-tertiary/40'
       } ${className}`}
     >
       {/* Top Metadata Bar: Speaker Badge, Timecodes, Nudge Buttons, CPS Score */}
-      <div className="flex flex-wrap items-center justify-between gap-1 text-xs select-none">
+      <div className="flex select-none flex-wrap items-center justify-between gap-1 text-xs">
         <div className="flex flex-wrap items-center gap-2">
           {/* Speaker Badge (PO Option 1 Theme Colors) */}
           <span
@@ -184,7 +181,7 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
               borderColor: speakerColor,
               color: speakerColor,
             }}
-            className="inline-flex items-center space-x-1 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-bg-primary/50"
+            className="inline-flex items-center space-x-1 rounded border bg-bg-primary/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
           >
             <User className="h-2.5 w-2.5 shrink-0" />
             <span>{speaker}</span>
@@ -192,7 +189,7 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
 
           {/* Formatted Timecode & Start/End Nudge Buttons */}
           <div className="flex items-center space-x-1 font-mono text-[11px] text-slate-300">
-            <Clock className="h-3 w-3 text-slate-500 shrink-0" />
+            <Clock className="h-3 w-3 shrink-0 text-slate-500" />
             <span data-testid={`timecode-start-${segId}`}>{formatStudioTimecode(start)}</span>
             <TimecodeNudge
               segmentId={segId}
@@ -202,12 +199,7 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
             />
             <span className="text-slate-500">&rarr;</span>
             <span data-testid={`timecode-end-${segId}`}>{formatStudioTimecode(end)}</span>
-            <TimecodeNudge
-              segmentId={segId}
-              boundary="end"
-              valueSec={end}
-              onNudge={handleNudge}
-            />
+            <TimecodeNudge segmentId={segId} boundary="end" valueSec={end} onNudge={handleNudge} />
           </div>
         </div>
 
@@ -221,14 +213,14 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
               ((id, delta) => useStudioStore.getState().nudgeSegmentTime(id, 'end', delta))
             }
           />
-          {isActive && <CheckCircle2 className="h-3.5 w-3.5 text-accent-neuro shrink-0" />}
+          {isActive && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-accent-neuro" />}
         </div>
       </div>
 
       {/* Inline Subtitle Textareas (Auto-resizing, <= 16ms Zero Input Lag) */}
       <div className="flex flex-col space-y-1.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-col space-y-0.5">
-          <label className="text-[10px] font-medium uppercase text-slate-400 tracking-wider">
+          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
             Vietsub
           </label>
           <textarea
@@ -239,12 +231,12 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
             onKeyDown={handleTextareaKeyDown}
             placeholder="Nhập phụ đề tiếng Việt..."
             data-testid={`textarea-vi-${segId}`}
-            className="w-full resize-none overflow-hidden rounded border border-border-dark/80 bg-bg-primary/50 px-2 py-1 text-xs sm:text-sm font-medium text-slate-100 placeholder-slate-500 focus:border-accent-neuro focus:outline-none focus:ring-1 focus:ring-accent-neuro/50 transition-colors"
+            className="w-full resize-none overflow-hidden rounded border border-border-dark/80 bg-bg-primary/50 px-2 py-1 text-xs font-medium text-slate-100 placeholder-slate-500 transition-colors focus:border-accent-neuro focus:outline-none focus:ring-1 focus:ring-accent-neuro/50 sm:text-sm"
           />
         </div>
 
         <div className="flex flex-col space-y-0.5">
-          <label className="text-[10px] font-medium uppercase text-slate-500 tracking-wider">
+          <label className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
             English Transcript
           </label>
           <textarea
@@ -255,7 +247,7 @@ const SegmentRowInner: React.FC<SegmentRowProps> = ({
             onKeyDown={handleTextareaKeyDown}
             placeholder="English transcript..."
             data-testid={`textarea-en-${segId}`}
-            className="w-full resize-none overflow-hidden rounded border border-border-dark/60 bg-bg-primary/30 px-2 py-0.5 text-[11px] italic text-slate-400 placeholder-slate-600 focus:border-slate-500 focus:outline-none transition-colors"
+            className="w-full resize-none overflow-hidden rounded border border-border-dark/60 bg-bg-primary/30 px-2 py-0.5 text-[11px] italic text-slate-400 placeholder-slate-600 transition-colors focus:border-slate-500 focus:outline-none"
           />
         </div>
       </div>

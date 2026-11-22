@@ -56,7 +56,9 @@ export const VTUBER_PALETTE_ASS_BGR = Object.freeze({
  * Type guard for SubtitleExportFormat.
  */
 export function isSubtitleExportFormat(value: unknown): value is SubtitleExportFormat {
-  return typeof value === 'string' && (value === 'ass' || value === 'srt' || value === 'project_json');
+  return (
+    typeof value === 'string' && (value === 'ass' || value === 'srt' || value === 'project_json')
+  );
 }
 
 /**

@@ -38,10 +38,7 @@ export const NUMPAD_CODE_MAP: Readonly<Record<string, SpeakerRole>> = Object.fre
 export interface UseStudioHotkeysOptions {
   readonly enabled?: boolean;
   readonly targetElement?: HTMLElement | Window | null;
-  readonly onSpeakerChange?: (
-    speakerId: SpeakerRole,
-    updatedSegmentIds: readonly string[],
-  ) => void;
+  readonly onSpeakerChange?: (speakerId: SpeakerRole, updatedSegmentIds: readonly string[]) => void;
 }
 
 /**
@@ -97,8 +94,8 @@ export function useStudioHotkeys(options: UseStudioHotkeysOptions = {}): {
         state.selectedSegmentIds.length > 0
           ? state.selectedSegmentIds
           : state.selectedSegmentId
-          ? [state.selectedSegmentId]
-          : [];
+            ? [state.selectedSegmentId]
+            : [];
 
       if (targetIds.length === 0) return;
 
@@ -162,8 +159,8 @@ export function useStudioHotkeys(options: UseStudioHotkeysOptions = {}): {
         state.selectedSegmentIds.length > 0
           ? state.selectedSegmentIds
           : state.selectedSegmentId
-          ? [state.selectedSegmentId]
-          : [];
+            ? [state.selectedSegmentId]
+            : [];
 
       if (targetIds.length === 0) {
         return;

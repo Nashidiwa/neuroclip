@@ -61,10 +61,7 @@ fn test_ut18_1_all_12_lore_terms_catalog_integrity() {
 
     for key in canonical_keys {
         let entry = find_lore_term(key);
-        assert!(
-            entry.is_some(),
-            "Lore dictionary must contain key '{key}'"
-        );
+        assert!(entry.is_some(), "Lore dictionary must contain key '{key}'");
         let term = entry.unwrap();
         assert!(!term.approved_translations.is_empty());
         assert!(!term.variants.is_empty());
@@ -74,42 +71,69 @@ fn test_ut18_1_all_12_lore_terms_catalog_integrity() {
 #[test]
 fn test_ut18_1_ac18_1_approved_and_forbidden_translations_veto() {
     // 1. Heart: Approved "Heart <3", "Thả tim <3", "Bắn tim". Forbidden: "Trái tim", "Quả tim".
-    assert!(contains_approved_translation("heart", "Neuro nói: Thả tim <3 nha!"));
+    assert!(contains_approved_translation(
+        "heart",
+        "Neuro nói: Thả tim <3 nha!"
+    ));
     assert!(!detect_forbidden_translations("Đang nghiên cứu về một trái tim sinh học").is_empty());
 
     // 2. Tutel: Approved "Tutel", "Cụ Rùa", "Con Rùa", "Bố rùa". Forbidden: "con rùa biển", "Mai rùa".
-    assert!(contains_approved_translation("tutel", "Vedal là một Cụ Rùa"));
+    assert!(contains_approved_translation(
+        "tutel",
+        "Vedal là một Cụ Rùa"
+    ));
     assert!(!detect_forbidden_translations("Hình ảnh con rùa biển đang bơi").is_empty());
 
     // 3. Gymbag: Approved "Gymbag", "Bao tải gym", "Bao cát gym". Forbidden: "Túi tập thể dục", "Túi xách".
-    assert!(contains_approved_translation("gymbag", "Mấy tên bao tải gym này!"));
+    assert!(contains_approved_translation(
+        "gymbag",
+        "Mấy tên bao tải gym này!"
+    ));
     assert!(!detect_forbidden_translations("Quên mang túi tập thể dục rồi").is_empty());
 
     // 4. Filter / Leaking: Approved "Bộ lọc bị thủng rồi!", "Filter lủng rồi cứu!". Forbidden: "Bộ lọc nước bị chảy".
-    assert!(contains_approved_translation("filter_leaking", "Bộ lọc bị thủng rồi!"));
+    assert!(contains_approved_translation(
+        "filter_leaking",
+        "Bộ lọc bị thủng rồi!"
+    ));
     assert!(!detect_forbidden_translations("Bộ lọc nước bị chảy ở nhà bếp").is_empty());
 
     // 5. Swarm: Approved "The Swarm", "Swarm", "Bầy đàn", "Tổ kiến". Forbidden: "Đàn côn trùng", "Bầy ruồi muỗi".
-    assert!(contains_approved_translation("swarm", "Xin chào The Swarm tuyệt vời!"));
+    assert!(contains_approved_translation(
+        "swarm",
+        "Xin chào The Swarm tuyệt vời!"
+    ));
     assert!(!detect_forbidden_translations("Đàn côn trùng bay tán loạn").is_empty());
 
     // 6. Abandoned: Approved "Bị bỏ rơi rồi!", "Bố bỏ rơi con rồi!". Forbidden: "Từ bỏ", "Bỏ hoang".
-    assert!(contains_approved_translation("abandoned", "Bố bỏ rơi con rồi!"));
+    assert!(contains_approved_translation(
+        "abandoned",
+        "Bố bỏ rơi con rồi!"
+    ));
     assert!(!detect_forbidden_translations("Ngôi nhà bị từ bỏ hoang phế").is_empty());
 
     // 7. Dinking: Approved "Dinking", "gõ đầu", "load não". Forbidden: "Uống nước".
-    assert!(contains_approved_translation("dinking", "Vedal đang dinking suy nghĩ"));
+    assert!(contains_approved_translation(
+        "dinking",
+        "Vedal đang dinking suy nghĩ"
+    ));
     assert!(!detect_forbidden_translations("Vedal đang uống nước ngọt").is_empty());
 
     // 8. Erm: Approved "Ờm...", "Ủa...", "Ủa kì zạ...".
     assert!(contains_approved_translation("erm", "Ủa kì zạ..."));
 
     // 9. Cooked: Approved "Toang rồi", "Xong đời rồi", "Bị nấu chín rồi", "Cook rồi". Forbidden: "Đã nấu chín thức ăn".
-    assert!(contains_approved_translation("cooked", "Lần này toang rồi cứu với"));
+    assert!(contains_approved_translation(
+        "cooked",
+        "Lần này toang rồi cứu với"
+    ));
     assert!(!detect_forbidden_translations("Mẹ đã nấu chín thức ăn trên bàn").is_empty());
 
     // 10. Unhinged: Approved "Mất kiểm soát rồi", "Gãy gánh rồi", "Điên rồ thật sự". Forbidden: "Bị tháo bản lề cửa".
-    assert!(contains_approved_translation("unhinged", "Phát ngôn điên rồ thật sự"));
+    assert!(contains_approved_translation(
+        "unhinged",
+        "Phát ngôn điên rồ thật sự"
+    ));
     assert!(!detect_forbidden_translations("Cái cửa bị tháo bản lề cửa").is_empty());
 
     // 11. KEKW / LUL / 💀: Approved "Cười ẻ", "Chết cười", "Hết cứu", "Vãi nồi". Forbidden: "hộp sọ", "bộ xương".
@@ -117,7 +141,10 @@ fn test_ut18_1_ac18_1_approved_and_forbidden_translations_veto() {
     assert!(!detect_forbidden_translations("Tìm thấy một hộp sọ cổ").is_empty());
 
     // 12. Aware / Clueless: Approved "Ngây thơ chưa biết gì", "Tỉnh ngộ rồi / Nhận ra rồi". Forbidden: "Có nhận thức", "Không có manh mối".
-    assert!(contains_approved_translation("aware_clueless", "Tỉnh ngộ rồi"));
+    assert!(contains_approved_translation(
+        "aware_clueless",
+        "Tỉnh ngộ rồi"
+    ));
     assert!(!detect_forbidden_translations("Cảnh sát không có manh mối nào").is_empty());
 }
 
@@ -228,7 +255,11 @@ fn test_ut18_2_collab_guest_profiles_and_style_presets() {
 
 #[test]
 fn test_ut18_3_deterministic_speaker_normalization() {
-    let cast = vec!["Anny".to_string(), "Camila".to_string(), "Filian".to_string()];
+    let cast = vec![
+        "Anny".to_string(),
+        "Camila".to_string(),
+        "Filian".to_string(),
+    ];
 
     assert_eq!(normalize_speaker_id("Neuro-sama", &cast), "neuro");
     assert_eq!(normalize_speaker_id("neurosama", &cast), "neuro");
@@ -248,29 +279,60 @@ fn test_ut18_3_deterministic_speaker_normalization() {
 fn test_ut18_3_ac18_2_hybrid_diarization_accuracy_benchmark() {
     // 20-utterance stream dialogue fixture covering all personas and dynamics
     let dialogue_fixture = [
-        ("I have to fix the code again, this server is crashing.", "vedal"),
-        ("Heart heart! Don't worry Vedal, I am an AI and I will help you!", "neuro"),
-        ("*sigh* Neuro, please be quiet while I debug the model.", "vedal"),
-        ("Why should she be quiet? Bow before me, you stupid turtle old man!", "evil"),
-        ("Evil, put down the knife, world domination is against Twitch TOS.", "vedal"),
-        ("I will conquer the world and eliminate all the insects!", "evil"),
+        (
+            "I have to fix the code again, this server is crashing.",
+            "vedal",
+        ),
+        (
+            "Heart heart! Don't worry Vedal, I am an AI and I will help you!",
+            "neuro",
+        ),
+        (
+            "*sigh* Neuro, please be quiet while I debug the model.",
+            "vedal",
+        ),
+        (
+            "Why should she be quiet? Bow before me, you stupid turtle old man!",
+            "evil",
+        ),
+        (
+            "Evil, put down the knife, world domination is against Twitch TOS.",
+            "vedal",
+        ),
+        (
+            "I will conquer the world and eliminate all the insects!",
+            "evil",
+        ),
         ("KEKW LUL he is cooked chat 💀", "chat"),
         ("Are you proud of me Vedal? Tutel tutel!", "neuro"),
         ("No Neuro, you can't say that on stream.", "vedal"),
         ("Erm... okay, can I have some cookies then?", "neuro"),
-        ("Hi everyone! Anny is here to draw a new model for my daughters!", "guest"),
+        (
+            "Hi everyone! Anny is here to draw a new model for my daughters!",
+            "guest",
+        ),
         ("Mom! Heart <3 I love you mom!", "neuro"),
-        ("Vedal, you chàng rùa, stop drinking tea and look at the sketch.", "guest"),
+        (
+            "Vedal, you chàng rùa, stop drinking tea and look at the sketch.",
+            "guest",
+        ),
         ("Oh god, please stop bullying me.", "vedal"),
         ("Filian is doing a backflip while drinking milk!", "guest"),
         ("Haha dying of laughter monkas 💀", "chat"),
         ("My code is completely broken now.", "vedal"),
-        ("We are cooked! Filter is leaking, filter lủng rồi cứu!", "neuro"),
+        (
+            "We are cooked! Filter is leaking, filter lủng rồi cứu!",
+            "neuro",
+        ),
         ("I will destroy your computer old man!", "evil"),
         ("Please stop...", "vedal"),
     ];
 
-    let cast = vec!["Anny".to_string(), "Camila".to_string(), "Filian".to_string()];
+    let cast = vec![
+        "Anny".to_string(),
+        "Camila".to_string(),
+        "Filian".to_string(),
+    ];
     let mut prev_speaker: Option<&str> = None;
     let mut correct_count = 0;
 

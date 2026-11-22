@@ -3610,7 +3610,10 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       );
 
       const pronounContent = fs.readFileSync(pronounPath, 'utf8');
-      assert.ok(pronounContent.includes('pub enum CanonicalSpeaker'), 'Must define CanonicalSpeaker');
+      assert.ok(
+        pronounContent.includes('pub enum CanonicalSpeaker'),
+        'Must define CanonicalSpeaker',
+      );
       assert.ok(pronounContent.includes('pub struct GuestProfile'), 'Must define GuestProfile');
       assert.ok(pronounContent.includes('pub enum StylePreset'), 'Must define StylePreset');
       assert.ok(
@@ -3740,7 +3743,11 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
 
       assert.strictEqual(fs.existsSync(lineWrapperPath), true, 'line_wrapper.rs must exist');
       assert.strictEqual(fs.existsSync(cpsOptimizerPath), true, 'cps_optimizer.rs must exist');
-      assert.strictEqual(fs.existsSync(integrationTestPath), true, 'line_wrapper_cps_test.rs must exist');
+      assert.strictEqual(
+        fs.existsSync(integrationTestPath),
+        true,
+        'line_wrapper_cps_test.rs must exist',
+      );
     });
 
     it('should assert zero-panic clippy invariant in TASK-M4-19 Rust production modules', () => {
@@ -3753,8 +3760,14 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
         const content = fs.readFileSync(file, 'utf8');
         // Separate test module from production code
         const prodCode = content.split('#[cfg(test)]')[0] ?? '';
-        assert.ok(!prodCode.includes('.unwrap()'), `${file} must not contain .unwrap() in prod code`);
-        assert.ok(!prodCode.includes('.expect('), `${file} must not contain .expect() in prod code`);
+        assert.ok(
+          !prodCode.includes('.unwrap()'),
+          `${file} must not contain .unwrap() in prod code`,
+        );
+        assert.ok(
+          !prodCode.includes('.expect('),
+          `${file} must not contain .expect() in prod code`,
+        );
         assert.ok(!prodCode.includes('panic!('), `${file} must not contain panic!() in prod code`);
       }
     });
@@ -3819,7 +3832,10 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.ok(seg1 && seg2);
       // UT-19.3: extended by 0.8s -> 2.3s
       assert.ok(Math.abs(seg1.endSec - 2.3) < 0.01, `endSec must be 2.3s, got ${seg1.endSec}`);
-      assert.ok(seg1.cpsScore <= RED_FLAG_CPS_THRESHOLD, `New CPS must be <= 20.0, got ${seg1.cpsScore}`);
+      assert.ok(
+        seg1.cpsScore <= RED_FLAG_CPS_THRESHOLD,
+        `New CPS must be <= 20.0, got ${seg1.cpsScore}`,
+      );
       assert.strictEqual(seg1.isFlaggedForReview, false, 'Flag must be cleared');
 
       // ED-19.1: buffer to next start >= 50ms
@@ -3914,7 +3930,11 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
         updated_at: '2026-11-20T00:00:00Z',
       };
 
-      assert.strictEqual(validate(validProject), true, 'Valid Schema 5.6 SubtitleProject must pass validation');
+      assert.strictEqual(
+        validate(validProject),
+        true,
+        'Valid Schema 5.6 SubtitleProject must pass validation',
+      );
 
       // Invalid: missing project_id
       const missingId = { ...validProject };
@@ -3923,7 +3943,10 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(validate(missingId), false, 'Missing project_id must fail');
 
       // Invalid: unrecognized target_layout
-      const invalidLayout = { ...validProject, target_layout: 'unsupported_layout' as unknown as SubtitleProjectJson['target_layout'] };
+      const invalidLayout = {
+        ...validProject,
+        target_layout: 'unsupported_layout' as unknown as SubtitleProjectJson['target_layout'],
+      };
       assert.strictEqual(validate(invalidLayout), false, 'Invalid target_layout must fail');
     });
 
@@ -3960,9 +3983,18 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
 
         // Extract non-test code
         const nonTestCode = content.split('#[cfg(test)]')[0] ?? content;
-        assert.ok(!nonTestCode.includes('.unwrap()'), `No .unwrap() allowed in production code in ${relPath}`);
-        assert.ok(!nonTestCode.includes('.expect('), `No .expect() allowed in production code in ${relPath}`);
-        assert.ok(!nonTestCode.includes('panic!'), `No panic! allowed in production code in ${relPath}`);
+        assert.ok(
+          !nonTestCode.includes('.unwrap()'),
+          `No .unwrap() allowed in production code in ${relPath}`,
+        );
+        assert.ok(
+          !nonTestCode.includes('.expect('),
+          `No .expect() allowed in production code in ${relPath}`,
+        );
+        assert.ok(
+          !nonTestCode.includes('panic!'),
+          `No panic! allowed in production code in ${relPath}`,
+        );
       }
 
       // Verify UTF-8 BOM constant defined in Rust export mod

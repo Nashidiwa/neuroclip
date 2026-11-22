@@ -72,7 +72,7 @@ export const CPSIndicator: React.FC<CPSIndicatorProps> = ({
     <div
       data-testid={`cps-indicator-${segId}`}
       data-rating={rating}
-      className={`inline-flex items-center space-x-1.5 select-none ${className}`}
+      className={`inline-flex select-none items-center space-x-1.5 ${className}`}
     >
       {/* Visual Badge Indicator */}
       <span
@@ -82,7 +82,7 @@ export const CPSIndicator: React.FC<CPSIndicatorProps> = ({
       >
         {isOverSpeed && <AlertTriangle className="h-2.5 w-2.5 shrink-0 text-rose-400" />}
         <span>{cps.toFixed(1)} CPS</span>
-        <span className="hidden sm:inline font-sans text-[9px] opacity-80">({badgeLabel})</span>
+        <span className="hidden font-sans text-[9px] opacity-80 sm:inline">({badgeLabel})</span>
       </span>
 
       {/* 1-Touch Borrow Silence Button (Displayed ONLY when CPS > 20) */}
@@ -99,8 +99,8 @@ export const CPSIndicator: React.FC<CPSIndicatorProps> = ({
           }
           className={`inline-flex items-center space-x-1 rounded border px-1.5 py-0.5 text-[10px] font-medium transition-all ${
             allowableBorrowSec > 0
-              ? 'border-accent-neuro/60 bg-accent-neuro/20 text-accent-neuro hover:bg-accent-neuro/30 hover:border-accent-neuro cursor-pointer active:scale-95'
-              : 'border-slate-700 bg-slate-800/40 text-slate-500 cursor-not-allowed opacity-60'
+              ? 'cursor-pointer border-accent-neuro/60 bg-accent-neuro/20 text-accent-neuro hover:border-accent-neuro hover:bg-accent-neuro/30 active:scale-95'
+              : 'cursor-not-allowed border-slate-700 bg-slate-800/40 text-slate-500 opacity-60'
           }`}
         >
           <Clock className="h-2.5 w-2.5 shrink-0" />

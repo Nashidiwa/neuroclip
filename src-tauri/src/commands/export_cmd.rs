@@ -1,7 +1,7 @@
 //! Tauri IPC commands for subtitle export (.ass, .srt) and project metadata persistence.
 
-use std::path::Path;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tauri::command;
 
 use crate::error::AppError;
@@ -103,7 +103,9 @@ pub async fn export_capcut_draft(
     tokio::task::spawn_blocking(move || {
         let (v_path, custom_root) = match &options {
             Some(opt) => (
-                opt.video_file_path.as_deref().or(project.video_file_path.as_deref()),
+                opt.video_file_path
+                    .as_deref()
+                    .or(project.video_file_path.as_deref()),
                 opt.custom_draft_root.as_deref().map(Path::new),
             ),
             None => (project.video_file_path.as_deref(), None),

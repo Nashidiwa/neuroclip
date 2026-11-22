@@ -2,6 +2,7 @@
 
 //! Tests for Advanced SubStation Alpha (.ass) and SubRip (.srt) subtitle generators (TASK-M4-08).
 
+use neuroclip_lib::export::{export_ass_project_file, generate_ass_script_from_project};
 use neuroclip_lib::stt::{
     create_subtitle_project, default_speaker_styles, escape_ass_text, format_ass_timecode,
     format_srt_timecode, generate_ass_script, generate_srt_script, map_speaker_to_ass_style,
@@ -189,8 +190,8 @@ fn test_default_speaker_styles_po_option_1_palette() {
 #[test]
 fn test_task_m4_24_export_module_bgr_and_bom_integration() {
     use neuroclip_lib::export::{
-        export_ass_file, export_srt_file, export_subtitle_project_json,
-        hex_to_ass_bgr, load_subtitle_project_json, UTF8_BOM, UTF8_BOM_BYTES,
+        export_ass_file, export_srt_file, export_subtitle_project_json, hex_to_ass_bgr,
+        load_subtitle_project_json, UTF8_BOM, UTF8_BOM_BYTES,
     };
 
     // UT-24.1: BGR Hex conversions
@@ -238,6 +239,82 @@ fn test_task_m4_24_export_module_bgr_and_bom_integration() {
     let loaded_project = load_subtitle_project_json(&json_path).unwrap();
     assert_eq!(loaded_project.project_id, project.project_id);
     assert_eq!(loaded_project.target_layout, "preset_two_stack_9_16");
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[test]
+fn test_patch_p1_02_ass_project_playres_and_speaker_styles() {
+    let container = create_sample_container();
+    let expected_vedal =
+        "Style: Vedal,Arial,54,&H0098FB98,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2.5,2,2,20,20,40,1";
+    let expected_chat =
+        "Style: Chat,Arial,48,&H00EBCE87,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1";
+
+    // Container-based ASS retains 1920x1080 and uses canonical Vedal (2.5) & Chat (Bold=0, Outline=2)
+    let container_ass = generate_ass_script(&container);
+    assert!(container_ass.contains("PlayResX: 1920"));
+    assert!(container_ass.contains("PlayResY: 1080"));
+    assert!(container_ass.contains(expected_vedal));
+    assert!(container_ass.contains(expected_chat));
+
+    // Project-based ASS resolves PlayResX/PlayResY from target_layout
+    let center_crop_project = create_subtitle_project(
+        container.clone(),
+        "CenterCrop_9_16",
+        "vod_p1_02",
+        Some("preset_center_crop_9_16"),
+    );
+    let center_crop_ass = generate_ass_script_from_project(&center_crop_project);
+    assert!(center_crop_ass.contains("PlayResX: 1080"));
+    assert!(center_crop_ass.contains("PlayResY: 1920"));
+    assert!(center_crop_ass.contains(expected_vedal));
+    assert!(center_crop_ass.contains(expected_chat));
+
+    let two_stack_project = create_subtitle_project(
+        container.clone(),
+        "TwoStack_9_16",
+        "vod_p1_02",
+        Some("preset_two_stack_9_16"),
+    );
+    let two_stack_ass = generate_ass_script_from_project(&two_stack_project);
+    assert!(two_stack_ass.contains("PlayResX: 1080"));
+    assert!(two_stack_ass.contains("PlayResY: 1920"));
+    assert!(two_stack_ass.contains(expected_vedal));
+    assert!(two_stack_ass.contains(expected_chat));
+
+    let original_project = create_subtitle_project(
+        container.clone(),
+        "Original_16_9",
+        "vod_p1_02",
+        Some("original_16_9"),
+    );
+    let original_ass = generate_ass_script_from_project(&original_project);
+    assert!(original_ass.contains("PlayResX: 1920"));
+    assert!(original_ass.contains("PlayResY: 1080"));
+    assert!(original_ass.contains(expected_vedal));
+    assert!(original_ass.contains(expected_chat));
+
+    let default_layout_project =
+        create_subtitle_project(container, "Default_Layout", "vod_p1_02", None);
+    let default_layout_ass = generate_ass_script_from_project(&default_layout_project);
+    assert!(default_layout_ass.contains("PlayResX: 1920"));
+    assert!(default_layout_ass.contains("PlayResY: 1080"));
+
+    // Verify file export writes UTF-8 BOM + 1080x1920 + canonical styles
+    let temp_dir = std::env::temp_dir().join(format!(
+        "neuroclip_patch_p1_02_{}",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+    ));
+    let out_ass_path = temp_dir.join("project_9_16.ass");
+    export_ass_project_file(&center_crop_project, &out_ass_path).unwrap();
+    let raw_bytes = std::fs::read(&out_ass_path).unwrap();
+    assert_eq!(&raw_bytes[0..3], &[0xEF, 0xBB, 0xBF]);
+    let file_text = String::from_utf8(raw_bytes[3..].to_vec()).unwrap();
+    assert!(file_text.contains("PlayResX: 1080"));
+    assert!(file_text.contains("PlayResY: 1920"));
+    assert!(file_text.contains(expected_vedal));
+    assert!(file_text.contains(expected_chat));
 
     let _ = std::fs::remove_dir_all(temp_dir);
 }

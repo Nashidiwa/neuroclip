@@ -15,7 +15,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   useStudioStore,
   findActiveSegments,
@@ -25,7 +26,13 @@ import {
 } from '../../stores/useStudioStore.ts';
 import { VideoCanvas } from './VideoCanvas.tsx';
 import { TimelineScrubber } from './TimelineScrubber.tsx';
-import { SubtitleStudio } from './SubtitleStudio.tsx';
+import {
+  SubtitleStudio,
+  isNonFilesystemUri,
+  normalizeFilesystemPath,
+  mapStudioLayoutToTargetLayout,
+  resolveStudioVideoPath,
+} from './SubtitleStudio.tsx';
 import type { TranscriptSegment, SpeakerRole } from '../../types/transcript.ts';
 import { normalizeTranscriptSegment } from '../../types/transcript.ts';
 
@@ -208,11 +215,7 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
   // ---------------------------------------------------------------------------
   describe('UT-20.1 & AC-20.2: Instant 9:16 Preset Switch (<= 50ms without video reload)', () => {
     it('should switch between Center-Crop 9:16 and Two-Stack 50/50 without recreating video element', () => {
-      render(
-        <VideoCanvas
-          videoSrc="https://test.local/sample.mp4"
-        />,
-      );
+      render(<VideoCanvas videoSrc="https://test.local/sample.mp4" />);
 
       const canvasContainer = screen.getByTestId('video-canvas-container');
       expect(canvasContainer).toHaveAttribute('data-preset', 'center-crop');
@@ -257,12 +260,7 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
   // ---------------------------------------------------------------------------
   describe('IT-20.1: HTML5 Video & asset:// Protocol Integration', () => {
     it('should convert local filesystem path to asset:// URI scheme', () => {
-      render(
-        <VideoCanvas
-          videoSrc="C:\\videos\\neuro_stream_slice.mp4"
-          preset916="center-crop"
-        />,
-      );
+      render(<VideoCanvas videoSrc="C:\\videos\\neuro_stream_slice.mp4" preset916="center-crop" />);
 
       const videoEl = screen.getByTestId('studio-video-element') as HTMLVideoElement;
       expect(videoEl.src).toContain('asset://localhost/');
@@ -284,16 +282,20 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
   describe('IT-20.2 & AC-20.3: Bi-directional Sync (Latency <= 30ms)', () => {
     const testSegments = [
       makeSegment('seg_01', 0.0, 10.0, 'vedal', 'Intro talk', 'Mở đầu cuộc trò chuyện'),
-      makeSegment('seg_02', 12.0, 18.0, 'neuro', 'Active dialogue at 15.4s', 'Câu thoại kích hoạt ở 15.4s'),
+      makeSegment(
+        'seg_02',
+        12.0,
+        18.0,
+        'neuro',
+        'Active dialogue at 15.4s',
+        'Câu thoại kích hoạt ở 15.4s',
+      ),
       makeSegment('seg_03', 20.0, 30.0, 'evil', 'Ending remarks', 'Lời kết thúc'),
     ];
 
     it('should highlight active segment at t = 15.4s within <= 30ms latency and seek on row click', () => {
       render(
-        <SubtitleStudio
-          videoSrc="https://test.local/clip_slice.mp4"
-          segments={testSegments}
-        />,
+        <SubtitleStudio videoSrc="https://test.local/clip_slice.mp4" segments={testSegments} />,
       );
 
       // Verify all segments are initially rendered
@@ -353,13 +355,7 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
         rAfCallbacks = rAfCallbacks.filter((_, idx) => idx + 1 !== handle);
       });
 
-      render(
-        <TimelineScrubber
-          currentTime={10.0}
-          duration={120.0}
-          isPlaying={true}
-        />,
-      );
+      render(<TimelineScrubber currentTime={10.0} duration={120.0} isPlaying={true} />);
 
       const slider = screen.getByTestId('timeline-slider') as HTMLInputElement;
 
@@ -397,13 +393,7 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
     });
 
     it('should maintain playback controls functionality (play/pause, mute, volume, nudge)', () => {
-      render(
-        <TimelineScrubber
-          currentTime={15.0}
-          duration={60.0}
-          isPlaying={false}
-        />,
-      );
+      render(<TimelineScrubber currentTime={15.0} duration={60.0} isPlaying={false} />);
 
       const playBtn = screen.getByTestId('timeline-play-btn');
       act(() => {
@@ -454,6 +444,286 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
 
       expect(elapsed).toBeLessThanOrEqual(30.0);
       expect(useStudioStore.getState().activeSegmentIds).toEqual(['s_test']);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // PATCH-P1-01: SubtitleStudio <-> useStudioStore <-> ExportModal Wiring
+  // ---------------------------------------------------------------------------
+  describe('PATCH-P1-01: SubtitleStudio <-> useStudioStore <-> ExportModal Wiring', () => {
+    const wiringSegments: TranscriptSegment[] = [
+      makeSegment('wire_1', 0.5, 2.5, 'vedal', 'Hello Neuro', 'Chào Neuro'),
+      makeSegment('wire_2', 3.0, 5.5, 'neuro', 'Filtered!', 'Bị lọc rồi!'),
+    ];
+
+    function mockCapCutSuccess(): ReturnType<typeof vi.mocked<typeof invoke>> {
+      const mockedInvoke = vi.mocked(invoke);
+      mockedInvoke.mockResolvedValue({
+        projectDir: 'C:\\CapCut\\Drafts\\NeuroClip_Highlight_Test',
+        projectPath: 'C:\\CapCut\\Drafts\\NeuroClip_Highlight_Test',
+        draftName: 'NeuroClip_Highlight_Test',
+        draftContentPath: 'C:\\CapCut\\Drafts\\NeuroClip_Highlight_Test\\draft_content.json',
+        draftMetaInfoPath: 'C:\\CapCut\\Drafts\\NeuroClip_Highlight_Test\\draft_meta_info.json',
+        assBackupPath: 'C:\\CapCut\\Drafts\\NeuroClip_Highlight_Test\\subtitle.ass',
+        srtBackupPath: 'C:\\CapCut\\Drafts\\NeuroClip_Highlight_Test\\subtitle.srt',
+        dualSafeguardFiles: ['subtitle.ass', 'subtitle.srt'],
+        durationMs: 12,
+      });
+      return mockedInvoke;
+    }
+
+    it('maps studio aspectRatio and preset916 to Schema 5.6 target_layout', () => {
+      expect(mapStudioLayoutToTargetLayout('9:16', 'center-crop')).toBe('preset_center_crop_9_16');
+      expect(mapStudioLayoutToTargetLayout('9:16', 'two-stack')).toBe('preset_two_stack_9_16');
+      expect(mapStudioLayoutToTargetLayout('16:9', 'center-crop')).toBe('original_16_9');
+      expect(mapStudioLayoutToTargetLayout('16:9', 'two-stack')).toBe('original_16_9');
+    });
+
+    it('filters non-filesystem URIs (case-insensitive) and empty/whitespace paths', () => {
+      expect(isNonFilesystemUri('asset://localhost/C:/clips/clip.mp4')).toBe(true);
+      expect(isNonFilesystemUri('ASSET://localhost/C:/clips/clip.mp4')).toBe(true);
+      expect(isNonFilesystemUri('http://localhost:1420/clip.mp4')).toBe(true);
+      expect(isNonFilesystemUri('HTTPS://cdn.example.com/clip.mp4')).toBe(true);
+      expect(isNonFilesystemUri('blob:http://localhost:1420/uuid')).toBe(true);
+      expect(isNonFilesystemUri('data:video/mp4;base64,AAAA')).toBe(true);
+      expect(isNonFilesystemUri('C:\\clips\\clip.mp4')).toBe(false);
+
+      expect(normalizeFilesystemPath(null)).toBeNull();
+      expect(normalizeFilesystemPath(undefined)).toBeNull();
+      expect(normalizeFilesystemPath('')).toBeNull();
+      expect(normalizeFilesystemPath('   \t\n  ')).toBeNull();
+      expect(normalizeFilesystemPath('  https://example.com/v.mp4  ')).toBeNull();
+      expect(normalizeFilesystemPath('  data:video/mp4;base64,AAAA  ')).toBeNull();
+      expect(normalizeFilesystemPath('  C:\\clips\\clip.mp4  ')).toBe('C:\\clips\\clip.mp4');
+      expect(normalizeFilesystemPath('/mnt/media/clip.mp4')).toBe('/mnt/media/clip.mp4');
+    });
+
+    it('resolves effectiveVideoPath with propVideoPath > matching storeVideoPath > OS fallback', () => {
+      // Explicit propVideoPath overrides asset:// propVideoSrc
+      expect(
+        resolveStudioVideoPath({
+          propVideoPath: 'D:\\clips\\clip.mp4',
+          propVideoSrc: 'asset://localhost/D:/clips/clip.mp4',
+          storeVideoPath: null,
+          storeVideoSrc: null,
+        }),
+      ).toBe('D:\\clips\\clip.mp4');
+
+      // Explicit propVideoPath={null} clears stale storeVideoPath
+      expect(
+        resolveStudioVideoPath({
+          propVideoPath: null,
+          propVideoSrc: 'asset://localhost/D:/clips/clip.mp4',
+          storeVideoPath: 'C:\\stale\\old.mp4',
+          storeVideoSrc: 'asset://localhost/D:/clips/clip.mp4',
+        }),
+      ).toBeNull();
+
+      // Matching propVideoSrc preserves storeVideoPath when propVideoPath is omitted
+      expect(
+        resolveStudioVideoPath({
+          propVideoPath: undefined,
+          propVideoSrc: 'asset://localhost/C:/clips/clip.mp4',
+          storeVideoPath: 'C:\\clips\\clip.mp4',
+          storeVideoSrc: 'asset://localhost/C:/clips/clip.mp4',
+        }),
+      ).toBe('C:\\clips\\clip.mp4');
+
+      // Store-driven mount falls back to non-URI storeVideoSrc if storeVideoPath is null
+      expect(
+        resolveStudioVideoPath({
+          propVideoPath: undefined,
+          propVideoSrc: undefined,
+          storeVideoPath: null,
+          storeVideoSrc: 'C:\\clips\\local_fallback.mp4',
+        }),
+      ).toBe('C:\\clips\\local_fallback.mp4');
+
+      // Never leaks non-filesystem URIs
+      expect(
+        resolveStudioVideoPath({
+          propVideoPath: undefined,
+          propVideoSrc: 'asset://localhost/C:/clips/clip.mp4',
+          storeVideoPath: 'data:video/mp4;base64,AAAA',
+          storeVideoSrc: 'asset://localhost/C:/clips/clip.mp4',
+        }),
+      ).toBeNull();
+    });
+
+    it('uses store videoSrc, videoPath, aspectRatio, and preset916 when mounted without props', async () => {
+      const mockedInvoke = mockCapCutSuccess();
+      useStudioStore
+        .getState()
+        .setVideoSrc('asset://localhost/C:/clips/store_clip.mp4', 'C:\\clips\\store_clip.mp4');
+      useStudioStore.getState().setSegments(wiringSegments);
+
+      render(<SubtitleStudio />);
+
+      const container = screen.getByTestId('subtitle-studio-container');
+      expect(container).toHaveAttribute('data-target-layout', 'preset_center_crop_9_16');
+
+      const videoEl = screen.getByTestId('studio-video-element') as HTMLVideoElement;
+      expect(videoEl.src).toContain('asset://localhost/C:/clips/store_clip.mp4');
+
+      fireEvent.click(screen.getByTestId('studio-export-button'));
+      fireEvent.click(screen.getByTestId('export-submit-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('export-success-banner')).toBeInTheDocument();
+      });
+
+      expect(mockedInvoke).toHaveBeenCalledWith(
+        'export_capcut_draft',
+        expect.objectContaining({
+          project: expect.objectContaining({
+            video_file_path: 'C:\\clips\\store_clip.mp4',
+            target_layout: 'preset_center_crop_9_16',
+          }),
+          options: expect.objectContaining({
+            video_file_path: 'C:\\clips\\store_clip.mp4',
+          }),
+        }),
+      );
+    });
+
+    it('never passes asset://, https://, or data: URIs into video_file_path when OS videoPath is absent', async () => {
+      const mockedInvoke = mockCapCutSuccess();
+
+      render(
+        <SubtitleStudio
+          videoSrc="asset://localhost/C:/clips/only_uri.mp4"
+          segments={wiringSegments}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('studio-export-button'));
+      fireEvent.click(screen.getByTestId('export-submit-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('export-success-banner')).toBeInTheDocument();
+      });
+
+      expect(mockedInvoke).toHaveBeenCalledWith(
+        'export_capcut_draft',
+        expect.objectContaining({
+          project: expect.objectContaining({
+            video_file_path: null,
+          }),
+          options: expect.objectContaining({
+            video_file_path: null,
+          }),
+        }),
+      );
+    });
+
+    it('accepts prop videoPath alongside asset:// videoSrc and preserves store videoPath on unchanged re-render', async () => {
+      const mockedInvoke = mockCapCutSuccess();
+
+      const { rerender } = render(
+        <SubtitleStudio
+          videoSrc="asset://localhost/D:/clips/clip.mp4"
+          videoPath={'D:\\clips\\clip.mp4'}
+          segments={wiringSegments}
+        />,
+      );
+
+      const videoEl = screen.getByTestId('studio-video-element') as HTMLVideoElement;
+      expect(videoEl.src).toContain('asset://localhost/D:/clips/clip.mp4');
+      expect(useStudioStore.getState().videoPath).toBe('D:\\clips\\clip.mp4');
+
+      // Re-render with identical videoSrc and omitted videoPath must not wipe store.videoPath
+      rerender(
+        <SubtitleStudio videoSrc="asset://localhost/D:/clips/clip.mp4" segments={wiringSegments} />,
+      );
+      expect(useStudioStore.getState().videoPath).toBe('D:\\clips\\clip.mp4');
+
+      fireEvent.click(screen.getByTestId('studio-export-button'));
+      fireEvent.click(screen.getByTestId('export-submit-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('export-success-banner')).toBeInTheDocument();
+      });
+
+      expect(mockedInvoke).toHaveBeenCalledWith(
+        'export_capcut_draft',
+        expect.objectContaining({
+          project: expect.objectContaining({
+            video_file_path: 'D:\\clips\\clip.mp4',
+          }),
+          options: expect.objectContaining({
+            video_file_path: 'D:\\clips\\clip.mp4',
+          }),
+        }),
+      );
+    });
+
+    it('propagates Studio preset and aspect-ratio switches into ExportModal CapCut and ASS payloads', async () => {
+      const mockedInvoke = mockCapCutSuccess();
+
+      render(
+        <SubtitleStudio videoSrc={'C:\\clips\\studio_switch.mp4'} segments={wiringSegments} />,
+      );
+
+      // Switch 9:16 preset to two-stack via TimelineScrubber control
+      fireEvent.click(screen.getByTestId('btn-preset-two-stack'));
+      expect(screen.getByTestId('video-canvas-container')).toHaveAttribute(
+        'data-preset',
+        'two-stack',
+      );
+      expect(screen.getByTestId('subtitle-studio-container')).toHaveAttribute(
+        'data-target-layout',
+        'preset_two_stack_9_16',
+      );
+
+      fireEvent.click(screen.getByTestId('studio-export-button'));
+      fireEvent.click(screen.getByTestId('export-submit-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('export-success-banner')).toBeInTheDocument();
+      });
+
+      expect(mockedInvoke).toHaveBeenCalledWith(
+        'export_capcut_draft',
+        expect.objectContaining({
+          project: expect.objectContaining({
+            video_file_path: 'C:\\clips\\studio_switch.mp4',
+            target_layout: 'preset_two_stack_9_16',
+          }),
+        }),
+      );
+
+      // Close modal, switch aspect ratio to 16:9, and export standalone ASS
+      fireEvent.click(screen.getByTestId('export-done-button'));
+      mockedInvoke.mockReset();
+      mockedInvoke.mockResolvedValue('C:\\NeuroClip\\export\\NeuroClip_Highlight.ass');
+
+      fireEvent.click(screen.getByTestId('btn-aspect-ratio-toggle'));
+      expect(screen.getByTestId('video-canvas-container')).toHaveAttribute(
+        'data-aspect-ratio',
+        '16:9',
+      );
+      expect(screen.getByTestId('subtitle-studio-container')).toHaveAttribute(
+        'data-target-layout',
+        'original_16_9',
+      );
+
+      fireEvent.click(screen.getByTestId('studio-export-button'));
+      fireEvent.click(screen.getByTestId('export-format-ass'));
+      fireEvent.click(screen.getByTestId('export-submit-button'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('export-success-banner')).toBeInTheDocument();
+      });
+
+      expect(mockedInvoke).toHaveBeenCalledWith(
+        'export_subtitles_project_ass',
+        expect.objectContaining({
+          project: expect.objectContaining({
+            video_file_path: 'C:\\clips\\studio_switch.mp4',
+            target_layout: 'original_16_9',
+          }),
+        }),
+      );
     });
   });
 });

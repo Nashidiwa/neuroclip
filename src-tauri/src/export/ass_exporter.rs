@@ -3,12 +3,14 @@
 //! Provides color-coded VTuber styling (Vedal, Neuro, Evil, Guest, Chat),
 //! BGR hex conversion, tag escaping, and UTF-8 with BOM file serialization.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::AppError;
-use crate::export::{write_file_with_bom, SubtitleProject};
-use crate::stt::transcript_parser::TranscriptSegmentsContainer;
+use crate::export::capcut_schema::canvas_config_for_layout;
+use crate::export::{write_file_with_bom, SpeakerStyle, SubtitleProject};
+use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer};
 
 /// Convert a 6-character hex RGB color string (e.g. `"#98FB98"`) to Aegisub ASS BGR color
 /// format with full opacity (`"&H0098FB98&"`).
@@ -88,6 +90,160 @@ pub fn map_speaker_to_ass_style(speaker_id: &str) -> &'static str {
     }
 }
 
+struct AssStyleDefaults {
+    name: &'static str,
+    lookup_keys: &'static [&'static str],
+    font_name: &'static str,
+    font_size: u32,
+    primary_bgr: &'static str,
+    outline_bgr: &'static str,
+    bold: i8,
+    outline: &'static str,
+}
+
+const STANDARD_ASS_STYLES: [AssStyleDefaults; 6] = [
+    AssStyleDefaults {
+        name: "Default",
+        lookup_keys: &["default", "unknown"],
+        font_name: "Arial",
+        font_size: 52,
+        primary_bgr: "&H00FFFFFF",
+        outline_bgr: "&H00000000",
+        bold: -1,
+        outline: "3",
+    },
+    AssStyleDefaults {
+        name: "Vedal",
+        lookup_keys: &["vedal"],
+        font_name: "Arial",
+        font_size: 54,
+        primary_bgr: "&H0098FB98",
+        outline_bgr: "&H00000000",
+        bold: -1,
+        outline: "2.5",
+    },
+    AssStyleDefaults {
+        name: "Neuro",
+        lookup_keys: &["neuro"],
+        font_name: "Arial",
+        font_size: 54,
+        primary_bgr: "&H00C1B6FF",
+        outline_bgr: "&H00000000",
+        bold: -1,
+        outline: "3",
+    },
+    AssStyleDefaults {
+        name: "Evil",
+        lookup_keys: &["evil"],
+        font_name: "Arial",
+        font_size: 54,
+        primary_bgr: "&H005500FF",
+        outline_bgr: "&H00000000",
+        bold: -1,
+        outline: "3",
+    },
+    AssStyleDefaults {
+        name: "Guest",
+        lookup_keys: &["guest"],
+        font_name: "Arial",
+        font_size: 54,
+        primary_bgr: "&H0000D7FF",
+        outline_bgr: "&H00000000",
+        bold: -1,
+        outline: "3",
+    },
+    AssStyleDefaults {
+        name: "Chat",
+        lookup_keys: &["chat"],
+        font_name: "Arial",
+        font_size: 48,
+        primary_bgr: "&H00EBCE87",
+        outline_bgr: "&H00000000",
+        bold: 0,
+        outline: "2",
+    },
+];
+
+fn append_ass_script_info(out: &mut String, title: &str, play_res_x: u32, play_res_y: u32) {
+    out.push_str("[Script Info]\n");
+    let _ = writeln!(out, "Title: {title}");
+    out.push_str("ScriptType: v4.00+\n");
+    out.push_str("WrapStyle: 0\n");
+    out.push_str("ScaledBorderAndShadow: yes\n");
+    out.push_str("YCbCr Matrix: TV.601\n");
+    let _ = writeln!(out, "PlayResX: {play_res_x}");
+    let _ = writeln!(out, "PlayResY: {play_res_y}\n");
+}
+
+fn find_speaker_style<'a, S: std::hash::BuildHasher>(
+    speaker_styles: Option<&'a HashMap<String, SpeakerStyle, S>>,
+    lookup_keys: &[&str],
+) -> Option<&'a SpeakerStyle> {
+    let styles = speaker_styles?;
+    for key in lookup_keys {
+        if let Some(style) = styles.get(*key) {
+            return Some(style);
+        }
+    }
+    None
+}
+
+fn append_v4_styles_section<S: std::hash::BuildHasher>(
+    out: &mut String,
+    speaker_styles: Option<&HashMap<String, SpeakerStyle, S>>,
+) {
+    out.push_str("[V4+ Styles]\n");
+    out.push_str("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n");
+
+    for spec in &STANDARD_ASS_STYLES {
+        if let Some(style) = find_speaker_style(speaker_styles, spec.lookup_keys) {
+            let primary_bgr = hex_to_ass_bgr(&style.color_hex);
+            let outline_bgr = hex_to_ass_bgr(&style.outline_color_hex);
+            let primary_col = primary_bgr.trim_end_matches('&');
+            let outline_col = outline_bgr.trim_end_matches('&');
+            let _ = writeln!(
+                out,
+                "Style: {},{},{},{primary_col},&H000000FF,{outline_col},&H80000000,{},0,0,0,100,100,0,0,1,{},2,2,20,20,40,1",
+                spec.name, style.font_name, style.font_size, spec.bold, spec.outline
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "Style: {},{},{},{},&H000000FF,{},&H80000000,{},0,0,0,100,100,0,0,1,{},2,2,20,20,40,1",
+                spec.name,
+                spec.font_name,
+                spec.font_size,
+                spec.primary_bgr,
+                spec.outline_bgr,
+                spec.bold,
+                spec.outline
+            );
+        }
+    }
+
+    out.push('\n');
+}
+
+fn append_events_section(out: &mut String, segments: &[TranscriptSegment]) {
+    out.push_str("[Events]\n");
+    out.push_str(
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+    );
+
+    for seg in segments {
+        let start_tc = format_ass_timecode(seg.start_sec);
+        let end_tc = format_ass_timecode(seg.end_sec);
+        let style = map_speaker_to_ass_style(&seg.speaker_id);
+        let raw_text = seg.text_vi.as_deref().unwrap_or(&seg.text_en);
+        let escaped_text = escape_ass_text(raw_text);
+
+        let _ = writeln!(
+            out,
+            "Dialogue: 0,{start_tc},{end_tc},{style},{style},0,0,0,,{escaped_text}"
+        );
+    }
+}
+
 /// Generate a complete Advanced SubStation Alpha (`.ass` v4.00+) subtitle script from a segment container.
 ///
 /// Features VTuber character styles in `&HAABBGGRR` hexadecimal format and
@@ -96,102 +252,27 @@ pub fn map_speaker_to_ass_style(speaker_id: &str) -> &'static str {
 pub fn generate_ass_script(container: &TranscriptSegmentsContainer) -> String {
     let mut out = String::with_capacity(4096);
 
-    out.push_str("[Script Info]\n");
-    out.push_str("Title: NeuroClip Subtitle Project\n");
-    out.push_str("ScriptType: v4.00+\n");
-    out.push_str("WrapStyle: 0\n");
-    out.push_str("ScaledBorderAndShadow: yes\n");
-    out.push_str("YCbCr Matrix: TV.601\n");
-    out.push_str("PlayResX: 1920\n");
-    out.push_str("PlayResY: 1080\n\n");
-
-    out.push_str("[V4+ Styles]\n");
-    out.push_str("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n");
-    out.push_str("Style: Default,Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Vedal,Arial,54,&H0098FB98,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Neuro,Arial,54,&H00C1B6FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Evil,Arial,54,&H005500FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Guest,Arial,54,&H0000D7FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1\n");
-    out.push_str("Style: Chat,Arial,48,&H00EBCE87,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1\n\n");
-
-    out.push_str("[Events]\n");
-    out.push_str(
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
-    );
-
-    for seg in &container.segments {
-        let start_tc = format_ass_timecode(seg.start_sec);
-        let end_tc = format_ass_timecode(seg.end_sec);
-        let style = map_speaker_to_ass_style(&seg.speaker_id);
-        let raw_text = seg.text_vi.as_deref().unwrap_or(&seg.text_en);
-        let escaped_text = escape_ass_text(raw_text);
-
-        let _ = writeln!(
-            out,
-            "Dialogue: 0,{start_tc},{end_tc},{style},{style},0,0,0,,{escaped_text}"
-        );
-    }
+    append_ass_script_info(&mut out, "NeuroClip Subtitle Project", 1920, 1080);
+    append_v4_styles_section(&mut out, None::<&HashMap<String, SpeakerStyle>>);
+    append_events_section(&mut out, &container.segments);
 
     out
 }
 
 /// Generate a complete Advanced SubStation Alpha (`.ass` v4.00+) subtitle script from a [`SubtitleProject`].
 ///
-/// Renders custom `speaker_styles` configured on the project.
+/// Resolves `PlayResX`/`PlayResY` from `project.target_layout` and renders custom
+/// `speaker_styles` configured on the project.
 #[must_use]
 pub fn generate_ass_script_from_project(project: &SubtitleProject) -> String {
     let mut out = String::with_capacity(4096);
 
-    out.push_str("[Script Info]\n");
-    let _ = writeln!(out, "Title: {}", project.project_name);
-    out.push_str("ScriptType: v4.00+\n");
-    out.push_str("WrapStyle: 0\n");
-    out.push_str("ScaledBorderAndShadow: yes\n");
-    out.push_str("YCbCr Matrix: TV.601\n");
-    out.push_str("PlayResX: 1920\n");
-    out.push_str("PlayResY: 1080\n\n");
+    let (play_res_x, play_res_y) = canvas_config_for_layout(&project.target_layout)
+        .map_or((1920, 1080), |cfg| (cfg.width, cfg.height));
 
-    out.push_str("[V4+ Styles]\n");
-    out.push_str("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n");
-
-    // Standard ordering for consistency
-    let standard_keys = ["Default", "Vedal", "Neuro", "Evil", "Guest", "Chat"];
-    for style_name in standard_keys {
-        let lookup_key = style_name.to_ascii_lowercase();
-        if let Some(style) = project.speaker_styles.get(&lookup_key) {
-            let primary_bgr = hex_to_ass_bgr(&style.color_hex);
-            let outline_bgr = hex_to_ass_bgr(&style.outline_color_hex);
-            let _ = writeln!(
-                out,
-                "Style: {style_name},{},{},{primary_bgr},&H000000FF,{outline_bgr},&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1",
-                style.font_name, style.font_size
-            );
-        } else {
-            // Fallback for missing style
-            let _ = writeln!(
-                out,
-                "Style: {style_name},Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1"
-            );
-        }
-    }
-
-    out.push_str("\n[Events]\n");
-    out.push_str(
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
-    );
-
-    for seg in &project.segments {
-        let start_tc = format_ass_timecode(seg.start_sec);
-        let end_tc = format_ass_timecode(seg.end_sec);
-        let style = map_speaker_to_ass_style(&seg.speaker_id);
-        let raw_text = seg.text_vi.as_deref().unwrap_or(&seg.text_en);
-        let escaped_text = escape_ass_text(raw_text);
-
-        let _ = writeln!(
-            out,
-            "Dialogue: 0,{start_tc},{end_tc},{style},{style},0,0,0,,{escaped_text}"
-        );
-    }
+    append_ass_script_info(&mut out, &project.project_name, play_res_x, play_res_y);
+    append_v4_styles_section(&mut out, Some(&project.speaker_styles));
+    append_events_section(&mut out, &project.segments);
 
     out
 }
@@ -233,7 +314,9 @@ pub fn export_ass_project_file(
 pub mod tests {
     use super::*;
     use crate::export::create_subtitle_project;
-    use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer, WordTiming};
+    use crate::stt::transcript_parser::{
+        TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
+    };
     use chrono::Utc;
     use std::time::Instant;
 
@@ -251,14 +334,12 @@ pub mod tests {
                     confidence: 0.96,
                     cps_score: 13.5,
                     is_flagged_for_review: false,
-                    words: vec![
-                        WordTiming {
-                            word: "Hello".to_string(),
-                            start_sec: 1.25,
-                            end_sec: 1.80,
-                            probability: 0.98,
-                        },
-                    ],
+                    words: vec![WordTiming {
+                        word: "Hello".to_string(),
+                        start_sec: 1.25,
+                        end_sec: 1.80,
+                        probability: 0.98,
+                    }],
                 },
                 TranscriptSegment {
                     segment_id: "seg_0002".to_string(),
@@ -330,8 +411,12 @@ pub mod tests {
         // Verify Events dialogue entries
         assert!(ass.contains("[Events]"));
         assert!(ass.contains("Dialogue: 0,0:00:01.25,0:00:03.80,Neuro,Neuro,0,0,0,,Chào chat! Mình thích tutel (trái tim)."));
-        assert!(ass.contains("Dialogue: 0,0:00:04.10,0:00:06.50,Vedal,Vedal,0,0,0,,Vedal: Stop saying that."));
-        assert!(ass.contains("Dialogue: 0,0:00:07.00,0:00:09.20,Evil,Evil,0,0,0,,Evil: Ta sẽ tiêu diệt thế giới."));
+        assert!(ass.contains(
+            "Dialogue: 0,0:00:04.10,0:00:06.50,Vedal,Vedal,0,0,0,,Vedal: Stop saying that."
+        ));
+        assert!(ass.contains(
+            "Dialogue: 0,0:00:07.00,0:00:09.20,Evil,Evil,0,0,0,,Evil: Ta sẽ tiêu diệt thế giới."
+        ));
     }
 
     #[test]
@@ -351,7 +436,11 @@ pub mod tests {
                 segment_id: format!("seg_{i:04}"),
                 start_sec: (i as f64) * 2.0,
                 end_sec: (i as f64) * 2.0 + 1.8,
-                speaker_id: if i % 2 == 0 { "neuro".to_string() } else { "vedal".to_string() },
+                speaker_id: if i % 2 == 0 {
+                    "neuro".to_string()
+                } else {
+                    "vedal".to_string()
+                },
                 text_en: format!("Sentence number {i}"),
                 text_vi: Some(format!("{sentence} #{i}")),
                 confidence: 0.95,
@@ -366,7 +455,10 @@ pub mod tests {
             segments,
         };
 
-        let temp_dir = std::env::temp_dir().join(format!("neuroclip_ass_test_{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_ass_test_{}",
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
         let output_path = temp_dir.join("subtitles_vn_test.ass");
 
         let exported_path = export_ass_file(&container, &output_path).unwrap();
@@ -423,7 +515,10 @@ pub mod tests {
     #[test]
     fn test_ass_escaping_and_timecode_clamping() {
         assert_eq!(escape_ass_text("Normal text"), "Normal text");
-        assert_eq!(escape_ass_text("Text with {tag} here"), "Text with (tag) here");
+        assert_eq!(
+            escape_ass_text("Text with {tag} here"),
+            "Text with (tag) here"
+        );
         assert_eq!(escape_ass_text("Line 1\r\nLine 2"), "Line 1\\NLine 2");
 
         assert_eq!(format_ass_timecode(0.0), "0:00:00.00");
@@ -456,5 +551,139 @@ pub mod tests {
         assert!(ass.contains("Style: Neuro,"));
         assert!(ass.contains("Style: Vedal,"));
         assert!(ass.contains("Dialogue: 0,"));
+    }
+
+    #[test]
+    fn test_patch_p1_02_vedal_and_chat_exact_styles_in_both_generators() {
+        let container = sample_container();
+        let ass_container = generate_ass_script(&container);
+
+        let project = create_subtitle_project(
+            container,
+            "NeuroClip Subtitle Project",
+            "vod_1",
+            Some("original_16_9"),
+        );
+        let ass_project = generate_ass_script_from_project(&project);
+
+        let expected_lines = [
+            "Style: Default,Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1",
+            "Style: Vedal,Arial,54,&H0098FB98,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2.5,2,2,20,20,40,1",
+            "Style: Neuro,Arial,54,&H00C1B6FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1",
+            "Style: Evil,Arial,54,&H005500FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1",
+            "Style: Guest,Arial,54,&H0000D7FF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1",
+            "Style: Chat,Arial,48,&H00EBCE87,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1",
+        ];
+
+        for line in expected_lines {
+            assert!(
+                ass_container.contains(line),
+                "generate_ass_script missing: {line}"
+            );
+            assert!(
+                ass_project.contains(line),
+                "generate_ass_script_from_project missing: {line}"
+            );
+        }
+
+        // With identical title and original_16_9 default styles, both generators match byte-for-byte
+        assert_eq!(ass_container, ass_project);
+    }
+
+    #[test]
+    fn test_patch_p1_02_project_playres_from_target_layout() {
+        let cases = [
+            (
+                Some("preset_center_crop_9_16"),
+                "PlayResX: 1080",
+                "PlayResY: 1920",
+            ),
+            (
+                Some("preset_two_stack_9_16"),
+                "PlayResX: 1080",
+                "PlayResY: 1920",
+            ),
+            (Some("original_16_9"), "PlayResX: 1920", "PlayResY: 1080"),
+            (None, "PlayResX: 1920", "PlayResY: 1080"),
+            (
+                Some("unknown_or_empty_layout"),
+                "PlayResX: 1920",
+                "PlayResY: 1080",
+            ),
+        ];
+
+        for (layout, expected_x, expected_y) in cases {
+            let project =
+                create_subtitle_project(sample_container(), "Layout Test", "vod_layout", layout);
+            let ass = generate_ass_script_from_project(&project);
+            assert!(
+                ass.contains(expected_x),
+                "Layout {layout:?} expected {expected_x}\n{ass}"
+            );
+            assert!(
+                ass.contains(expected_y),
+                "Layout {layout:?} expected {expected_y}\n{ass}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_patch_p1_02_project_missing_and_custom_speaker_styles() {
+        let mut project = create_subtitle_project(
+            sample_container(),
+            "Custom Styles",
+            "vod_custom",
+            Some("preset_center_crop_9_16"),
+        );
+
+        // Empty speaker_styles falls back to canonical VTuber defaults (including Vedal 2.5 & Chat 0/2)
+        project.speaker_styles.clear();
+        let fallback_ass = generate_ass_script_from_project(&project);
+        assert!(fallback_ass.contains(
+            "Style: Vedal,Arial,54,&H0098FB98,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2.5,2,2,20,20,40,1"
+        ));
+        assert!(fallback_ass.contains(
+            "Style: Chat,Arial,48,&H00EBCE87,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1"
+        ));
+
+        // Custom speaker_styles (including "unknown" fallback for Default) preserve font/size/colors and role Bold/Outline
+        project.speaker_styles.insert(
+            "vedal".to_string(),
+            SpeakerStyle {
+                color_hex: "#112233".to_string(),
+                font_name: "Inter".to_string(),
+                font_size: 60,
+                outline_color_hex: "#445566".to_string(),
+            },
+        );
+        project.speaker_styles.insert(
+            "chat".to_string(),
+            SpeakerStyle {
+                color_hex: "#AABBCC".to_string(),
+                font_name: "Roboto".to_string(),
+                font_size: 44,
+                outline_color_hex: "#101010".to_string(),
+            },
+        );
+        project.speaker_styles.insert(
+            "unknown".to_string(),
+            SpeakerStyle {
+                color_hex: "#EEEEEE".to_string(),
+                font_name: "Consolas".to_string(),
+                font_size: 50,
+                outline_color_hex: "#010101".to_string(),
+            },
+        );
+
+        let custom_ass = generate_ass_script_from_project(&project);
+        assert!(custom_ass.contains(
+            "Style: Vedal,Inter,60,&H00332211,&H000000FF,&H00665544,&H80000000,-1,0,0,0,100,100,0,0,1,2.5,2,2,20,20,40,1"
+        ));
+        assert!(custom_ass.contains(
+            "Style: Chat,Roboto,44,&H00CCBBAA,&H000000FF,&H00101010,&H80000000,0,0,0,0,100,100,0,0,1,2,2,2,20,20,40,1"
+        ));
+        assert!(custom_ass.contains(
+            "Style: Default,Consolas,50,&H00EEEEEE,&H000000FF,&H00010101,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1"
+        ));
     }
 }

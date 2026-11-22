@@ -154,11 +154,7 @@ describe('CharacterHotkeyBar Component', () => {
     const selectAllBtn = screen.getByTestId('btn-select-all');
     fireEvent.click(selectAllBtn);
 
-    expect(useStudioStore.getState().selectedSegmentIds).toEqual([
-      'seg_1',
-      'seg_2',
-      'seg_3',
-    ]);
+    expect(useStudioStore.getState().selectedSegmentIds).toEqual(['seg_1', 'seg_2', 'seg_3']);
   });
 
   it('should clear selection when clicking "Bỏ chọn"', () => {

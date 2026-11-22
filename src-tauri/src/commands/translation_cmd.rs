@@ -114,11 +114,11 @@ pub async fn wrap_vietnamese_subtitles(
                 && !text_vi.starts_with(crate::translation::SAFETY_FALLBACK_PREFIX)
                 && !text_vi.starts_with(crate::translation::FORMAT_FALLBACK_PREFIX)
             {
-                seg.text_vi = Some(crate::translation::line_wrapper::wrap_vietnamese_text_to_string(
-                    text_vi,
-                    max_chars,
-                    max_l,
-                ));
+                seg.text_vi = Some(
+                    crate::translation::line_wrapper::wrap_vietnamese_text_to_string(
+                        text_vi, max_chars, max_l,
+                    ),
+                );
             }
         }
     }
@@ -138,10 +138,8 @@ pub async fn optimize_transcript_cps(
     let config = crate::translation::cps_optimizer::TimeBorrowingConfig {
         max_borrow_ms: max_borrow_ms
             .unwrap_or(crate::translation::cps_optimizer::DEFAULT_MAX_BORROW_MS),
-        min_gap_ms: min_gap_ms
-            .unwrap_or(crate::translation::cps_optimizer::DEFAULT_MIN_GAP_MS),
-        target_cps: target_cps
-            .unwrap_or(crate::translation::cps_optimizer::DEFAULT_TARGET_CPS),
+        min_gap_ms: min_gap_ms.unwrap_or(crate::translation::cps_optimizer::DEFAULT_MIN_GAP_MS),
+        target_cps: target_cps.unwrap_or(crate::translation::cps_optimizer::DEFAULT_TARGET_CPS),
         trigger_cps: crate::translation::cps_optimizer::CPS_RED_THRESHOLD,
         max_clip_duration_sec: clip_duration,
     };

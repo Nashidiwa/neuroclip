@@ -90,7 +90,8 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   const effectiveIsPlaying = propIsPlaying !== undefined ? propIsPlaying : storeIsPlaying;
   const effectiveIsMuted = propIsMuted !== undefined ? propIsMuted : storeIsMuted;
   const effectiveVolume = propVolume !== undefined ? propVolume : storeVolume;
-  const effectivePlaybackRate = propPlaybackRate !== undefined ? propPlaybackRate : storePlaybackRate;
+  const effectivePlaybackRate =
+    propPlaybackRate !== undefined ? propPlaybackRate : storePlaybackRate;
   const effectivePreset = propPreset916 ?? storePreset916;
   const effectiveAspectRatio = propAspectRatio ?? storeAspectRatio;
 
@@ -140,7 +141,10 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
         rafHandleRef.current = null;
       }
 
-      const clamped = Math.max(0, Math.min(effectiveDuration > 0 ? effectiveDuration : targetTime, targetTime));
+      const clamped = Math.max(
+        0,
+        Math.min(effectiveDuration > 0 ? effectiveDuration : targetTime, targetTime),
+      );
       if (onSeek) {
         onSeek(clamped);
       } else {
@@ -243,7 +247,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   return (
     <div
       data-testid="timeline-scrubber"
-      className={`w-full flex flex-col space-y-2 rounded-xl border border-border-dark bg-bg-secondary/70 p-3 shadow-acrylic select-none ${className}`}
+      className={`flex w-full select-none flex-col space-y-2 rounded-xl border border-border-dark bg-bg-secondary/70 p-3 shadow-acrylic ${className}`}
     >
       {/* Top Bar: Timeline Scrubber Slider Track */}
       <div className="flex flex-col space-y-1">
@@ -260,14 +264,15 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             onPointerUp={handleSliderPointerUp}
             disabled={effectiveDuration <= 0}
             aria-label="Thanh tua thời gian video"
-            className="w-full h-2 cursor-pointer appearance-none rounded-lg bg-bg-tertiary accent-accent-neuro focus:outline-hidden disabled:opacity-50"
+            className="focus:outline-hidden h-2 w-full cursor-pointer appearance-none rounded-lg bg-bg-tertiary accent-accent-neuro disabled:opacity-50"
           />
         </div>
 
         {/* Timecode and Progress display */}
-        <div className="flex items-center justify-between text-xs font-mono text-slate-300">
+        <div className="flex items-center justify-between font-mono text-xs text-slate-300">
           <span data-testid="timeline-timecode" className="font-semibold text-accent-neuro">
-            {formatStudioTimecode(displayTime, forceHours)} / {formatStudioTimecode(effectiveDuration, forceHours)}
+            {formatStudioTimecode(displayTime, forceHours)} /{' '}
+            {formatStudioTimecode(effectiveDuration, forceHours)}
           </span>
           <span className="text-[11px] text-slate-400">
             {effectiveDuration > 0
@@ -278,7 +283,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       </div>
 
       {/* Bottom Bar: Transport Controls & Preset Selection */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border-dark/60">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-dark/60 pt-1">
         {/* Left: Playback & Nudge Controls */}
         <div className="flex items-center space-x-1">
           {/* Play/Pause Button */}
@@ -287,9 +292,13 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             data-testid="timeline-play-btn"
             onClick={handleTogglePlay}
             aria-label={effectiveIsPlaying ? 'Tạm dừng video' : 'Phát video'}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-neuro/20 text-accent-neuro transition-colors hover:bg-accent-neuro/30 focus:outline-hidden"
+            className="focus:outline-hidden flex h-8 w-8 items-center justify-center rounded-lg bg-accent-neuro/20 text-accent-neuro transition-colors hover:bg-accent-neuro/30"
           >
-            {effectiveIsPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
+            {effectiveIsPlaying ? (
+              <Pause className="h-4 w-4" />
+            ) : (
+              <Play className="ml-0.5 h-4 w-4" />
+            )}
           </button>
 
           {/* Jump -5s */}
@@ -298,7 +307,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             data-testid="timeline-nudge-back-5s"
             onClick={() => handleNudge(-5)}
             title="Lùi 5 giây"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200"
           >
             <Rewind className="h-3.5 w-3.5" />
           </button>
@@ -309,7 +318,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             data-testid="timeline-nudge-back-frame"
             onClick={() => handleNudge(-0.1)}
             title="Lùi 1 khung hình (100ms)"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200"
           >
             <RotateCcw className="h-3.5 w-3.5" />
           </button>
@@ -320,7 +329,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             data-testid="timeline-nudge-forward-frame"
             onClick={() => handleNudge(0.1)}
             title="Tiến 1 khung hình (100ms)"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200"
           >
             <RotateCw className="h-3.5 w-3.5" />
           </button>
@@ -331,7 +340,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             data-testid="timeline-nudge-forward-5s"
             onClick={() => handleNudge(5)}
             title="Tiến 5 giây"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200"
           >
             <FastForward className="h-3.5 w-3.5" />
           </button>
@@ -343,7 +352,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               data-testid="timeline-mute-btn"
               onClick={handleToggleMute}
               aria-label={effectiveIsMuted ? 'Bật âm' : 'Tắt âm'}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 transition-colors"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200"
             >
               {effectiveIsMuted || effectiveVolume === 0 ? (
                 <VolumeX className="h-4 w-4 text-accent-evil" />
@@ -360,7 +369,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               value={effectiveIsMuted ? 0 : effectiveVolume}
               onChange={handleVolumeChange}
               aria-label="Âm lượng"
-              className="w-16 h-1.5 cursor-pointer appearance-none rounded-lg bg-bg-tertiary accent-accent-neuro"
+              className="h-1.5 w-16 cursor-pointer appearance-none rounded-lg bg-bg-tertiary accent-accent-neuro"
             />
           </div>
 
@@ -371,7 +380,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               value={effectivePlaybackRate}
               onChange={handleSpeedSelect}
               aria-label="Tốc độ phát video"
-              className="h-6 rounded border border-border-dark bg-bg-tertiary px-1 text-[11px] font-mono text-slate-300 focus:outline-hidden"
+              className="focus:outline-hidden h-6 rounded border border-border-dark bg-bg-tertiary px-1 font-mono text-[11px] text-slate-300"
             >
               {SPEED_OPTIONS.map((speed) => (
                 <option key={speed} value={speed}>
@@ -391,7 +400,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             onClick={() => handlePresetSelect('center-crop')}
             className={`flex items-center space-x-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               effectivePreset === 'center-crop'
-                ? 'border border-accent-neuro/60 bg-accent-neuro/20 text-accent-neuro font-semibold'
+                ? 'border border-accent-neuro/60 bg-accent-neuro/20 font-semibold text-accent-neuro'
                 : 'text-slate-400 hover:bg-bg-tertiary hover:text-slate-200'
             }`}
           >
@@ -406,7 +415,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             onClick={() => handlePresetSelect('two-stack')}
             className={`flex items-center space-x-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               effectivePreset === 'two-stack'
-                ? 'border border-accent-neuro/60 bg-accent-neuro/20 text-accent-neuro font-semibold'
+                ? 'border border-accent-neuro/60 bg-accent-neuro/20 font-semibold text-accent-neuro'
                 : 'text-slate-400 hover:bg-bg-tertiary hover:text-slate-200'
             }`}
           >
@@ -420,7 +429,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             data-testid="btn-aspect-ratio-toggle"
             onClick={handleAspectRatioToggle}
             title="Đổi tỷ lệ khung hình"
-            className="flex items-center space-x-1 rounded-md border border-border-dark bg-bg-tertiary/70 px-2 py-1 text-xs text-slate-300 hover:bg-bg-tertiary transition-colors"
+            className="flex items-center space-x-1 rounded-md border border-border-dark bg-bg-tertiary/70 px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-bg-tertiary"
           >
             <span>{effectiveAspectRatio}</span>
           </button>

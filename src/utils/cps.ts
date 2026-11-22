@@ -19,7 +19,7 @@ export const CPS_GREEN_THRESHOLD = 17.0;
 export const CPS_RED_THRESHOLD = 20.0;
 export const DEFAULT_TARGET_CPS = 17.0;
 export const DEFAULT_MAX_BORROW_MS = 800; // 0.8s max allowable extension
-export const DEFAULT_MIN_GAP_MS = 50;     // 0.05s collision safety buffer
+export const DEFAULT_MIN_GAP_MS = 50; // 0.05s collision safety buffer
 export const MIN_SEGMENT_DURATION_SEC = 0.05; // 50ms minimum duration clamp
 
 // ---------------------------------------------------------------------------

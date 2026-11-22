@@ -10,11 +10,7 @@
  */
 
 import { createStore, type StoreHook } from './createStore.ts';
-import {
-  isSpeakerRole,
-  type TranscriptSegment,
-  type SpeakerRole,
-} from '../types/transcript.ts';
+import { isSpeakerRole, type TranscriptSegment, type SpeakerRole } from '../types/transcript.ts';
 import { calculateCps } from '../utils/text_wrap.ts';
 import { calculateBorrowDuration } from '../utils/cps.ts';
 
@@ -280,7 +276,14 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
   setVideoSrc: (src, videoPath = null) => {
     set({
       videoSrc: src,
-      videoPath: videoPath ?? (typeof src === 'string' && !src.startsWith('http') && !src.startsWith('asset://') && !src.startsWith('blob:') ? src : null),
+      videoPath:
+        videoPath ??
+        (typeof src === 'string' &&
+        !src.startsWith('http') &&
+        !src.startsWith('asset://') &&
+        !src.startsWith('blob:')
+          ? src
+          : null),
     });
   },
 
@@ -428,9 +431,7 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
       const startIdx = Math.min(validAnchorIdx, targetIdx);
       const endIdx = Math.max(validAnchorIdx, targetIdx);
 
-      const rangeIds = segments
-        .slice(startIdx, endIdx + 1)
-        .map((s) => s.segmentId ?? s.segment_id);
+      const rangeIds = segments.slice(startIdx, endIdx + 1).map((s) => s.segmentId ?? s.segment_id);
 
       return {
         selectedSegmentIds: rangeIds,
@@ -460,17 +461,17 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
       updates.textVi !== undefined
         ? updates.textVi
         : updates.text_vi !== undefined
-        ? updates.text_vi
-        : undefined;
+          ? updates.text_vi
+          : undefined;
 
     const textEn =
       updates.textEn !== undefined
         ? updates.textEn
         : updates.text_en !== undefined
-        ? updates.text_en
-        : updates.text !== undefined
-        ? updates.text
-        : undefined;
+          ? updates.text_en
+          : updates.text !== undefined
+            ? updates.text
+            : undefined;
 
     set((state) => {
       const nextSegments = state.segments.map((seg) => {
@@ -575,9 +576,7 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
 
   borrowSilence: (segmentId) => {
     const state = get();
-    const segIdx = state.segments.findIndex(
-      (s) => (s.segmentId ?? s.segment_id) === segmentId,
-    );
+    const segIdx = state.segments.findIndex((s) => (s.segmentId ?? s.segment_id) === segmentId);
     if (segIdx < 0) return false;
     const currentSeg = state.segments[segIdx];
     if (!currentSeg) return false;

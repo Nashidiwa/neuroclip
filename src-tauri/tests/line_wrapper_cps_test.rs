@@ -130,7 +130,10 @@ fn test_it_19_1_end_to_end_line_wrapper_and_cps_pipeline() {
     assert!(json_str.contains("\"cps_score\":"));
 
     let roundtrip_res: Result<TranscriptSegmentsContainer, _> = serde_json::from_str(&json_str);
-    assert!(roundtrip_res.is_ok(), "Schema 5.5 deserialization must succeed");
+    assert!(
+        roundtrip_res.is_ok(),
+        "Schema 5.5 deserialization must succeed"
+    );
     let roundtrip = roundtrip_res.unwrap_or(container);
     assert_eq!(roundtrip.clip_id, "clip_m4_19_e2e");
     assert_eq!(roundtrip.segments.len(), 2);

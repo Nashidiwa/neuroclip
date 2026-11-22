@@ -24,14 +24,9 @@ pub use ass_exporter::{
     generate_ass_script, generate_ass_script_from_project, hex_to_ass_bgr,
     map_speaker_to_ass_style,
 };
-pub use srt_exporter::{
-    export_srt_file, export_srt_project_file, format_srt_timecode, generate_srt_script,
-    generate_srt_script_from_project, generate_srt_script_from_segments,
-};
 pub use capcut_draft::{
     default_capcut_drafts_dir, detect_capcut_drafts_dir, export_capcut_draft_folder,
-    generate_project_folder_name, sanitize_project_name, update_root_meta_info,
-    CapCutExportResult,
+    generate_project_folder_name, sanitize_project_name, update_root_meta_info, CapCutExportResult,
 };
 pub use capcut_schema::{
     canvas_config_for_layout, hex_to_normalized_rgb, sec_to_micros, CanvasConfig,
@@ -39,6 +34,10 @@ pub use capcut_schema::{
     DraftMetaMaterials, DraftSegment, DraftStoreItem, DraftTextMaterial, DraftTrack,
     DraftVideoMaterial, RootMetaInfo, TimeRange, DEFAULT_SUBTITLE_TRANSFORM_X,
     DEFAULT_SUBTITLE_TRANSFORM_Y, MICROS_PER_SEC, MIN_CLIP_DURATION_MICROS,
+};
+pub use srt_exporter::{
+    export_srt_file, export_srt_project_file, format_srt_timecode, generate_srt_script,
+    generate_srt_script_from_project, generate_srt_script_from_segments,
 };
 
 /// UTF-8 Byte Order Mark string representation (`\u{FEFF}`).
@@ -252,9 +251,8 @@ pub fn load_subtitle_project_json(path: &Path) -> Result<SubtitleProject, AppErr
         ))
     })?;
 
-    let project: SubtitleProject = serde_json::from_str(&data).map_err(|e| {
-        AppError::Internal(format!("Failed to parse subtitle project JSON: {e}"))
-    })?;
+    let project: SubtitleProject = serde_json::from_str(&data)
+        .map_err(|e| AppError::Internal(format!("Failed to parse subtitle project JSON: {e}")))?;
 
     Ok(project)
 }
@@ -269,7 +267,9 @@ pub fn load_subtitle_project_json(path: &Path) -> Result<SubtitleProject, AppErr
 )]
 mod tests {
     use super::*;
-    use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer, WordTiming};
+    use crate::stt::transcript_parser::{
+        TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
+    };
 
     fn make_test_container() -> TranscriptSegmentsContainer {
         TranscriptSegmentsContainer {
@@ -322,14 +322,12 @@ mod tests {
     #[test]
     fn test_export_and_load_subtitle_project_json() {
         let container = make_test_container();
-        let project = create_subtitle_project(
-            container,
-            "Disk Project",
-            "vod_disk_123",
-            None,
-        );
+        let project = create_subtitle_project(container, "Disk Project", "vod_disk_123", None);
 
-        let temp_dir = std::env::temp_dir().join(format!("neuroclip_test_{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_test_{}",
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
         let output_path = temp_dir.join("subproject_test.json");
 
         let exported_path = export_subtitle_project_json(&project, &output_path).unwrap();

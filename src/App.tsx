@@ -570,7 +570,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'studio' && (
-          <div className="flex-1 min-h-[600px] -m-6 flex flex-col overflow-hidden">
+          <div className="-m-6 flex min-h-[600px] flex-1 flex-col overflow-hidden">
             <SubtitleStudio />
           </div>
         )}

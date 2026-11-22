@@ -197,8 +197,7 @@ export interface VirtualizedSegmentListProps {
       ) => void)
     | undefined;
   readonly onNudgeTime?:
-    | ((segmentId: string, boundary: 'start' | 'end', deltaSec: number) => void)
-    | undefined;
+    ((segmentId: string, boundary: 'start' | 'end', deltaSec: number) => void) | undefined;
   readonly className?: string | undefined;
 }
 
@@ -280,9 +279,9 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
   );
 
   return (
-    <div className={`flex flex-col h-full w-full overflow-hidden ${className}`}>
+    <div className={`flex h-full w-full flex-col overflow-hidden ${className}`}>
       {/* List Toolbar / Auto-Follow Status */}
-      <div className="flex items-center justify-between border-b border-border-dark/60 bg-bg-secondary/90 px-3 py-1.5 text-xs text-slate-400 select-none">
+      <div className="flex select-none items-center justify-between border-b border-border-dark/60 bg-bg-secondary/90 px-3 py-1.5 text-xs text-slate-400">
         <span className="font-mono text-[11px] text-slate-400">
           Hiển thị {virtualizer.getVirtualItems().length} / {effectiveSegments.length} dòng
         </span>
@@ -292,8 +291,8 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
           onClick={() => setAutoFollowEnabled((prev) => !prev)}
           className={`inline-flex items-center space-x-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
             autoFollowEnabled
-              ? 'text-accent-neuro bg-accent-neuro/10 hover:bg-accent-neuro/20'
-              : 'text-slate-400 bg-bg-tertiary hover:text-slate-200'
+              ? 'bg-accent-neuro/10 text-accent-neuro hover:bg-accent-neuro/20'
+              : 'bg-bg-tertiary text-slate-400 hover:text-slate-200'
           }`}
           title={
             autoFollowEnabled
@@ -334,7 +333,7 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
           >
             <MessageSquare className="h-8 w-8 text-slate-500/70" />
             <p className="text-sm font-medium">Chưa có phân đoạn phụ đề</p>
-            <p className="text-xs text-slate-500 max-w-[220px]">
+            <p className="max-w-[220px] text-xs text-slate-500">
               Nạp tệp transcript_segments.json hoặc chạy Whisper STT để tạo phụ đề
             </p>
           </div>

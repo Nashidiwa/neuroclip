@@ -102,10 +102,7 @@ describe('TASK-M4-21: Virtualized Segment List & Realtime Editing Integration', 
       },
     });
 
-    Element.prototype.scrollTo = function (
-      options?: number | ScrollToOptions,
-      y?: number,
-    ) {
+    Element.prototype.scrollTo = function (options?: number | ScrollToOptions, y?: number) {
       if (typeof options === 'object' && options !== null && options.top !== undefined) {
         currentScrollTop = options.top;
       } else if (typeof options === 'number') {
@@ -590,12 +587,7 @@ describe('TASK-M4-21: Virtualized Segment List & Realtime Editing Integration', 
     it('TimecodeNudge calls onNudge with exact deltaSec when clicked', () => {
       const onNudge = vi.fn();
       render(
-        <TimecodeNudge
-          segmentId="test_id"
-          boundary="start"
-          valueSec={1.0}
-          onNudge={onNudge}
-        />,
+        <TimecodeNudge segmentId="test_id" boundary="start" valueSec={1.0} onNudge={onNudge} />,
       );
 
       fireEvent.click(screen.getByTestId('nudge-start-plus'));
@@ -609,14 +601,7 @@ describe('TASK-M4-21: Virtualized Segment List & Realtime Editing Integration', 
       const onSelect = vi.fn();
       const seg = makeSegment('row_test', 0, 5, 'evil', 'Evil text', 'Evil sub');
 
-      render(
-        <SegmentRow
-          segment={seg}
-          isActive={false}
-          isSelected={false}
-          onSelect={onSelect}
-        />,
-      );
+      render(<SegmentRow segment={seg} isActive={false} isSelected={false} onSelect={onSelect} />);
 
       fireEvent.click(screen.getByTestId('segment-row-row_test'));
       expect(onSelect).toHaveBeenCalledWith(seg);

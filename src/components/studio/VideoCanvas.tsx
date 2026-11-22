@@ -81,7 +81,8 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
   const effectiveIsPlaying = propIsPlaying !== undefined ? propIsPlaying : storeIsPlaying;
   const effectiveVolume = propVolume !== undefined ? propVolume : storeVolume;
   const effectiveIsMuted = propIsMuted !== undefined ? propIsMuted : storeIsMuted;
-  const effectivePlaybackRate = propPlaybackRate !== undefined ? propPlaybackRate : storePlaybackRate;
+  const effectivePlaybackRate =
+    propPlaybackRate !== undefined ? propPlaybackRate : storePlaybackRate;
 
   // Synchronize controlled currentTime prop if provided
   useEffect(() => {
@@ -244,13 +245,16 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
         data-aspect-ratio={effectiveAspectRatio}
         className={`relative flex items-center justify-center rounded-xl border border-border-dark bg-bg-secondary/60 shadow-acrylic ${containerAspectClass} ${className}`}
       >
-        <div data-testid="video-empty-state" className="flex flex-col items-center justify-center space-y-3 p-8 text-center">
+        <div
+          data-testid="video-empty-state"
+          className="flex flex-col items-center justify-center space-y-3 p-8 text-center"
+        >
           <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border-dark bg-bg-tertiary text-slate-400">
             <Film className="h-7 w-7 text-accent-neuro/70" />
           </div>
           <div className="space-y-1">
             <p className="text-sm font-semibold text-slate-200">Chưa có video được nạp</p>
-            <p className="text-xs text-slate-400 max-w-[240px]">
+            <p className="max-w-[240px] text-xs text-slate-400">
               Vui lòng chọn video slice hoặc nạp clip highlight để bắt đầu biên tập
             </p>
           </div>
@@ -264,7 +268,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
       data-testid="video-canvas-container"
       data-preset={effectivePreset}
       data-aspect-ratio={effectiveAspectRatio}
-      className={`relative mx-auto overflow-hidden rounded-xl bg-black border border-border-dark shadow-acrylic select-none flex flex-col ${containerAspectClass} ${className}`}
+      className={`relative mx-auto flex select-none flex-col overflow-hidden rounded-xl border border-border-dark bg-black shadow-acrylic ${containerAspectClass} ${className}`}
     >
       {/* Primary Video Pane (Top half in two-stack, full container in center-crop) */}
       <div
@@ -318,7 +322,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
               muted
               aria-hidden="true"
               tabIndex={-1}
-              className="absolute inset-0 h-full w-full object-cover object-bottom pointer-events-none"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover object-bottom"
             />
           </div>
         </>
@@ -328,7 +332,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
       {effectiveActiveSegments.length > 0 && (
         <div
           data-testid="subtitle-overlay"
-          className="absolute bottom-6 inset-x-3 pointer-events-none z-20 flex flex-col items-center gap-1.5"
+          className="pointer-events-none absolute inset-x-3 bottom-6 z-20 flex flex-col items-center gap-1.5"
         >
           {effectiveActiveSegments.map((segment) => {
             const segId = segment.segmentId ?? segment.segment_id;
@@ -340,7 +344,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
               <div
                 key={segId}
                 data-testid={`subtitle-line-${segId}`}
-                className="max-w-[96%] rounded-md bg-black/40 px-2.5 py-1 text-center backdrop-blur-xs transition-opacity duration-100"
+                className="backdrop-blur-xs max-w-[96%] rounded-md bg-black/40 px-2.5 py-1 text-center transition-opacity duration-100"
               >
                 <span
                   style={{
@@ -348,9 +352,9 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
                     textShadow:
                       '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 4px rgba(0,0,0,0.9)',
                   }}
-                  className="font-sans font-bold text-sm sm:text-base leading-snug tracking-wide"
+                  className="font-sans text-sm font-bold leading-snug tracking-wide sm:text-base"
                 >
-                  <span className="opacity-80 mr-1.5 uppercase text-xs tracking-wider">
+                  <span className="mr-1.5 text-xs uppercase tracking-wider opacity-80">
                     [{speaker}]
                   </span>
                   {text}

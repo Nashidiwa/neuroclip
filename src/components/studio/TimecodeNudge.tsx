@@ -61,7 +61,7 @@ export const TimecodeNudge: React.FC<TimecodeNudgeProps> = ({
         data-testid={`nudge-${boundary}-minus`}
         aria-label={`Lùi mốc ${boundary} 100ms`}
         title={`Lùi 100ms (${boundary === 'start' ? 'Shift+A' : ''})`}
-        className="rounded p-0.5 text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 active:scale-95 disabled:opacity-40 transition-colors"
+        className="rounded p-0.5 text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200 active:scale-95 disabled:opacity-40"
       >
         <span data-testid={`nudge-${boundary}-minus-100ms`} className="sr-only">
           -100ms
@@ -76,7 +76,7 @@ export const TimecodeNudge: React.FC<TimecodeNudgeProps> = ({
         data-testid={`nudge-${boundary}-plus`}
         aria-label={`Tiến mốc ${boundary} 100ms`}
         title={`Tiến 100ms (${boundary === 'start' ? 'Shift+D' : ''})`}
-        className="rounded p-0.5 text-slate-400 hover:bg-bg-tertiary hover:text-slate-200 active:scale-95 disabled:opacity-40 transition-colors"
+        className="rounded p-0.5 text-slate-400 transition-colors hover:bg-bg-tertiary hover:text-slate-200 active:scale-95 disabled:opacity-40"
       >
         <span data-testid={`nudge-${boundary}-plus-100ms`} className="sr-only">
           +100ms

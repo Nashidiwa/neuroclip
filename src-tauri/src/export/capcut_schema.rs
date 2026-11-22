@@ -4,8 +4,8 @@
 //! and `root_meta_info.json`, supporting multi-track timelines (video, audio, text),
 //! materials catalog, normalized coordinate transforms, and microsecond timeranges (1s = 1,000,000us).
 
-use serde::{Deserialize, Serialize};
 use crate::error::{AppError, ExportError};
+use serde::{Deserialize, Serialize};
 
 /// 1 second = 1,000,000 microseconds in CapCut timeline.
 pub const MICROS_PER_SEC: f64 = 1_000_000.0;
@@ -68,7 +68,9 @@ pub fn canvas_config_for_layout(layout: &str) -> Result<CanvasConfig, AppError> 
             height: 1920,
             ratio: "9:16".to_string(),
         }),
-        other => Err(AppError::Export(ExportError::InvalidLayout(other.to_string()))),
+        other => Err(AppError::Export(ExportError::InvalidLayout(
+            other.to_string(),
+        ))),
     }
 }
 

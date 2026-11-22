@@ -4,19 +4,18 @@
 //! project directory generation, creation of `draft_content.json` and `draft_meta_info.json`,
 //! and invariant Dual Export Safeguard (always writes `subtitle.ass` and `subtitle.srt`).
 
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, ExportError};
 use crate::export::capcut_schema::{
-    canvas_config_for_layout, hex_to_normalized_rgb, sec_to_micros,
-    DraftAudioMaterial, DraftContent, DraftMaterials, DraftMetaInfo,
-    DraftMetaMaterialItem, DraftMetaMaterials, DraftSegment, DraftStoreItem,
-    DraftTextMaterial, DraftTrack, DraftVideoMaterial, RootMetaInfo, TimeRange,
-    DEFAULT_SUBTITLE_TRANSFORM_X, DEFAULT_SUBTITLE_TRANSFORM_Y,
+    canvas_config_for_layout, hex_to_normalized_rgb, sec_to_micros, DraftAudioMaterial,
+    DraftContent, DraftMaterials, DraftMetaInfo, DraftMetaMaterialItem, DraftMetaMaterials,
+    DraftSegment, DraftStoreItem, DraftTextMaterial, DraftTrack, DraftVideoMaterial, RootMetaInfo,
+    TimeRange, DEFAULT_SUBTITLE_TRANSFORM_X, DEFAULT_SUBTITLE_TRANSFORM_Y,
     MIN_CLIP_DURATION_MICROS,
 };
 use crate::export::{export_ass_project_file, export_srt_project_file, SubtitleProject};
@@ -182,9 +181,10 @@ pub fn build_capcut_draft_content(
         let video_mat_id = generate_capcut_id();
         let audio_mat_id = generate_capcut_id();
 
-        let mat_name = Path::new(v_path)
-            .file_name()
-            .map_or_else(|| "clip_slice.mp4".to_string(), |f| f.to_string_lossy().to_string());
+        let mat_name = Path::new(v_path).file_name().map_or_else(
+            || "clip_slice.mp4".to_string(),
+            |f| f.to_string_lossy().to_string(),
+        );
 
         video_materials.push(DraftVideoMaterial {
             id: video_mat_id.clone(),
@@ -249,8 +249,7 @@ pub fn build_capcut_draft_content(
         let char_count = raw_text.chars().count();
 
         // Build double-encoded inner content JSON
-        let escaped_text =
-            serde_json::to_string(raw_text).unwrap_or_else(|_| "\"\"".to_string());
+        let escaped_text = serde_json::to_string(raw_text).unwrap_or_else(|_| "\"\"".to_string());
         let content_json = format!(
             r#"{{"styles":[{{"fill":{{"alpha":1.0,"content":{{"solid":{{"color":[{:.6},{:.6},{:.6}]}}}}}},"range":[0,{}]}}],"text":{}}}"#,
             norm_rgb[0], norm_rgb[1], norm_rgb[2], char_count, escaped_text
@@ -399,7 +398,11 @@ pub fn update_root_meta_info(drafts_root: &Path, item: &DraftStoreItem) {
     };
 
     // If not already present, push and save back
-    if !meta.all_draft_store.iter().any(|d| d.draft_id == item.draft_id) {
+    if !meta
+        .all_draft_store
+        .iter()
+        .any(|d| d.draft_id == item.draft_id)
+    {
         meta.all_draft_store.push(item.clone());
         if let Ok(bytes) = serde_json::to_vec_pretty(&meta) {
             let _ = std::fs::write(&root_meta_path, bytes);
@@ -465,12 +468,8 @@ pub fn export_capcut_draft_folder(
     })?;
 
     // 5. Generate draft_meta_info.json
-    let meta = build_capcut_draft_meta_info(
-        &content,
-        &project_dir,
-        &drafts_root,
-        effective_video_path,
-    );
+    let meta =
+        build_capcut_draft_meta_info(&content, &project_dir, &drafts_root, effective_video_path);
     let meta_path = project_dir.join("draft_meta_info.json");
     let meta_bytes = serde_json::to_vec(&meta).map_err(|e| {
         AppError::Export(ExportError::FileWriteFailed {
@@ -528,7 +527,9 @@ pub fn export_capcut_draft_folder(
 mod tests {
     use super::*;
     use crate::export::create_subtitle_project;
-    use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer, WordTiming};
+    use crate::stt::transcript_parser::{
+        TranscriptSegment, TranscriptSegmentsContainer, WordTiming,
+    };
 
     fn make_test_container() -> TranscriptSegmentsContainer {
         TranscriptSegmentsContainer {
@@ -612,12 +613,9 @@ mod tests {
             Utc::now().timestamp_nanos_opt().unwrap_or(0)
         ));
 
-        let result = export_capcut_draft_folder(
-            &project,
-            Some("C:\\media\\test.mp4"),
-            Some(&temp_dir),
-        )
-        .unwrap();
+        let result =
+            export_capcut_draft_folder(&project, Some("C:\\media\\test.mp4"), Some(&temp_dir))
+                .unwrap();
 
         assert!(Path::new(&result.project_dir).exists());
         assert!(Path::new(&result.draft_content_path).exists());

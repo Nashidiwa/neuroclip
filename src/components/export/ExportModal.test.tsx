@@ -59,13 +59,7 @@ describe('ExportModal Component', () => {
   });
 
   it('renders modal dialog with accessible elements when isOpen=true', () => {
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     expect(screen.getByTestId('export-modal')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -77,25 +71,13 @@ describe('ExportModal Component', () => {
   });
 
   it('does not render anything when isOpen=false', () => {
-    render(
-      <ExportModal
-        isOpen={false}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={false} onClose={mockOnClose} project={mockProject} />);
 
     expect(screen.queryByTestId('export-modal')).not.toBeInTheDocument();
   });
 
   it('highlights Dual Export Safeguard badge (ADR-005) when CapCut format is selected', () => {
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     const badge = screen.getByTestId('dual-safeguard-badge');
     expect(badge).toBeInTheDocument();
@@ -105,13 +87,7 @@ describe('ExportModal Component', () => {
   });
 
   it('switches between CapCut, ASS, and SRT formats', () => {
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     // Switch to ASS
     fireEvent.click(screen.getByTestId('export-format-ass'));
@@ -149,7 +125,7 @@ describe('ExportModal Component', () => {
         onClose={mockOnClose}
         project={mockProject}
         onExportSuccess={mockOnExportSuccess}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByTestId('export-submit-button'));
@@ -162,7 +138,7 @@ describe('ExportModal Component', () => {
       mockProject,
       expect.objectContaining({
         videoFilePath: 'C:\\Videos\\clip.mp4',
-      })
+      }),
     );
     expect(screen.getByTestId('safeguard-file-ass')).toBeInTheDocument();
     expect(screen.getByTestId('safeguard-file-srt')).toBeInTheDocument();
@@ -187,13 +163,7 @@ describe('ExportModal Component', () => {
       durationMs: 15,
     });
 
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     const input = screen.getByTestId('custom-draft-path-input');
     fireEvent.change(input, { target: { value: 'D:\\CustomDrafts' } });
@@ -207,7 +177,7 @@ describe('ExportModal Component', () => {
       mockProject,
       expect.objectContaining({
         customDraftRoot: 'D:\\CustomDrafts',
-      })
+      }),
     );
   });
 
@@ -219,13 +189,7 @@ describe('ExportModal Component', () => {
       recoverable: true,
     });
 
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     fireEvent.click(screen.getByTestId('export-submit-button'));
 
@@ -233,7 +197,9 @@ describe('ExportModal Component', () => {
       expect(screen.getByTestId('export-error-banner')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Không tìm thấy thư mục CapCut Draft trên máy tính của bạn.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Không tìm thấy thư mục CapCut Draft trên máy tính của bạn.'),
+    ).toBeInTheDocument();
   });
 
   it('handles file write error (ERR_EXPORT_FILE_WRITE_FAILED)', async () => {
@@ -245,13 +211,7 @@ describe('ExportModal Component', () => {
       recoverable: true,
     });
 
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     fireEvent.click(screen.getByTestId('export-submit-button'));
 
@@ -259,7 +219,9 @@ describe('ExportModal Component', () => {
       expect(screen.getByTestId('export-error-banner')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Không thể ghi tệp dự án hoặc tệp phụ đề ra ổ đĩa.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Không thể ghi tệp dự án hoặc tệp phụ đề ra ổ đĩa.'),
+    ).toBeInTheDocument();
   });
 
   it('handles standalone ASS export', async () => {
@@ -272,7 +234,7 @@ describe('ExportModal Component', () => {
         onClose={mockOnClose}
         project={mockProject}
         onExportSuccess={mockOnExportSuccess}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByTestId('export-format-ass'));
@@ -296,7 +258,7 @@ describe('ExportModal Component', () => {
         onClose={mockOnClose}
         project={mockProject}
         onExportSuccess={mockOnExportSuccess}
-      />
+      />,
     );
 
     fireEvent.click(screen.getByTestId('export-format-srt'));
@@ -311,13 +273,7 @@ describe('ExportModal Component', () => {
   });
 
   it('closes modal when close button, cancel button, or backdrop is clicked', () => {
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     // Close button
     fireEvent.click(screen.getByTestId('export-close-button'));
@@ -333,13 +289,7 @@ describe('ExportModal Component', () => {
   });
 
   it('closes modal when Escape key is pressed', () => {
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(mockOnClose).toHaveBeenCalledTimes(1);
@@ -366,13 +316,7 @@ describe('ExportModal Component', () => {
       },
     });
 
-    render(
-      <ExportModal
-        isOpen={true}
-        onClose={mockOnClose}
-        project={mockProject}
-      />
-    );
+    render(<ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />);
 
     fireEvent.click(screen.getByTestId('export-submit-button'));
 
