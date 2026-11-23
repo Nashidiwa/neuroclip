@@ -603,13 +603,7 @@ pub fn build_loudnorm_pipe_args(input_path: &Path, config: &AudioPrepConfig) -> 
 /// Resolve the path to the `ffmpeg` executable.
 #[must_use]
 pub fn resolve_ffmpeg_binary() -> String {
-    if let Ok(p) = std::env::var("NEUROCLIP_FFMPEG_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "ffmpeg".to_string()
+    crate::sidecar::resolve_sidecar_binary("ffmpeg", "NEUROCLIP_FFMPEG_PATH")
 }
 
 /// Check if mock audio preparation mode is enabled via environment variable.
@@ -677,11 +671,11 @@ pub async fn prepare_audio_file(
 
     let mut cmd = tokio::process::Command::new(&binary);
     cmd.args(&args);
-    cmd.stdout(Stdio::piped());
+    cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::piped());
     cmd.kill_on_drop(true);
 
-    let child = cmd.spawn().map_err(|e| {
+    let mut child = cmd.spawn().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             AppError::Sidecar(SidecarError::BinaryNotFound {
                 name: "ffmpeg".to_string(),
@@ -697,9 +691,17 @@ pub async fn prepare_audio_file(
     })?;
 
     assign_child_to_job_guard(&child);
+    let stderr_handle = child.stderr.take().map(|stderr| {
+        tokio::spawn(async move {
+            crate::sidecar::drain_pipe_lossy(stderr).await;
+        })
+    });
     let mut guard = ChildProcessGuard::new(child);
 
     let Some(child_ref) = guard.child_mut() else {
+        if let Some(h) = stderr_handle {
+            h.abort();
+        }
         return Err(AppError::Stt(SttError::VadProcessingFailed(
             "Internal error: Child process unavailable in guard".to_string(),
         )));
@@ -707,15 +709,19 @@ pub async fn prepare_audio_file(
 
     let status = if let Some(token) = cancel_token {
         tokio::select! {
+            biased;
+            () = token.cancelled() => {
+                if let Some(h) = stderr_handle {
+                    h.abort();
+                }
+                return Err(AppError::TaskCancelled);
+            }
             res = child_ref.wait() => {
                 res.map_err(|e| AppError::Sidecar(SidecarError::ExecutionFailed {
                     binary: "ffmpeg".to_string(),
                     exit_code: None,
                     details: e.to_string(),
                 }))?
-            }
-            () = token.cancelled() => {
-                return Err(AppError::TaskCancelled);
             }
         }
     } else {
@@ -727,6 +733,10 @@ pub async fn prepare_audio_file(
             })
         })?
     };
+
+    if let Some(h) = stderr_handle {
+        let _ = h.await;
+    }
 
     if !status.success() {
         return Err(AppError::Stt(SttError::VadProcessingFailed(format!(
@@ -812,7 +822,16 @@ pub async fn prepare_audio_to_buffer(
 
     assign_child_to_job_guard(&child);
 
+    let stderr_handle = child.stderr.take().map(|stderr| {
+        tokio::spawn(async move {
+            crate::sidecar::drain_pipe_lossy(stderr).await;
+        })
+    });
+
     let Some(stdout) = child.stdout.take() else {
+        if let Some(h) = stderr_handle {
+            h.abort();
+        }
         return Err(AppError::Stt(SttError::VadProcessingFailed(
             "Failed to capture stdout pipe from FFmpeg".to_string(),
         )));
@@ -823,12 +842,16 @@ pub async fn prepare_audio_to_buffer(
 
     if let Some(token) = cancel_token {
         tokio::select! {
-            res = tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut pcm_bytes) => {
-                res.map_err(|e| AppError::Stt(SttError::VadProcessingFailed(e.to_string())))?;
-            }
+            biased;
             () = token.cancelled() => {
                 let _ = child.start_kill();
+                if let Some(h) = stderr_handle {
+                    h.abort();
+                }
                 return Err(AppError::TaskCancelled);
+            }
+            res = tokio::io::AsyncReadExt::read_to_end(&mut reader, &mut pcm_bytes) => {
+                res.map_err(|e| AppError::Stt(SttError::VadProcessingFailed(e.to_string())))?;
             }
         }
     } else {
@@ -844,6 +867,10 @@ pub async fn prepare_audio_to_buffer(
             details: e.to_string(),
         })
     })?;
+
+    if let Some(h) = stderr_handle {
+        let _ = h.await;
+    }
 
     if !status.success() {
         return Err(AppError::Stt(SttError::VadProcessingFailed(format!(

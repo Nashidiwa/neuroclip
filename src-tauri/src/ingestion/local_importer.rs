@@ -229,25 +229,43 @@ struct LocalImportRuntimeOptions {
     mock_duration: Option<f64>,
 }
 
-async fn import_local_video_file_inner<F>(
+fn finalize_local_import_manifest(
+    vod_id: &str,
+    canonical_video: &Path,
+    duration_seconds: f64,
+    audio_cache_path: &Path,
+    project_dir: &Path,
+) -> Result<VodManifest, AppError> {
+    let title = canonical_video
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("Local Video")
+        .to_string();
+
+    let canonical_str = canonical_video.to_string_lossy().to_string();
+    generate_vod_manifest_with_streams(
+        vod_id,
+        "local_file",
+        None,
+        &title,
+        None,
+        duration_seconds,
+        audio_cache_path,
+        project_dir,
+        None,
+        Some(&canonical_str),
+    )
+}
+
+fn prepare_local_import_paths(
     file_path: &Path,
     project_root: &Path,
     cache_root: &Path,
-    task_id: Option<&str>,
-    progress_callback: F,
-    cancellation_token: CancellationToken,
-    runtime_opts: LocalImportRuntimeOptions,
-) -> Result<VodManifest, AppError>
-where
-    F: Fn(IngestProgressPayload) + Send + Sync + 'static,
-{
+    skip_disk_check: bool,
+) -> Result<(PathBuf, String, PathBuf, PathBuf), AppError> {
     let canonical_video = validate_local_video_path(file_path)?;
     let vod_id = derive_local_vod_id(&canonical_video);
-    let effective_task_id = task_id
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or(vod_id.as_str())
-        .to_string();
 
     let project_dir = project_root.join(&vod_id);
     std::fs::create_dir_all(&project_dir).map_err(|e| {
@@ -264,9 +282,50 @@ where
         })
     })?;
 
-    if !runtime_opts.skip_disk_check {
+    if !skip_disk_check {
         check_disk_space(Some(cache_root))?;
     }
+
+    let audio_cache_path = cache_root.join(format!("{vod_id}_audio_cache.wav"));
+    Ok((canonical_video, vod_id, project_dir, audio_cache_path))
+}
+
+async fn import_local_video_file_inner<F>(
+    file_path: &Path,
+    project_root: &Path,
+    cache_root: &Path,
+    task_id: Option<&str>,
+    progress_callback: F,
+    cancellation_token: CancellationToken,
+    runtime_opts: LocalImportRuntimeOptions,
+) -> Result<VodManifest, AppError>
+where
+    F: Fn(IngestProgressPayload) + Send + Sync + 'static,
+{
+    let file_path_owned = file_path.to_path_buf();
+    let project_root_owned = project_root.to_path_buf();
+    let cache_root_owned = cache_root.to_path_buf();
+    let skip_disk_check = runtime_opts.skip_disk_check;
+
+    let (canonical_video, vod_id, project_dir, audio_cache_path) =
+        tokio::task::spawn_blocking(move || {
+            prepare_local_import_paths(
+                &file_path_owned,
+                &project_root_owned,
+                &cache_root_owned,
+                skip_disk_check,
+            )
+        })
+        .await
+        .map_err(|e| {
+            AppError::Internal(format!("Local import preparation task panicked: {e}"))
+        })??;
+
+    let effective_task_id = task_id
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(vod_id.as_str())
+        .to_string();
 
     progress_callback(IngestProgressPayload {
         task_id: effective_task_id.clone(),
@@ -280,7 +339,6 @@ where
         Some(d) => d,
         None => probe_local_video_duration(&canonical_video, &cancellation_token).await?,
     };
-    let audio_cache_path = cache_root.join(format!("{vod_id}_audio_cache.wav"));
 
     progress_callback(IngestProgressPayload {
         task_id: effective_task_id.clone(),
@@ -295,13 +353,18 @@ where
         if cancellation_token.is_cancelled() {
             return Err(AppError::TaskCancelled);
         }
-        let wav_bytes = build_synthetic_pcm_wav_bytes(1600);
-        std::fs::write(&audio_cache_path, wav_bytes).map_err(|e| {
-            AppError::Storage(StorageError::DirectoryCreationFailed {
-                path: audio_cache_path.display().to_string(),
-                details: e.to_string(),
+        let audio_cache_write_path = audio_cache_path.clone();
+        tokio::task::spawn_blocking(move || {
+            let wav_bytes = build_synthetic_pcm_wav_bytes(1600);
+            std::fs::write(&audio_cache_write_path, wav_bytes).map_err(|e| {
+                AppError::Storage(StorageError::DirectoryCreationFailed {
+                    path: audio_cache_write_path.display().to_string(),
+                    details: e.to_string(),
+                })
             })
-        })?;
+        })
+        .await
+        .map_err(|e| AppError::Internal(format!("Mock WAV write task panicked: {e}")))??;
     } else {
         let ffmpeg_bin = resolve_ffmpeg_binary();
         let args = build_local_wav_extraction_args(&canonical_video, &audio_cache_path);
@@ -318,26 +381,18 @@ where
         SubprocessSupervisor::run(&config, None, None, &cancellation_token).await?;
     }
 
-    let title = canonical_video
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or("Local Video")
-        .to_string();
-
-    let canonical_str = canonical_video.to_string_lossy().to_string();
-    let manifest = generate_vod_manifest_with_streams(
-        &vod_id,
-        "local_file",
-        None,
-        &title,
-        None,
-        duration_seconds,
-        &audio_cache_path,
-        &project_dir,
-        None,
-        Some(&canonical_str),
-    )?;
+    let vod_id_for_manifest = vod_id;
+    let manifest = tokio::task::spawn_blocking(move || {
+        finalize_local_import_manifest(
+            &vod_id_for_manifest,
+            &canonical_video,
+            duration_seconds,
+            &audio_cache_path,
+            &project_dir,
+        )
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Manifest generation task panicked: {e}")))??;
 
     progress_callback(IngestProgressPayload {
         task_id: effective_task_id,

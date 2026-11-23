@@ -329,6 +329,224 @@ describe('TASK-M4-12: Reactive Highlight Store', () => {
     expect(result.current.error?.recoverable).toBe(false);
     expect(mockedInvoke).toHaveBeenCalledTimes(0);
   });
+
+  it('merges concurrent toggleBookmark calls on different clusters without clobbering', async () => {
+    const cluster1 = normalizeHighlightCluster({
+      cluster_id: 'cluster_1',
+      start_sec: 10.0,
+      end_sec: 40.0,
+      peak_sec: 25.0,
+      score: 90.0,
+      primary_reason: 'Peak 1',
+      top_emotes: ['KEKW'],
+      is_bookmarked: false,
+    });
+    const cluster2 = normalizeHighlightCluster({
+      cluster_id: 'cluster_2',
+      start_sec: 60.0,
+      end_sec: 90.0,
+      peak_sec: 75.0,
+      score: 82.0,
+      primary_reason: 'Peak 2',
+      top_emotes: ['LUL'],
+      is_bookmarked: false,
+    });
+
+    act(() => {
+      highlightStore.setState({
+        vodId: 'vod_concurrent_bm',
+        clusters: [cluster1, cluster2],
+        clustersContainer: {
+          vodId: 'vod_concurrent_bm',
+          clusters: [cluster1, cluster2],
+          vod_id: 'vod_concurrent_bm',
+        },
+      });
+    });
+
+    let resolveFirst!: (val: HighlightClusterJson) => void;
+    let resolveSecond!: (val: HighlightClusterJson) => void;
+    mockedInvoke
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    const p1 = useHighlightStore.getState().toggleBookmark('cluster_1', true);
+    const p2 = useHighlightStore.getState().toggleBookmark('cluster_2', true);
+
+    await act(async () => {
+      resolveFirst({
+        cluster_id: 'cluster_1',
+        start_sec: 10.0,
+        end_sec: 40.0,
+        peak_sec: 25.0,
+        score: 90.0,
+        primary_reason: 'Peak 1',
+        top_emotes: ['KEKW'],
+        is_bookmarked: true,
+      });
+      await p1;
+
+      resolveSecond({
+        cluster_id: 'cluster_2',
+        start_sec: 60.0,
+        end_sec: 90.0,
+        peak_sec: 75.0,
+        score: 82.0,
+        primary_reason: 'Peak 2',
+        top_emotes: ['LUL'],
+        is_bookmarked: true,
+      });
+      await p2;
+    });
+
+    const finalClusters = useHighlightStore.getState().clusters;
+    expect(finalClusters[0]?.isBookmarked).toBe(true);
+    expect(finalClusters[1]?.isBookmarked).toBe(true);
+  });
+
+  it('discards out-of-order detectHighlightsForVod responses across VOD switches', async () => {
+    let resolveOld!: (val: HighlightClustersContainerJson) => void;
+    let resolveNew!: (val: HighlightClustersContainerJson) => void;
+
+    mockedInvoke
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNew = resolve;
+          }),
+      );
+
+    const pOld = useHighlightStore.getState().detectHighlightsForVod('vod_old', 100);
+    const pNew = useHighlightStore.getState().detectHighlightsForVod('vod_new', 200);
+
+    await act(async () => {
+      resolveNew({
+        vod_id: 'vod_new',
+        clusters: [
+          {
+            cluster_id: 'c_new',
+            start_sec: 20,
+            end_sec: 45,
+            peak_sec: 30,
+            score: 88,
+            primary_reason: 'New Peak',
+            top_emotes: ['NeuroHeart'],
+            is_bookmarked: false,
+          },
+        ],
+      });
+      await pNew;
+
+      resolveOld({
+        vod_id: 'vod_old',
+        clusters: [
+          {
+            cluster_id: 'c_old',
+            start_sec: 5,
+            end_sec: 25,
+            peak_sec: 15,
+            score: 60,
+            primary_reason: 'Old Stale Peak',
+            top_emotes: [],
+            is_bookmarked: false,
+          },
+        ],
+      });
+      await pOld;
+    });
+
+    const state = useHighlightStore.getState();
+    expect(state.vodId).toBe('vod_new');
+    expect(state.clusters.map((c) => c.clusterId)).toEqual(['c_new']);
+  });
+
+  it('resets isLoading on setVodId switch so superseded detectHighlightsForVod or fetchClustersForVod cannot strand isLoading', async () => {
+    let resolveDetect!: (val: HighlightClustersContainerJson) => void;
+    let rejectFetch!: (err: unknown) => void;
+
+    mockedInvoke
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveDetect = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFetch = reject;
+          }),
+      );
+
+    const pDetect = useHighlightStore.getState().detectHighlightsForVod('vod_1', 300);
+    expect(useHighlightStore.getState().isLoading).toBe(true);
+
+    act(() => {
+      useHighlightStore.getState().setVodId('vod_2');
+    });
+    expect(useHighlightStore.getState().vodId).toBe('vod_2');
+    expect(useHighlightStore.getState().isLoading).toBe(false);
+
+    await act(async () => {
+      resolveDetect({
+        vod_id: 'vod_1',
+        clusters: [
+          {
+            cluster_id: 'c_stale',
+            start_sec: 10,
+            end_sec: 30,
+            peak_sec: 20,
+            score: 80,
+            primary_reason: 'Stale',
+            top_emotes: [],
+            is_bookmarked: false,
+          },
+        ],
+      });
+      await pDetect;
+    });
+
+    expect(useHighlightStore.getState().vodId).toBe('vod_2');
+    expect(useHighlightStore.getState().isLoading).toBe(false);
+    expect(useHighlightStore.getState().clusters).toEqual([]);
+
+    const pFetch = useHighlightStore.getState().fetchClustersForVod('vod_2');
+    expect(useHighlightStore.getState().isLoading).toBe(true);
+
+    act(() => {
+      useHighlightStore.getState().setVodId('vod_3');
+    });
+    expect(useHighlightStore.getState().isLoading).toBe(false);
+
+    await act(async () => {
+      rejectFetch({
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Stale fetch failure',
+        recoverable: true,
+      });
+      await expect(pFetch).rejects.toMatchObject({ code: ERROR_CODES.INTERNAL_ERROR });
+    });
+
+    expect(useHighlightStore.getState().vodId).toBe('vod_3');
+    expect(useHighlightStore.getState().isLoading).toBe(false);
+    expect(useHighlightStore.getState().error).toBeNull();
+  });
 });
 
 describe('TASK-M4-12: HighlightViewer Component Rendering & Interactions', () => {

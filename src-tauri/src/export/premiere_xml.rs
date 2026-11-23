@@ -468,6 +468,11 @@ fn resolve_timeline_clips(
                 let dur_f = sec_to_frames(e - s, fps).max(1);
                 (start_f, dur_f)
             }
+            (Some(s), Some(_e), None) => {
+                // Explicit start & end with end <= start: clamp to minimum 1 frame at start_f
+                let start_f = sec_to_frames(s, fps);
+                (start_f, 1)
+            }
             (Some(s), _, Some(d)) => {
                 let start_f = sec_to_frames(s, fps);
                 let dur_f = sec_to_frames(d, fps).max(1);
@@ -1268,5 +1273,41 @@ pub mod tests {
         let xml = generate_premiere_xml(&proj, None).unwrap();
         assert!(xml.contains("<name>[VEDAL] VISIBLE_AFTER_60_NULS</name>"));
         assert!(xml.contains("<comment>VISIBLE_AFTER_60_NULS</comment>"));
+    }
+
+    #[test]
+    fn test_resolve_timeline_clips_clamps_non_positive_end_range_at_explicit_start() {
+        let container = TranscriptSegmentsContainer {
+            clip_id: "clip_range_clamp".to_string(),
+            segments: vec![make_segment("s1", 0.0, 2.0, "neuro", "hi", None)],
+        };
+        let proj =
+            create_subtitle_project(container, "Range Clamp", "vod_clamp", Some("original_16_9"));
+        let options = PremiereXmlExportOptions {
+            video_file_path: None,
+            clips: Some(vec![
+                PremiereClipInput {
+                    clip_id: Some("c1".to_string()),
+                    name: Some("First".to_string()),
+                    file_path: "C:/clips/first.mp4".to_string(),
+                    start_sec: Some(0.0),
+                    end_sec: Some(2.0),
+                    duration_sec: None,
+                },
+                PremiereClipInput {
+                    clip_id: Some("c2".to_string()),
+                    name: Some("Inverted".to_string()),
+                    file_path: "C:/clips/second.mp4".to_string(),
+                    start_sec: Some(5.0),
+                    end_sec: Some(3.0),
+                    duration_sec: None,
+                },
+            ]),
+            fps: Some(60),
+        };
+
+        let xml = generate_premiere_xml(&proj, Some(&options)).unwrap();
+        // Second clip must start at 5.0s (300 frames) and clamp to 1 frame (end=301), not cursor_frames (120)
+        assert!(xml.contains("<start>300</start>\n            <end>301</end>"));
     }
 }

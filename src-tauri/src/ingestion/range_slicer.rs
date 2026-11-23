@@ -275,25 +275,13 @@ pub fn parse_ffprobe_json(json_str: &str) -> Result<FfprobeOutput, AppError> {
 /// Resolve path to the `ffmpeg` executable.
 #[must_use]
 pub fn resolve_ffmpeg_binary() -> String {
-    if let Ok(p) = std::env::var("NEUROCLIP_FFMPEG_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "ffmpeg".to_string()
+    crate::sidecar::resolve_sidecar_binary("ffmpeg", "NEUROCLIP_FFMPEG_PATH")
 }
 
 /// Resolve path to the `ffprobe` executable.
 #[must_use]
 pub fn resolve_ffprobe_binary() -> String {
-    if let Ok(p) = std::env::var("NEUROCLIP_FFPROBE_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "ffprobe".to_string()
+    crate::sidecar::resolve_sidecar_binary("ffprobe", "NEUROCLIP_FFPROBE_PATH")
 }
 
 /// Build FFmpeg command-line arguments for range slicing (UT-13.1).
@@ -613,11 +601,11 @@ pub async fn execute_range_slice(
     let start_time = Instant::now();
     let mut cmd = tokio::process::Command::new(&binary);
     cmd.args(&args);
-    cmd.stdout(Stdio::piped());
+    cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::piped());
     cmd.kill_on_drop(true);
 
-    let child = cmd.spawn().map_err(|e| {
+    let mut child = cmd.spawn().map_err(|e| {
         AppError::Sidecar(SidecarError::BinaryNotFound {
             name: "ffmpeg".to_string(),
             path: format!("{binary}: {e}"),
@@ -625,53 +613,80 @@ pub async fn execute_range_slice(
     })?;
 
     assign_child_to_job_guard(&child);
+    let stderr_handle = child.stderr.take().map(|stderr| {
+        tokio::spawn(async move {
+            let mut lines = crate::sidecar::LossyLineReader::new(stderr);
+            let mut tail = std::collections::VecDeque::with_capacity(64);
+            while let Ok(Some(line)) = lines.next_line().await {
+                if tail.len() >= 64 {
+                    tail.pop_front();
+                }
+                tail.push_back(line);
+            }
+            tail.into_iter().collect::<Vec<_>>().join("\n")
+        })
+    });
     let mut guard = ChildProcessGuard::new(child);
 
     let output_status = if let Some(ref token) = cancel_token {
         let token_cancelled = token.clone();
-        match guard.child_mut() {
-            Some(child_ref) => {
-                tokio::select! {
-                    res = child_ref.wait() => {
-                        res.map_err(|e| AppError::Sidecar(SidecarError::ExecutionFailed {
-                            binary: "ffmpeg".to_string(),
-                            exit_code: None,
-                            details: e.to_string(),
-                        }))?
+        if let Some(child_ref) = guard.child_mut() {
+            tokio::select! {
+                biased;
+                () = token_cancelled.cancelled() => {
+                    if let Some(h) = stderr_handle {
+                        h.abort();
                     }
-                    () = token_cancelled.cancelled() => {
-                        return Err(AppError::TaskCancelled);
-                    }
+                    return Err(AppError::TaskCancelled);
+                }
+                res = child_ref.wait() => {
+                    res.map_err(|e| AppError::Sidecar(SidecarError::ExecutionFailed {
+                        binary: "ffmpeg".to_string(),
+                        exit_code: None,
+                        details: e.to_string(),
+                    }))?
                 }
             }
-            None => {
-                return Err(AppError::Internal(
-                    "ChildProcessGuard missing active process".to_string(),
-                ));
+        } else {
+            if let Some(h) = stderr_handle {
+                h.abort();
             }
+            return Err(AppError::Internal(
+                "ChildProcessGuard missing active process".to_string(),
+            ));
         }
+    } else if let Some(child_ref) = guard.child_mut() {
+        child_ref.wait().await.map_err(|e| {
+            AppError::Sidecar(SidecarError::ExecutionFailed {
+                binary: "ffmpeg".to_string(),
+                exit_code: None,
+                details: e.to_string(),
+            })
+        })?
     } else {
-        match guard.child_mut() {
-            Some(child_ref) => child_ref.wait().await.map_err(|e| {
-                AppError::Sidecar(SidecarError::ExecutionFailed {
-                    binary: "ffmpeg".to_string(),
-                    exit_code: None,
-                    details: e.to_string(),
-                })
-            })?,
-            None => {
-                return Err(AppError::Internal(
-                    "ChildProcessGuard missing active process".to_string(),
-                ));
-            }
+        if let Some(h) = stderr_handle {
+            h.abort();
         }
+        return Err(AppError::Internal(
+            "ChildProcessGuard missing active process".to_string(),
+        ));
+    };
+
+    let stderr_tail = match stderr_handle {
+        Some(h) => h.await.unwrap_or_default(),
+        None => String::new(),
     };
 
     if !output_status.success() {
-        return Err(AppError::Ingestion(IngestError::SliceFailed(format!(
-            "FFmpeg thoát với mã lỗi: {:?}",
-            output_status.code()
-        ))));
+        let details = if stderr_tail.is_empty() {
+            format!("FFmpeg thoát với mã lỗi: {:?}", output_status.code())
+        } else {
+            format!(
+                "FFmpeg thoát với mã lỗi: {:?} ({stderr_tail})",
+                output_status.code()
+            )
+        };
+        return Err(AppError::Ingestion(IngestError::SliceFailed(details)));
     }
 
     let file_metadata = std::fs::metadata(&req.output_path).map_err(|e| {

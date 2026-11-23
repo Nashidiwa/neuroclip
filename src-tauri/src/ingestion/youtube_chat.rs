@@ -9,17 +9,31 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, IngestError, SidecarError, StorageError};
-use crate::ingestion::streamer::assign_child_to_job_guard;
+use crate::ingestion::streamer::{assign_child_to_job_guard, validate_http_url};
 use crate::ingestion::twitch_gql::ChatProgressPayload;
+use crate::sidecar::resolve_sidecar_binary;
 
 fn resolve_ytdlp_binary() -> String {
-    if let Ok(p) = std::env::var("NEUROCLIP_YTDLP_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "yt-dlp".to_string()
+    resolve_sidecar_binary("yt-dlp", "NEUROCLIP_YTDLP_PATH")
+}
+
+fn build_youtube_chat_args(validated_url: &str, template_path: &Path) -> Vec<String> {
+    vec![
+        "--skip-download".to_string(),
+        "--write-subs".to_string(),
+        "--sub-langs".to_string(),
+        "live_chat".to_string(),
+        "--no-warnings".to_string(),
+        "--no-playlist".to_string(),
+        "--retries".to_string(),
+        "3".to_string(),
+        "--socket-timeout".to_string(),
+        "20".to_string(),
+        "-o".to_string(),
+        template_path.to_string_lossy().to_string(),
+        "--".to_string(),
+        validated_url.to_string(),
+    ]
 }
 
 /// Download YouTube Live Chat replay NDJSON stream using managed yt-dlp.
@@ -37,6 +51,8 @@ pub async fn fetch_youtube_live_chat_replay<F>(
 where
     F: Fn(ChatProgressPayload) + Send + Sync + 'static,
 {
+    let validated_url = validate_http_url(url)?;
+
     // Fast mock check for unit / integration tests
     if std::env::var("NEUROCLIP_MOCK_CHAT_UNAVAILABLE").is_ok() {
         return Err(AppError::Ingestion(IngestError::ChatReplayUnavailable));
@@ -75,21 +91,7 @@ where
         current_offset_sec: 0.0,
     });
 
-    let args = [
-        "--skip-download".to_string(),
-        "--write-subs".to_string(),
-        "--sub-langs".to_string(),
-        "live_chat".to_string(),
-        "--no-warnings".to_string(),
-        "--no-playlist".to_string(),
-        "--retries".to_string(),
-        "3".to_string(),
-        "--socket-timeout".to_string(),
-        "20".to_string(),
-        "-o".to_string(),
-        template_path.to_string_lossy().to_string(),
-        url.to_string(),
-    ];
+    let args = build_youtube_chat_args(validated_url, &template_path);
 
     let mut cmd = Command::new(&ytdlp_bin);
     cmd.args(&args)
@@ -160,4 +162,48 @@ where
 
     // If file was not produced, chat replay is not available
     Err(AppError::Ingestion(IngestError::ChatReplayUnavailable))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_youtube_chat_args_places_double_dash_before_url() {
+        let args = build_youtube_chat_args(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            Path::new("C:\\tmp\\vod.%(ext)s"),
+        );
+        let len = args.len();
+        assert_eq!(args[len - 2], "--");
+        assert_eq!(args[len - 1], "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_youtube_live_chat_replay_rejects_invalid_and_flag_urls() {
+        let temp_dir = std::env::temp_dir();
+        for bad in [
+            "",
+            "   ",
+            " https://www.youtube.com/watch?v=123",
+            "--exec=calc.exe",
+            "-v",
+            "ftp://example.com/video",
+            "https://www.youtube.com/watch?v=1\0",
+        ] {
+            let res = fetch_youtube_live_chat_replay(
+                bad,
+                "vod_bad",
+                &temp_dir,
+                CancellationToken::new(),
+                |_| {},
+            )
+            .await;
+            assert!(
+                matches!(res, Err(AppError::Ingestion(IngestError::InvalidUrl(_)))),
+                "Expected InvalidUrl for {bad:?}, got {res:?}"
+            );
+        }
+    }
 }

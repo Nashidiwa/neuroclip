@@ -7,6 +7,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { listenChatProgress, listenChatFallback } from '../services/ipc/chat.ts';
 import {
   isChatEventJson,
   isChatEventsContainerJson,
@@ -32,6 +34,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 const mockedInvoke = vi.mocked(invoke);
+const mockedListen = vi.mocked(listen);
 
 describe('Schema 5.3 Chat Contracts & Type Guards', () => {
   const sampleEventJson: ChatEventJson = {
@@ -322,7 +325,7 @@ describe('useChatStore State Transitions', () => {
     expect(state.chatHeatmap?.vodId).toBe('vod_1');
   });
 
-  it('handles chat unavailable soft fallback (ERR-05)', async () => {
+  it('handles chat unavailable soft fallback (ERR-05) without duplicate red error state', async () => {
     mockedInvoke.mockRejectedValue({
       code: 'ERR_INGEST_CHAT_UNAVAILABLE',
       message: 'Chat replay is unavailable for this VOD',
@@ -340,8 +343,301 @@ describe('useChatStore State Transitions', () => {
     const state = chatStore.getState();
     expect(state.isExtracting).toBe(false);
     expect(state.hasChatReplay).toBe(false);
-    expect(state.error?.code).toBe('ERR_INGEST_CHAT_UNAVAILABLE');
-    expect(state.error?.recoverable).toBe(true);
+    expect(state.error).toBeNull();
+    expect(state.fallbackNotice?.code).toBe('ERR_INGEST_CHAT_UNAVAILABLE');
+    expect(state.fallbackNotice?.audioFallbackActive).toBe(true);
+  });
+
+  it('preserves chat:fallback event notice without setting error when start_chat_extraction rejects with ERR_INGEST_CHAT_UNAVAILABLE', async () => {
+    const callbacks = new Map<string, (event: { payload: unknown }) => void>();
+    mockedListen.mockImplementation(async (eventName, cb) => {
+      callbacks.set(eventName, cb as (event: { payload: unknown }) => void);
+      return () => {};
+    });
+
+    mockedInvoke.mockImplementation(async (cmd) => {
+      if (cmd === 'start_chat_extraction') {
+        callbacks.get('chat:fallback')?.({
+          payload: {
+            taskId: 'vod_fallback_event',
+            code: 'ERR_INGEST_CHAT_UNAVAILABLE',
+            message: 'Chat replay không khả dụng. Đang tự động chuyển sang Audio RMS.',
+            audioFallbackActive: true,
+          },
+        });
+        throw {
+          code: 'ERR_INGEST_CHAT_UNAVAILABLE',
+          message: 'Chat replay unavailable',
+          recoverable: true,
+        };
+      }
+      return null;
+    });
+
+    await expect(
+      chatStore.getState().extractChat('vod_fallback_event', 'https://twitch.tv/videos/111'),
+    ).rejects.toMatchObject({
+      code: 'ERR_INGEST_CHAT_UNAVAILABLE',
+    });
+
+    const state = chatStore.getState();
+    expect(state.isExtracting).toBe(false);
+    expect(state.hasChatReplay).toBe(false);
+    expect(state.error).toBeNull();
+    expect(state.fallbackNotice).toEqual({
+      taskId: 'vod_fallback_event',
+      code: 'ERR_INGEST_CHAT_UNAVAILABLE',
+      message: 'Chat replay không khả dụng. Đang tự động chuyển sang Audio RMS.',
+      audioFallbackActive: true,
+    });
+  });
+
+  it('deduplicates concurrent extractChat calls to 1 progress + 1 fallback listener and filters by taskId', async () => {
+    const callbacks = new Map<string, (event: { payload: unknown }) => void>();
+    const unlistenSpies: Array<ReturnType<typeof vi.fn>> = [];
+    const resolveListens: Array<(unlisten: () => void) => void> = [];
+
+    mockedListen.mockImplementation((eventName, cb) => {
+      callbacks.set(eventName, cb as (event: { payload: unknown }) => void);
+      const spy = vi.fn();
+      unlistenSpies.push(spy);
+      return new Promise<() => void>((resolve) => {
+        resolveListens.push(resolve);
+      });
+    });
+
+    mockedInvoke.mockImplementation(async (cmd) => {
+      if (cmd === 'start_chat_extraction') {
+        return 'C:\\cache\\chat.json';
+      }
+      if (cmd === 'get_chat_velocity_heatmap') {
+        return {
+          vod_id: 'vod_2',
+          window_seconds: 10.0,
+          step_seconds: 10.0,
+          total_buckets: 0,
+          max_velocity_mps: 0,
+          peak_timestamp_sec: 0,
+          points: [],
+        };
+      }
+      return null;
+    });
+
+    const p1 = chatStore.getState().extractChat('vod_1', 'https://twitch.tv/videos/1');
+    const p2 = chatStore.getState().extractChat('vod_2', 'https://twitch.tv/videos/2');
+
+    expect(mockedListen).toHaveBeenCalledTimes(2);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+
+    resolveListens.forEach((resolve, idx) => resolve(unlistenSpies[idx]!));
+    await Promise.all([p1, p2]);
+
+    // Only vod_2 (the newer extraction) invoked start_chat_extraction
+    expect(mockedInvoke).toHaveBeenCalledWith('start_chat_extraction', {
+      vodId: 'vod_2',
+      url: 'https://twitch.tv/videos/2',
+    });
+
+    // Stale progress for another taskId is ignored
+    chatStore.setState({ isExtracting: true, vodId: 'vod_2', progress: null });
+    callbacks.get('chat:progress')?.({
+      payload: {
+        taskId: 'vod_1',
+        stage: 'downloading',
+        percent: 50,
+        messagesExtracted: 10,
+        currentOffsetSec: 5,
+      },
+    });
+    expect(chatStore.getState().progress).toBeNull();
+
+    callbacks.get('chat:progress')?.({
+      payload: {
+        taskId: 'vod_2',
+        stage: 'downloading',
+        percent: 75,
+        messagesExtracted: 40,
+        currentOffsetSec: 20,
+      },
+    });
+    expect(chatStore.getState().progress?.percent).toBe(75);
+  });
+
+  it('detaches pending chat listeners and skips IPC when reset() runs mid-subscribe', async () => {
+    const unlistenSpies: Array<ReturnType<typeof vi.fn>> = [];
+    const resolveListens: Array<(unlisten: () => void) => void> = [];
+
+    mockedListen.mockImplementation(() => {
+      const spy = vi.fn();
+      unlistenSpies.push(spy);
+      return new Promise<() => void>((resolve) => {
+        resolveListens.push(resolve);
+      });
+    });
+
+    const pending = chatStore
+      .getState()
+      .extractChat('vod_reset_race', 'https://twitch.tv/videos/1');
+    expect(mockedListen).toHaveBeenCalledTimes(2);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+
+    chatStore.getState().reset();
+    resolveListens.forEach((resolve, idx) => resolve(unlistenSpies[idx]!));
+    await pending;
+
+    for (const spy of unlistenSpies) {
+      expect(spy).toHaveBeenCalledTimes(1);
+    }
+    expect(mockedInvoke).not.toHaveBeenCalled();
+    expect(chatStore.getState().isExtracting).toBe(false);
+  });
+
+  it('discards stale fetchChatEvents response when switching to a newer VOD', async () => {
+    let resolveOld!: (val: ChatEventsContainerJson) => void;
+    let resolveNew!: (val: ChatEventsContainerJson) => void;
+
+    mockedInvoke
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNew = resolve;
+          }),
+      );
+
+    const pOld = chatStore.getState().fetchChatEvents('vod_old');
+    const pNew = chatStore.getState().fetchChatEvents('vod_new');
+
+    resolveNew({ vod_id: 'vod_new', total_messages: 1, events: [] });
+    await pNew;
+    expect(chatStore.getState().chatEvents?.vodId).toBe('vod_new');
+
+    resolveOld({ vod_id: 'vod_old', total_messages: 99, events: [] });
+    await pOld;
+    expect(chatStore.getState().chatEvents?.vodId).toBe('vod_new');
+  });
+
+  it('resets isExtracting and progress on setVodId switch so superseded extractChat cannot strand isExtracting', async () => {
+    let resolveExtract!: (val: string) => void;
+    mockedInvoke.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveExtract = resolve;
+        }),
+    );
+
+    const pending = chatStore.getState().extractChat('vod_1', 'https://twitch.tv/videos/1');
+    expect(chatStore.getState().isExtracting).toBe(true);
+    await vi.waitFor(() => expect(mockedInvoke).toHaveBeenCalledTimes(1));
+
+    chatStore.setState({
+      progress: {
+        taskId: 'vod_1',
+        stage: 'downloading',
+        percent: 40,
+        messagesExtracted: 120,
+        currentOffsetSec: 60,
+      },
+    });
+
+    // Switch active VOD mid-extraction
+    chatStore.getState().setVodId('vod_2');
+    expect(chatStore.getState().vodId).toBe('vod_2');
+    expect(chatStore.getState().isExtracting).toBe(false);
+    expect(chatStore.getState().progress).toBeNull();
+
+    // Late completion of superseded vod_1 extraction must not clobber vod_2 or strand isExtracting
+    resolveExtract('C:\\cache\\vod_1_chat.json');
+    await pending;
+
+    expect(chatStore.getState().vodId).toBe('vod_2');
+    expect(chatStore.getState().isExtracting).toBe(false);
+    expect(chatStore.getState().chatFilePath).toBeNull();
+  });
+
+  it('keeps isExtracting false when superseded extractChat rejects after setVodId switch', async () => {
+    let rejectExtract!: (err: unknown) => void;
+    mockedInvoke.mockImplementationOnce(
+      () =>
+        new Promise<string>((_resolve, reject) => {
+          rejectExtract = reject;
+        }),
+    );
+
+    const pending = chatStore.getState().extractChat('vod_err_1', 'https://twitch.tv/videos/1');
+    expect(chatStore.getState().isExtracting).toBe(true);
+    await vi.waitFor(() => expect(mockedInvoke).toHaveBeenCalledTimes(1));
+
+    chatStore.getState().setVodId('vod_err_2');
+    expect(chatStore.getState().isExtracting).toBe(false);
+
+    rejectExtract({
+      code: 'ERR_INGEST_CHAT_UNAVAILABLE',
+      message: 'No chat',
+      recoverable: true,
+    });
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_INGEST_CHAT_UNAVAILABLE' });
+
+    expect(chatStore.getState().vodId).toBe('vod_err_2');
+    expect(chatStore.getState().isExtracting).toBe(false);
+    expect(chatStore.getState().fallbackNotice).toBeNull();
+    expect(chatStore.getState().error).toBeNull();
+  });
+
+  it('listenChatProgress and listenChatFallback degrade cleanly on listen error and ignore malformed payloads', async () => {
+    mockedListen.mockRejectedValueOnce(new Error('No Tauri runtime'));
+    const unlistenFail = await listenChatProgress(() => {});
+    expect(() => unlistenFail()).not.toThrow();
+
+    mockedListen.mockRejectedValueOnce(new Error('No Tauri runtime'));
+    const unlistenFallbackFail = await listenChatFallback(() => {});
+    expect(() => unlistenFallbackFail()).not.toThrow();
+
+    let progressHandler: ((event: { payload: unknown }) => void) | undefined;
+    let fallbackHandler: ((event: { payload: unknown }) => void) | undefined;
+    mockedListen
+      .mockImplementationOnce(async (_name, cb) => {
+        progressHandler = cb as (event: { payload: unknown }) => void;
+        return () => {};
+      })
+      .mockImplementationOnce(async (_name, cb) => {
+        fallbackHandler = cb as (event: { payload: unknown }) => void;
+        return () => {};
+      });
+
+    const receivedProgress: unknown[] = [];
+    const receivedFallback: unknown[] = [];
+    await listenChatProgress((p) => receivedProgress.push(p));
+    await listenChatFallback((f) => receivedFallback.push(f));
+
+    progressHandler?.({ payload: { invalid: true } });
+    progressHandler?.({
+      payload: {
+        taskId: 't1',
+        stage: 'done',
+        percent: 100,
+        messagesExtracted: 5,
+        currentOffsetSec: 12,
+      },
+    });
+    fallbackHandler?.({ payload: { bad: 123 } });
+    fallbackHandler?.({
+      payload: {
+        taskId: 't1',
+        code: 'ERR_INGEST_CHAT_UNAVAILABLE',
+        message: 'Fallback',
+        audioFallbackActive: true,
+      },
+    });
+
+    expect(receivedProgress).toHaveLength(1);
+    expect(receivedFallback).toHaveLength(1);
   });
 });
 

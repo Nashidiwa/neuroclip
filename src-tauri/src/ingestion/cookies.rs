@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::error::{AppError, IngestError};
+
 /// Supported desktop browsers for extracting session cookies via yt-dlp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -72,6 +74,68 @@ pub fn parse_browser_type(name: &str) -> Option<BrowserType> {
     }
 }
 
+/// Validate cookie source parameters against CLI flag injection or NUL bytes.
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] with [`IngestError::InvalidUrl`] if a cookie file path is empty,
+/// starts with `-`, or contains `\0` / control characters.
+pub fn validate_cookie_source(source: &CookieSource) -> Result<(), AppError> {
+    if let CookieSource::File(path) = source {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::Ingestion(IngestError::InvalidUrl(
+                "Cookie file path cannot be empty".to_string(),
+            )));
+        }
+        if path.chars().next().is_some_and(char::is_whitespace) || trimmed.starts_with('-') {
+            return Err(AppError::Ingestion(IngestError::InvalidUrl(
+                "Cookie file path must not start with whitespace or '-'".to_string(),
+            )));
+        }
+        if path.contains('\0') || path.chars().any(char::is_control) {
+            return Err(AppError::Ingestion(IngestError::InvalidUrl(
+                "Cookie file path contains control or NUL characters".to_string(),
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Validate optional custom User-Agent string against header/CLI injection
+/// (control characters such as `\r`, `\n`, `\0`, `\t`, `\x1b` and leading `-`).
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] with [`IngestError::InvalidUrl`] if `custom_ua` contains
+/// control characters or starts with `-`.
+pub fn validate_custom_user_agent(custom_ua: Option<&str>) -> Result<(), AppError> {
+    if let Some(ua) = custom_ua {
+        if ua.chars().any(char::is_control) {
+            return Err(AppError::Ingestion(IngestError::InvalidUrl(
+                "Custom User-Agent must not contain control or NUL characters".to_string(),
+            )));
+        }
+        if ua.trim().starts_with('-') {
+            return Err(AppError::Ingestion(IngestError::InvalidUrl(
+                "Custom User-Agent must not start with '-'".to_string(),
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Validate both cookie source and optional custom User-Agent before passing to `yt-dlp`.
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] if either input contains unsafe characters or leading `-`.
+pub fn validate_bot_defense_inputs(
+    cookie_source: &CookieSource,
+    custom_ua: Option<&str>,
+) -> Result<(), AppError> {
+    validate_cookie_source(cookie_source)?;
+    validate_custom_user_agent(custom_ua)?;
+    Ok(())
+}
+
 /// Build CLI arguments for cookies to pass to `yt-dlp`.
 #[must_use]
 pub fn build_cookie_args(source: &CookieSource) -> Vec<String> {
@@ -84,7 +148,10 @@ pub fn build_cookie_args(source: &CookieSource) -> Vec<String> {
             ]
         }
         CookieSource::File(path) => {
-            vec!["--cookies".to_string(), path.clone()]
+            if validate_cookie_source(source).is_err() {
+                return Vec::new();
+            }
+            vec!["--cookies".to_string(), path.trim().to_string()]
         }
     }
 }
@@ -100,7 +167,7 @@ pub fn build_bot_defense_args(
     let mut args = build_cookie_args(cookie_source);
 
     let ua = match custom_ua {
-        Some(u) if !u.trim().is_empty() => u.trim(),
+        Some(u) if !u.trim().is_empty() && validate_custom_user_agent(Some(u)).is_ok() => u.trim(),
         _ => get_rotated_desktop_user_agent(),
     };
 
@@ -111,6 +178,18 @@ pub fn build_bot_defense_args(
     args.push("Accept-Language: en-US,en;q=0.9".to_string());
 
     args
+}
+
+/// Validate inputs and build comprehensive anti-bot defense CLI arguments for `yt-dlp`.
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] if `cookie_source` or `custom_ua` fails validation.
+pub fn try_build_bot_defense_args(
+    cookie_source: &CookieSource,
+    custom_ua: Option<&str>,
+) -> Result<Vec<String>, AppError> {
+    validate_bot_defense_inputs(cookie_source, custom_ua)?;
+    Ok(build_bot_defense_args(cookie_source, custom_ua))
 }
 
 #[cfg(test)]
@@ -176,5 +255,67 @@ mod tests {
         assert_eq!(args[3], "CustomUA/1.0");
         assert_eq!(args[4], "--add-header");
         assert_eq!(args[5], "Accept-Language: en-US,en;q=0.9");
+    }
+
+    #[test]
+    fn test_validate_bot_defense_inputs_rejects_injection_and_nul() {
+        assert!(
+            validate_bot_defense_inputs(&CookieSource::File("-evil.txt".to_string()), None)
+                .is_err()
+        );
+        assert!(
+            validate_bot_defense_inputs(&CookieSource::File("--exec=calc".to_string()), None)
+                .is_err()
+        );
+        assert!(validate_bot_defense_inputs(
+            &CookieSource::File("C:\\cookies\0.txt".to_string()),
+            None
+        )
+        .is_err());
+        assert!(validate_bot_defense_inputs(&CookieSource::File("   ".to_string()), None).is_err());
+
+        assert!(validate_bot_defense_inputs(
+            &CookieSource::None,
+            Some("Mozilla/5.0\r\n--exec=calc")
+        )
+        .is_err());
+        assert!(
+            validate_bot_defense_inputs(&CookieSource::None, Some("Mozilla/5.0\nEvil")).is_err()
+        );
+        assert!(
+            validate_bot_defense_inputs(&CookieSource::None, Some("Mozilla/5.0\0Evil")).is_err()
+        );
+        assert!(validate_custom_user_agent(Some("Mozilla/5.0\x1b[31mEvil")).is_err());
+        assert!(validate_custom_user_agent(Some("Mozilla/5.0\tEvil")).is_err());
+        assert!(validate_custom_user_agent(Some("-evil-flag")).is_err());
+        assert!(validate_custom_user_agent(Some("  --exec=calc")).is_err());
+        assert!(validate_custom_user_agent(Some("   ")).is_ok());
+        assert!(validate_custom_user_agent(Some("Mozilla/5.0 Custom")).is_ok());
+
+        // Infallible builders also neutralize unsafe inputs cleanly
+        assert_eq!(
+            build_cookie_args(&CookieSource::File("-evil.txt".to_string())),
+            Vec::<String>::new()
+        );
+        let safe_args = build_bot_defense_args(&CookieSource::None, Some("BadUA\r\nInjected"));
+        let ua_idx = safe_args.iter().position(|a| a == "--user-agent").unwrap();
+        assert!(!safe_args[ua_idx + 1].contains('\r'));
+        assert!(!safe_args[ua_idx + 1].contains('\n'));
+
+        let safe_dash_args = build_bot_defense_args(&CookieSource::None, Some("--exec=calc"));
+        let dash_ua_idx = safe_dash_args
+            .iter()
+            .position(|a| a == "--user-agent")
+            .unwrap();
+        assert!(!safe_dash_args[dash_ua_idx + 1].starts_with('-'));
+
+        let safe_ctrl_args = build_bot_defense_args(&CookieSource::None, Some("Bad\x1bUA\tTab"));
+        let ctrl_ua_idx = safe_ctrl_args
+            .iter()
+            .position(|a| a == "--user-agent")
+            .unwrap();
+        assert!(!safe_ctrl_args[ctrl_ua_idx + 1]
+            .chars()
+            .any(char::is_control));
     }
 }

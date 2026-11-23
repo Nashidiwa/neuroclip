@@ -7,12 +7,24 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, BufReader};
 
+use crate::core::storage::validate_vod_id;
 use crate::error::{AppError, SidecarError, SttError};
 use crate::ingestion::streamer::assign_child_to_job_guard;
+use crate::sidecar::{drain_pipe_lossy, LossyLineReader};
 use crate::stt::transcript_parser::{parse_whisper_json_full, TranscriptSegmentsContainer};
+
+static WHISPER_TEMP_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+struct TempFileGuard(PathBuf);
+
+impl Drop for TempFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
 
 /// Progress callback closure type.
 pub type ProgressCallback = Arc<dyn Fn(SttProgressPayload) + Send + Sync>;
@@ -127,6 +139,8 @@ pub async fn run_whisper_transcription(
     config: &WhisperSidecarConfig,
     on_progress: Option<ProgressCallback>,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
+    let clean_clip_id = validate_vod_id(clip_id).map_err(AppError::Storage)?;
+
     // Check for simulated mock error
     if let Ok(err_msg) = std::env::var("NEUROCLIP_MOCK_WHISPER_ERROR") {
         return Err(AppError::Stt(SttError::SidecarExecutionFailed {
@@ -147,7 +161,7 @@ pub async fn run_whisper_transcription(
         // Emit simulated progress
         if let Some(ref cb) = on_progress {
             cb(SttProgressPayload {
-                task_id: clip_id.to_string(),
+                task_id: clean_clip_id.to_string(),
                 stage: "transcribing".to_string(),
                 percent: 50.0,
                 eta_sec: Some(2.0),
@@ -155,7 +169,7 @@ pub async fn run_whisper_transcription(
                 total_chunks: 1,
             });
             cb(SttProgressPayload {
-                task_id: clip_id.to_string(),
+                task_id: clean_clip_id.to_string(),
                 stage: "completed".to_string(),
                 percent: 100.0,
                 eta_sec: Some(0.0),
@@ -164,7 +178,7 @@ pub async fn run_whisper_transcription(
             });
         }
 
-        return parse_whisper_json_full(&mock_content, clip_id);
+        return parse_whisper_json_full(&mock_content, clean_clip_id);
     }
 
     // Verify audio file exists
@@ -182,8 +196,11 @@ pub async fn run_whisper_transcription(
     };
 
     let temp_dir = std::env::temp_dir();
-    let output_prefix = temp_dir.join(format!("whisper_out_{clip_id}"));
-    let output_json = temp_dir.join(format!("whisper_out_{clip_id}.json"));
+    let seq = WHISPER_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let output_prefix = temp_dir.join(format!("whisper_out_{clean_clip_id}_{pid}_{seq}"));
+    let output_json = temp_dir.join(format!("whisper_out_{clean_clip_id}_{pid}_{seq}.json"));
+    let _temp_guard = TempFileGuard(output_json.clone());
 
     let mut args = vec![
         "-m".to_string(),
@@ -226,14 +243,20 @@ pub async fn run_whisper_transcription(
     // Attach to Windows Job Object immediately to guarantee zero zombies (`ADR-007`)
     assign_child_to_job_guard(&child);
 
-    // Read stderr for progress reports
-    if let Some(stderr) = child.stderr.take() {
+    // Concurrently drain stdout so large subprocess output cannot deadlock the pipe buffer
+    let stdout_handle = child.stdout.take().map(|stdout| {
+        tokio::spawn(async move {
+            drain_pipe_lossy(stdout).await;
+        })
+    });
+
+    // Read stderr concurrently for progress reports
+    let stderr_handle = child.stderr.take().map(|stderr| {
         let callback = on_progress.clone();
-        let clip_id_owned = clip_id.to_string();
+        let clip_id_owned = clean_clip_id.to_string();
 
         tokio::spawn(async move {
-            let reader = BufReader::new(stderr);
-            let mut lines = reader.lines();
+            let mut lines = LossyLineReader::new(stderr);
 
             while let Ok(Some(line)) = lines.next_line().await {
                 let trimmed = line.trim();
@@ -257,8 +280,8 @@ pub async fn run_whisper_transcription(
                     }
                 }
             }
-        });
-    }
+        })
+    });
 
     let status = child.wait().await.map_err(|e| {
         AppError::Sidecar(SidecarError::ExecutionFailed {
@@ -267,6 +290,13 @@ pub async fn run_whisper_transcription(
             details: format!("Whisper process wait error: {e}"),
         })
     })?;
+
+    if let Some(h) = stdout_handle {
+        let _ = h.await;
+    }
+    if let Some(h) = stderr_handle {
+        let _ = h.await;
+    }
 
     if !status.success() {
         return Err(AppError::Sidecar(SidecarError::ExecutionFailed {
@@ -290,14 +320,11 @@ pub async fn run_whisper_transcription(
         )))
     })?;
 
-    // Cleanup temp JSON file
-    let _ = std::fs::remove_file(&output_json);
-
-    let container = parse_whisper_json_full(&json_content, clip_id)?;
+    let container = parse_whisper_json_full(&json_content, clean_clip_id)?;
 
     if let Some(ref cb) = on_progress {
         cb(SttProgressPayload {
-            task_id: clip_id.to_string(),
+            task_id: clean_clip_id.to_string(),
             stage: "completed".to_string(),
             percent: 100.0,
             eta_sec: Some(0.0),
@@ -307,4 +334,41 @@ pub async fn run_whisper_transcription(
     }
 
     Ok(container)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_run_whisper_transcription_rejects_traversal_clip_id() {
+        let cfg = WhisperSidecarConfig::default();
+        let audio = Path::new("unused.wav");
+        for bad in ["../escape", "sub/clip", "sub\\clip", "CON", "clip?1", ""] {
+            let res = run_whisper_transcription(bad, audio, &cfg, None).await;
+            assert!(
+                matches!(res, Err(AppError::Storage(_))),
+                "Expected Storage validation error for clip_id {bad:?}, got {res:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_whisper_temp_file_guard_removes_file_on_drop() {
+        let temp_path = std::env::temp_dir().join(format!(
+            "neuroclip_whisper_guard_test_{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&temp_path, b"{\"stale\": true}").unwrap();
+        assert!(temp_path.exists());
+        {
+            let _guard = TempFileGuard(temp_path.clone());
+            assert!(temp_path.exists());
+        }
+        assert!(
+            !temp_path.exists(),
+            "TempFileGuard must delete temp JSON file on drop"
+        );
+    }
 }

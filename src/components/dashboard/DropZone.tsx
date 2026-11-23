@@ -81,6 +81,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pathInputRef = useRef<HTMLInputElement | null>(null);
+  const mountedRef = useRef<boolean>(true);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [manualPath, setManualPath] = useState<string>('');
@@ -88,10 +89,17 @@ export const DropZone: React.FC<DropZoneProps> = ({
   const [manifest, setManifest] = useState<VodManifest | null>(null);
   const [error, setError] = useState<IpcErrorResponse | null>(null);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const processFilePath = useCallback(
     async (rawPath: string): Promise<void> => {
       const trimmed = rawPath.trim();
-      if (!trimmed || disabled || isImporting) return;
+      if (!trimmed || disabled || isImporting || !mountedRef.current) return;
 
       if (!isSupportedVideoPath(trimmed)) {
         setError(createUnsupportedExtensionError(trimmed));
@@ -107,15 +115,19 @@ export const DropZone: React.FC<DropZoneProps> = ({
       setIsImporting(true);
       try {
         const result = await importLocalVideo(trimmed, customCacheDir ?? null);
+        if (!mountedRef.current) return;
         setManifest(result);
         setManualPath(trimmed);
         if (onImportSuccess) {
           onImportSuccess(result);
         }
       } catch (err: unknown) {
+        if (!mountedRef.current) return;
         setError(parseIpcError(err, 'Không thể nhập tệp video cục bộ'));
       } finally {
-        setIsImporting(false);
+        if (mountedRef.current) {
+          setIsImporting(false);
+        }
       }
     },
     [customCacheDir, disabled, isImporting, onImportSuccess, onSelectFilePath],
@@ -233,11 +245,13 @@ export const DropZone: React.FC<DropZoneProps> = ({
     if (onBrowseRequest) {
       void onBrowseRequest()
         .then((selectedPath) => {
+          if (!mountedRef.current) return;
           if (typeof selectedPath === 'string' && selectedPath.trim().length > 0) {
             void processFilePath(selectedPath);
           }
         })
         .catch((err: unknown) => {
+          if (!mountedRef.current) return;
           setError(parseIpcError(err, 'Không thể mở hộp thoại chọn tệp'));
         });
       return;

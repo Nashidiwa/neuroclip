@@ -31,8 +31,11 @@ import {
 import {
   STT_CHUNK_EVENT,
   STT_PROGRESS_EVENT,
+  listenSttChunk,
+  listenSttProgress,
   startFasterWhisperTranscription,
 } from '../services/ipc/stt.ts';
+import { listenTranslationProgress } from '../services/ipc/translation.ts';
 import { ERROR_CODES } from '../services/ipc/error.ts';
 import { useTranscriptStore } from '../stores/useTranscriptStore.ts';
 
@@ -926,5 +929,78 @@ describe('useTranscriptStore Reactive Store Invariants', () => {
     expect(result.current.isModelVerified).toBe(false);
     expect(result.current.isGeminiConnected).toBeNull();
     expect(result.current.isTestingGeminiConnection).toBe(false);
+  });
+
+  it('listenSttProgress, listenSttChunk, and listenTranslationProgress degrade gracefully and ignore malformed payloads', async () => {
+    mockedListen.mockRejectedValueOnce(new Error('No Tauri runtime'));
+    expect(() => {
+      void listenSttProgress(() => {}).then((fn) => fn());
+    }).not.toThrow();
+
+    mockedListen.mockRejectedValueOnce(new Error('No Tauri runtime'));
+    const unlistenChunkErr = await listenSttChunk(() => {});
+    expect(() => unlistenChunkErr()).not.toThrow();
+
+    mockedListen.mockRejectedValueOnce(new Error('No Tauri runtime'));
+    const unlistenTrErr = await listenTranslationProgress(() => {});
+    expect(() => unlistenTrErr()).not.toThrow();
+
+    let sttProgressCb: ((e: { payload: unknown }) => void) | undefined;
+    let sttChunkCb: ((e: { payload: unknown }) => void) | undefined;
+    let trProgressCb: ((e: { payload: unknown }) => void) | undefined;
+
+    mockedListen
+      .mockImplementationOnce(async (_name, cb) => {
+        sttProgressCb = cb as (e: { payload: unknown }) => void;
+        return () => {};
+      })
+      .mockImplementationOnce(async (_name, cb) => {
+        sttChunkCb = cb as (e: { payload: unknown }) => void;
+        return () => {};
+      })
+      .mockImplementationOnce(async (_name, cb) => {
+        trProgressCb = cb as (e: { payload: unknown }) => void;
+        return () => {};
+      });
+
+    const receivedSttProgress: unknown[] = [];
+    const receivedSttChunk: unknown[] = [];
+    const receivedTrProgress: unknown[] = [];
+
+    await listenSttProgress((p) => receivedSttProgress.push(p));
+    await listenSttChunk((c) => receivedSttChunk.push(c));
+    await listenTranslationProgress((t) => receivedTrProgress.push(t));
+
+    // Malformed payloads must be ignored without throwing
+    sttProgressCb?.({ payload: { invalid: true } });
+    sttChunkCb?.({ payload: { clip_id: 'c1', segment: null } });
+    trProgressCb?.({ payload: { clipId: 'c1', translatedCount: 'bad' } });
+
+    expect(receivedSttProgress).toHaveLength(0);
+    expect(receivedSttChunk).toHaveLength(0);
+    expect(receivedTrProgress).toHaveLength(0);
+
+    // Valid payloads pass through
+    sttProgressCb?.({ payload: { taskId: 'c1', stage: 'running', percent: 50 } });
+    sttChunkCb?.({
+      payload: {
+        clip_id: 'c1',
+        chunk_index: 0,
+        segment: {
+          segment_id: 'seg_1',
+          start_sec: 0,
+          end_sec: 1,
+          speaker_id: 'neuro',
+          text_en: 'Hi',
+          confidence: 0.9,
+          cps_score: 2,
+        },
+      },
+    });
+    trProgressCb?.({ payload: { clipId: 'c1', translatedCount: 1, totalCount: 2 } });
+
+    expect(receivedSttProgress).toHaveLength(1);
+    expect(receivedSttChunk).toHaveLength(1);
+    expect(receivedTrProgress).toHaveLength(1);
   });
 });

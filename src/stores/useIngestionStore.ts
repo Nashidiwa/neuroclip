@@ -8,7 +8,7 @@
  * Strict adherence to docs/CONVENTIONS.md (zero-any, monotonic sequence counter).
  */
 
-import { createStore } from './createStore.ts';
+import { createStore, type GetStateFn, type SetStateFn } from './createStore.ts';
 import {
   type VodManifest,
   type VodMetadata,
@@ -19,7 +19,7 @@ import {
   cancelVodIngestion,
   listenIngestProgress,
 } from '../services/ipc/ingestion.ts';
-import { type IpcErrorResponse, parseIpcError } from '../services/ipc/error.ts';
+import { ERROR_CODES, type IpcErrorResponse, parseIpcError } from '../services/ipc/error.ts';
 
 // ---------------------------------------------------------------------------
 // Store Interface Contract
@@ -61,8 +61,82 @@ export interface IngestionState {
 // Ingestion Store Instance & Monotonic Sequence Counter
 // ---------------------------------------------------------------------------
 
-let ingestionSeq = 0;
+let resetEpoch = 0;
+let probeSeq = 0;
+let ingestSeq = 0;
+let listenersPromise: Promise<void> | null = null;
+let activeListenersToken = 0;
 let progressUnlisten: (() => void) | null = null;
+
+async function safeListenIngest(register: () => Promise<() => void>): Promise<(() => void) | null> {
+  try {
+    return await register();
+  } catch {
+    return null;
+  }
+}
+
+function ensureIngestListener(
+  set: SetStateFn<IngestionState>,
+  get: GetStateFn<IngestionState>,
+): Promise<void> {
+  if (progressUnlisten) {
+    return Promise.resolve();
+  }
+  if (listenersPromise) {
+    return listenersPromise;
+  }
+
+  const epochAtStart = resetEpoch;
+  const token = ++activeListenersToken;
+  const pending = (async () => {
+    const nextUnlisten = await safeListenIngest(() =>
+      listenIngestProgress((event) => {
+        const cur = get();
+        if (!cur.isIngesting) return;
+        if (cur.activeTaskId !== null && event.taskId !== cur.activeTaskId) {
+          return;
+        }
+        set({
+          progress: event,
+          activeTaskId: event.taskId,
+        });
+      }),
+    );
+
+    if (epochAtStart !== resetEpoch) {
+      nextUnlisten?.();
+      if (activeListenersToken === token) {
+        listenersPromise = null;
+      }
+      return;
+    }
+
+    if (nextUnlisten) {
+      if (progressUnlisten) {
+        nextUnlisten();
+      } else {
+        progressUnlisten = nextUnlisten;
+      }
+    }
+
+    if (activeListenersToken === token) {
+      listenersPromise = null;
+    }
+  })();
+
+  listenersPromise = pending;
+  return pending;
+}
+
+function cleanupIngestListener(): void {
+  ++activeListenersToken;
+  listenersPromise = null;
+  if (progressUnlisten) {
+    progressUnlisten();
+    progressUnlisten = null;
+  }
+}
 
 export const useIngestionStore = createStore<IngestionState>((set, get) => ({
   url: '',
@@ -99,7 +173,8 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
   },
 
   probe: async (urlOverride?: string): Promise<VodMetadata> => {
-    const seq = ++ingestionSeq;
+    const seq = ++probeSeq;
+    const epoch = resetEpoch;
     const targetUrl = urlOverride ?? get().url;
 
     set({ isProbing: true, error: null });
@@ -107,7 +182,7 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
     try {
       const meta = await probeVod(targetUrl, get().cookiesPath, get().browserCookies);
 
-      if (seq === ingestionSeq) {
+      if (seq === probeSeq && epoch === resetEpoch) {
         set({
           metadata: meta,
           isProbing: false,
@@ -117,7 +192,7 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
       return meta;
     } catch (err: unknown) {
       const normalizedError = parseIpcError(err, 'Không thể kiểm tra thông tin VOD');
-      if (seq === ingestionSeq) {
+      if (seq === probeSeq && epoch === resetEpoch) {
         set({
           isProbing: false,
           error: normalizedError,
@@ -128,7 +203,8 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
   },
 
   startIngestion: async (urlOverride?: string): Promise<VodManifest> => {
-    const seq = ++ingestionSeq;
+    const seq = ++ingestSeq;
+    const epoch = resetEpoch;
     const targetUrl = urlOverride ?? get().url;
     const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -147,31 +223,21 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
       },
     });
 
-    // Setup real-time progress listener if not already bound
-    if (!progressUnlisten) {
-      void listenIngestProgress((event) => {
-        const cur = get();
-        if (cur.isIngesting) {
-          set({
-            progress: event,
-            activeTaskId: event.taskId,
-          });
-        }
-      }).then((unlisten) => {
-        progressUnlisten = unlisten;
-      });
-    }
+    const listenerReady = ensureIngestListener(set, get);
 
     try {
-      const manifest = await startVodIngestion(targetUrl, {
-        audioOnly: get().audioOnly,
-        cookiesPath: get().cookiesPath,
-        browserCookies: get().browserCookies,
-        customCacheDir: get().customCacheDir,
-        taskId,
-      });
+      const [manifest] = await Promise.all([
+        startVodIngestion(targetUrl, {
+          audioOnly: get().audioOnly,
+          cookiesPath: get().cookiesPath,
+          browserCookies: get().browserCookies,
+          customCacheDir: get().customCacheDir,
+          taskId,
+        }),
+        listenerReady,
+      ]);
 
-      if (seq === ingestionSeq) {
+      if (seq === ingestSeq && epoch === resetEpoch) {
         set({
           manifest,
           isIngesting: false,
@@ -189,7 +255,7 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
       return manifest;
     } catch (err: unknown) {
       const normalizedError = parseIpcError(err, 'Lỗi khi thu nạp luồng âm thanh VOD');
-      if (seq === ingestionSeq) {
+      if (seq === ingestSeq && epoch === resetEpoch) {
         set({
           isIngesting: false,
           activeTaskId: null,
@@ -201,23 +267,44 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
   },
 
   cancelIngestion: async (): Promise<boolean> => {
+    const seqAtStart = ingestSeq;
+    const epoch = resetEpoch;
     const taskId = get().activeTaskId ?? '';
     try {
       const ok = await cancelVodIngestion(taskId);
-      set({
-        isIngesting: false,
-        activeTaskId: null,
-        error: {
-          code: 'ERR_TASK_CANCELLED',
-          message: 'Tác vụ thu nạp đã bị hủy bỏ',
-          details: `Cancelled task: ${taskId}`,
-          recoverable: true,
-        },
-      });
-      return ok;
+      const cur = get();
+      if (
+        ok &&
+        seqAtStart === ingestSeq &&
+        epoch === resetEpoch &&
+        cur.isIngesting &&
+        cur.activeTaskId === taskId
+      ) {
+        ++ingestSeq;
+        set({
+          isIngesting: false,
+          activeTaskId: null,
+          error: {
+            code: ERROR_CODES.TASK_CANCELLED,
+            message: 'Tác vụ thu nạp đã bị hủy bỏ',
+            details: `Cancelled task: ${taskId}`,
+            recoverable: false,
+          },
+        });
+        return true;
+      }
+      return false;
     } catch (err: unknown) {
       const normalizedError = parseIpcError(err, 'Không thể hủy tác vụ');
-      set({ error: normalizedError });
+      const cur = get();
+      if (
+        seqAtStart === ingestSeq &&
+        epoch === resetEpoch &&
+        cur.isIngesting &&
+        cur.activeTaskId === taskId
+      ) {
+        set({ error: normalizedError });
+      }
       return false;
     }
   },
@@ -227,11 +314,10 @@ export const useIngestionStore = createStore<IngestionState>((set, get) => ({
   },
 
   reset: () => {
-    ++ingestionSeq;
-    if (progressUnlisten) {
-      progressUnlisten();
-      progressUnlisten = null;
-    }
+    ++resetEpoch;
+    ++probeSeq;
+    ++ingestSeq;
+    cleanupIngestListener();
     set({
       url: '',
       audioOnly: true,

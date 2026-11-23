@@ -141,16 +141,19 @@ pub fn init_logging_with_dir(log_dir: &Path) -> Result<(), String> {
         .flatten_event(true)
         .with_writer(non_blocking_appender);
 
-    // 6. Build console logging layer (Pretty in debug mode, compact in release)
+    // 6. Build console logging layer wrapped in RedactingWriter for defense-in-depth
     #[cfg(debug_assertions)]
     let console_layer = tracing_subscriber::fmt::layer()
         .pretty()
         .with_target(true)
         .with_line_number(true)
-        .with_file(true);
+        .with_file(true)
+        .with_writer(|| RedactingWriter::new(std::io::stdout()));
 
     #[cfg(not(debug_assertions))]
-    let console_layer = tracing_subscriber::fmt::layer().compact();
+    let console_layer = tracing_subscriber::fmt::layer()
+        .compact()
+        .with_writer(|| RedactingWriter::new(std::io::stdout()));
 
     // 7. Compose subscriber registry and initialize safely with try_init()
     let subscriber = tracing_subscriber::registry()
@@ -220,5 +223,21 @@ mod tests {
                 assert_eq!(deser, entry);
             }
         }
+    }
+
+    #[test]
+    fn test_console_redacting_writer_sanitizes_secrets() {
+        use std::io::Write as _;
+        let mut buf: Vec<u8> = Vec::new();
+        {
+            let mut writer = RedactingWriter::new(&mut buf);
+            writer
+                .write_all(b"INFO console test key=gsk_1234567890abcdef12345678\n")
+                .unwrap();
+            writer.flush().unwrap();
+        }
+        let rendered = String::from_utf8_lossy(&buf);
+        assert!(!rendered.contains("gsk_1234567890abcdef12345678"));
+        assert!(rendered.contains("gsk_[REDACTED]5678"));
     }
 }

@@ -63,51 +63,73 @@ const initialState = {
   error: null as IpcErrorResponse | null,
 };
 
+let resetEpoch = 0;
+let clustersSeq = 0;
+
 export const useHighlightStore = createStore<HighlightState>((set, get) => ({
   ...initialState,
 
-  setVodId: (vodId) => set({ vodId }),
+  setVodId: (vodId) => {
+    if (get().vodId !== vodId) {
+      ++clustersSeq;
+      set({ vodId, isLoading: false });
+      return;
+    }
+    set({ vodId });
+  },
 
   selectCluster: (selectedClusterId) => set({ selectedClusterId }),
 
   detectHighlightsForVod: async (vodId, durationSeconds, options) => {
+    const seq = ++clustersSeq;
+    const epoch = resetEpoch;
     set({ isLoading: true, error: null, vodId });
     try {
       const container = await detectHighlights(vodId, durationSeconds, options);
-      set({
-        isLoading: false,
-        clustersContainer: container,
-        clusters: container.clusters,
-        error: null,
-      });
+      if (seq === clustersSeq && epoch === resetEpoch) {
+        set({
+          isLoading: false,
+          clustersContainer: container,
+          clusters: container.clusters,
+          error: null,
+        });
+      }
       return container;
     } catch (err: unknown) {
       const parsed = parseIpcError(err);
-      set({ isLoading: false, error: parsed });
+      if (seq === clustersSeq && epoch === resetEpoch) {
+        set({ isLoading: false, error: parsed });
+      }
       throw parsed;
     }
   },
 
   fetchClustersForVod: async (vodId) => {
+    const seq = ++clustersSeq;
+    const epoch = resetEpoch;
     set({ isLoading: true, error: null, vodId });
     try {
       const container = await getHighlightClusters(vodId);
-      set({
-        isLoading: false,
-        clustersContainer: container,
-        clusters: container.clusters,
-        error: null,
-      });
+      if (seq === clustersSeq && epoch === resetEpoch) {
+        set({
+          isLoading: false,
+          clustersContainer: container,
+          clusters: container.clusters,
+          error: null,
+        });
+      }
       return container;
     } catch (err: unknown) {
       const parsed = parseIpcError(err);
-      set({ isLoading: false, error: parsed });
+      if (seq === clustersSeq && epoch === resetEpoch) {
+        set({ isLoading: false, error: parsed });
+      }
       throw parsed;
     }
   },
 
   toggleBookmark: async (clusterId, bookmarked) => {
-    const { vodId, clusters, clustersContainer } = get();
+    const { vodId } = get();
     if (!vodId || vodId.trim().length === 0) {
       const err: IpcErrorResponse = {
         code: ERROR_CODES.INTERNAL_ERROR,
@@ -118,11 +140,19 @@ export const useHighlightStore = createStore<HighlightState>((set, get) => ({
       throw err;
     }
 
+    const epoch = resetEpoch;
+    const seqAtStart = clustersSeq;
+
     try {
       const updated = await toggleHighlightBookmark(vodId, clusterId, bookmarked);
-      const nextClusters = clusters.map((c) => (c.clusterId === clusterId ? updated : c));
-      const nextContainer = clustersContainer
-        ? { ...clustersContainer, clusters: nextClusters }
+      const current = get();
+      if (epoch !== resetEpoch || seqAtStart !== clustersSeq || current.vodId !== vodId) {
+        return updated;
+      }
+
+      const nextClusters = current.clusters.map((c) => (c.clusterId === clusterId ? updated : c));
+      const nextContainer = current.clustersContainer
+        ? { ...current.clustersContainer, clusters: nextClusters }
         : null;
 
       set({
@@ -134,14 +164,20 @@ export const useHighlightStore = createStore<HighlightState>((set, get) => ({
       return updated;
     } catch (err: unknown) {
       const parsed = parseIpcError(err);
-      set({ error: parsed });
+      if (epoch === resetEpoch && seqAtStart === clustersSeq && get().vodId === vodId) {
+        set({ error: parsed });
+      }
       throw parsed;
     }
   },
 
   clearError: () => set({ error: null }),
 
-  reset: () => set(initialState),
+  reset: () => {
+    ++resetEpoch;
+    ++clustersSeq;
+    set(initialState);
+  },
 }));
 
 export const highlightStore = {

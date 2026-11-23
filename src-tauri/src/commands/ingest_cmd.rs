@@ -8,8 +8,10 @@ use std::sync::Mutex;
 use tauri::Emitter;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::storage::{check_disk_space, resolve_cache_dir, resolve_projects_dir};
-use crate::error::{AppError, StorageError};
+use crate::core::storage::{
+    check_disk_space, resolve_cache_dir, resolve_projects_dir, validate_vod_id,
+};
+use crate::error::{AppError, IngestError, StorageError};
 use crate::ingestion::cookies::{parse_browser_type, CookieSource};
 use crate::ingestion::local_importer::import_local_video_file;
 use crate::ingestion::streamer::{
@@ -107,12 +109,26 @@ pub async fn probe_vod(
 /// 3. Download audio-only stream with yt-dlp anti-bot defense.
 /// 4. Generate Schema 5.2 compliant `vod_manifest.json`.
 #[tauri::command]
-#[allow(clippy::too_many_lines)]
 pub async fn start_vod_ingestion(
     url: String,
     options: Option<IngestOptions>,
     app: tauri::AppHandle,
 ) -> Result<VodManifest, AppError> {
+    run_vod_ingestion_pipeline(url, options, move |payload: IngestProgressPayload| {
+        let _ = app.emit("ingest:progress", &payload);
+    })
+    .await
+}
+
+#[allow(clippy::too_many_lines)]
+async fn run_vod_ingestion_pipeline<F>(
+    url: String,
+    options: Option<IngestOptions>,
+    emit_progress: F,
+) -> Result<VodManifest, AppError>
+where
+    F: Fn(IngestProgressPayload) + Send + Sync + Clone + 'static,
+{
     let opts = options.unwrap_or_default();
     let cookie_source = resolve_cookie_source(Some(&opts));
 
@@ -144,10 +160,18 @@ pub async fn start_vod_ingestion(
         }
     };
 
-    let vod_id = if metadata.id.trim().is_empty() {
+    let raw_vod_id = if metadata.id.trim().is_empty() {
         initial_task_id.clone()
     } else {
         metadata.id
+    };
+
+    let vod_id = match validate_vod_id(&raw_vod_id) {
+        Ok(clean_id) => clean_id.to_string(),
+        Err(e) => {
+            unregister_task_token(&initial_task_id);
+            return Err(AppError::Storage(e));
+        }
     };
 
     // Register vod_id alias if distinct from initial_task_id
@@ -155,54 +179,59 @@ pub async fn start_vod_ingestion(
         register_task_token(&vod_id, cancellation_token.clone());
     }
 
-    // Step 2: Resolve workspace and cache paths
-    let projects_root = resolve_projects_dir();
-    let project_dir = projects_root.join(&vod_id);
-    if let Err(e) = std::fs::create_dir_all(&project_dir) {
-        unregister_task_token(&initial_task_id);
-        if vod_id != initial_task_id {
-            unregister_task_token(&vod_id);
+    // Step 2 & 3: Resolve workspace/cache paths, create directories, and run disk preflight on blocking pool
+    let vod_id_for_fs = vod_id.clone();
+    let custom_cache_dir = opts.custom_cache_dir.clone();
+    let prep_res = tokio::task::spawn_blocking(move || {
+        let projects_root = resolve_projects_dir();
+        let project_dir = projects_root.join(&vod_id_for_fs);
+        if let Err(e) = std::fs::create_dir_all(&project_dir) {
+            return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
+                path: project_dir.to_string_lossy().to_string(),
+                details: e.to_string(),
+            }));
         }
-        return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
-            path: project_dir.to_string_lossy().to_string(),
-            details: e.to_string(),
-        }));
-    }
 
-    let cache_dir = match opts.custom_cache_dir.as_deref() {
-        Some(dir) if !dir.trim().is_empty() => PathBuf::from(dir.trim()),
-        _ => resolve_cache_dir(),
+        let cache_dir = match custom_cache_dir.as_deref() {
+            Some(dir) if !dir.trim().is_empty() => PathBuf::from(dir.trim()),
+            _ => resolve_cache_dir(),
+        };
+        if let Err(e) = std::fs::create_dir_all(&cache_dir) {
+            return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
+                path: cache_dir.to_string_lossy().to_string(),
+                details: e.to_string(),
+            }));
+        }
+
+        check_disk_space(Some(&cache_dir))?;
+        Ok((project_dir, cache_dir))
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Ingestion storage prep task panicked: {e}")));
+
+    let (project_dir, cache_dir) = match prep_res {
+        Ok(Ok(paths)) => paths,
+        Ok(Err(e)) | Err(e) => {
+            unregister_task_token(&initial_task_id);
+            if vod_id != initial_task_id {
+                unregister_task_token(&vod_id);
+            }
+            return Err(e);
+        }
     };
-    if let Err(e) = std::fs::create_dir_all(&cache_dir) {
-        unregister_task_token(&initial_task_id);
-        if vod_id != initial_task_id {
-            unregister_task_token(&vod_id);
-        }
-        return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
-            path: cache_dir.to_string_lossy().to_string(),
-            details: e.to_string(),
-        }));
-    }
 
-    // Step 3: Pre-flight disk space check
-    if let Err(e) = check_disk_space(Some(&cache_dir)) {
-        unregister_task_token(&initial_task_id);
-        if vod_id != initial_task_id {
-            unregister_task_token(&vod_id);
-        }
-        return Err(e);
-    }
-
-    // Step 4: Download audio stream with 1Hz progress updates
-    let app_clone = app.clone();
+    // Step 4: Download audio stream with 1Hz progress updates keyed by initial_task_id
+    let progress_task_id = initial_task_id.clone();
+    let emit_for_download = emit_progress.clone();
     let audio_res = download_audio_stream(
         &url,
         &cache_dir,
         &vod_id,
         &cookie_source,
         opts.custom_user_agent.as_deref(),
-        move |payload: IngestProgressPayload| {
-            let _ = app_clone.emit("ingest:progress", &payload);
+        move |mut payload: IngestProgressPayload| {
+            payload.task_id.clone_from(&progress_task_id);
+            emit_for_download(payload);
         },
         cancellation_token,
     )
@@ -214,35 +243,39 @@ pub async fn start_vod_ingestion(
     }
     let audio_path = audio_res?;
 
-    // Step 6: Generate Schema 5.2 compliant vod_manifest.json
-    let source_type = detect_source_type(&url);
+    // Step 6: Generate Schema 5.2 compliant vod_manifest.json on blocking threadpool
+    let source_type = detect_source_type(&url).to_string();
     let duration = metadata.duration.unwrap_or(0.0);
     let streamer = metadata.uploader.or(metadata.channel);
+    let title = metadata.title.clone();
+    let video_stream_url = metadata.video_stream_url.clone();
+    let vod_id_manifest = vod_id.clone();
 
-    let manifest = generate_vod_manifest_with_streams(
-        &vod_id,
-        source_type,
-        Some(&url),
-        &metadata.title,
-        streamer.as_deref(),
-        duration,
-        &audio_path,
-        &project_dir,
-        metadata.video_stream_url.as_deref(),
-        None,
-    )?;
+    let manifest = tokio::task::spawn_blocking(move || {
+        generate_vod_manifest_with_streams(
+            &vod_id_manifest,
+            &source_type,
+            Some(&url),
+            &title,
+            streamer.as_deref(),
+            duration,
+            &audio_path,
+            &project_dir,
+            video_stream_url.as_deref(),
+            None,
+        )
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Manifest write task panicked: {e}")))??;
 
-    // Emit final 100% progress event
-    let _ = app.emit(
-        "ingest:progress",
-        &IngestProgressPayload {
-            task_id: vod_id,
-            stage: "complete".to_string(),
-            percent: 100.0,
-            speed_kbps: 0.0,
-            eta_sec: 0,
-        },
-    );
+    // Emit final 100% progress event keyed by initial_task_id
+    emit_progress(IngestProgressPayload {
+        task_id: initial_task_id,
+        stage: "complete".to_string(),
+        percent: 100.0,
+        speed_kbps: 0.0,
+        eta_sec: 0,
+    });
 
     Ok(manifest)
 }
@@ -272,11 +305,16 @@ pub async fn import_local_video(
         );
     register_task_token(&tid, cancellation_token.clone());
 
-    let projects_root = resolve_projects_dir();
-    let cache_root = match custom_cache_dir.as_deref() {
-        Some(dir) if !dir.trim().is_empty() => PathBuf::from(dir.trim()),
-        _ => resolve_cache_dir(),
-    };
+    let (projects_root, cache_root) = tokio::task::spawn_blocking(move || {
+        let projects_root = resolve_projects_dir();
+        let cache_root = match custom_cache_dir.as_deref() {
+            Some(dir) if !dir.trim().is_empty() => PathBuf::from(dir.trim()),
+            _ => resolve_cache_dir(),
+        };
+        (projects_root, cache_root)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Local import path resolution panicked: {e}")))?;
 
     let app_clone = app.clone();
     let res = import_local_video_file(
@@ -309,7 +347,8 @@ pub fn cancel_vod_ingestion(task_id: String) -> Result<bool, AppError> {
 #[allow(clippy::needless_pass_by_value)]
 #[tauri::command]
 pub fn get_vod_manifest(project_id: String) -> Result<VodManifest, AppError> {
-    let project_dir = resolve_projects_dir().join(&project_id);
+    let clean_id = validate_vod_id(&project_id).map_err(AppError::Storage)?;
+    let project_dir = resolve_projects_dir().join(clean_id);
     let manifest_path = project_dir.join("vod_manifest.json");
 
     if !manifest_path.exists() {
@@ -330,6 +369,37 @@ pub fn get_vod_manifest(project_id: String) -> Result<VodManifest, AppError> {
     Ok(manifest)
 }
 
+/// Validate `source_path` for `extract_pcm_stream`: reject empty, leading whitespace or `-`,
+/// control/`\0` characters; allow `http(s)://` URL or an existing local file.
+fn validate_pcm_source_path(source_path: &str) -> Result<String, AppError> {
+    if source_path.is_empty() || source_path.trim().is_empty() {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "Source path cannot be empty".to_string(),
+        )));
+    }
+    if source_path.chars().any(|c| c.is_control() || c == '\0') {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "Source path contains control or NUL characters".to_string(),
+        )));
+    }
+    if source_path.chars().next().is_some_and(char::is_whitespace) || source_path.starts_with('-') {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "Source path must not start with whitespace or '-'".to_string(),
+        )));
+    }
+    let trimmed = source_path.trim();
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return Ok(trimmed.to_string());
+    }
+    let local_path = std::path::Path::new(trimmed);
+    if !local_path.exists() || !local_path.is_file() {
+        return Err(AppError::Storage(StorageError::FileNotFound(
+            trimmed.to_string(),
+        )));
+    }
+    Ok(trimmed.to_string())
+}
+
 /// Stream audio from input source (file or URL) through FFmpeg 16kHz mono pipe,
 /// processing samples via `AudioRingBuffer` sliding window to compute RMS energy telemetry.
 #[tauri::command]
@@ -339,14 +409,25 @@ pub async fn extract_pcm_stream(
     max_windows: Option<usize>,
     task_id: Option<String>,
 ) -> Result<Vec<AudioEnergyWindow>, AppError> {
+    let validated_source =
+        tokio::task::spawn_blocking(move || validate_pcm_source_path(&source_path))
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!("Source path validation task panicked: {e}"))
+            })??;
+
     let cancellation_token = CancellationToken::new();
     let tid = task_id.unwrap_or_else(|| format!("pcm_{}", chrono::Utc::now().timestamp_millis()));
     register_task_token(&tid, cancellation_token.clone());
 
     let win_samples = window_samples.unwrap_or(8000); // 500ms at 16kHz mono
-    let res =
-        compute_audio_energy_stream(&source_path, win_samples, max_windows, cancellation_token)
-            .await;
+    let res = compute_audio_energy_stream(
+        &validated_source,
+        win_samples,
+        max_windows,
+        cancellation_token,
+    )
+    .await;
 
     unregister_task_token(&tid);
     res
@@ -431,5 +512,214 @@ mod tests {
         let cancelled = cancel_task_token("");
         assert!(cancelled);
         assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn test_get_vod_manifest_rejects_traversal_and_absolute_paths() {
+        for bad in [
+            "",
+            "   ",
+            "..",
+            "../outside",
+            "..\\outside",
+            "proj/sub",
+            "proj\\sub",
+            "C:\\Windows\\System32",
+            "D:vod_123",
+        ] {
+            let res = get_vod_manifest(bad.to_string());
+            assert!(
+                matches!(res, Err(AppError::Storage(_))),
+                "Expected Storage error for invalid project_id {bad:?}, got {res:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_extract_pcm_stream_rejects_invalid_source_paths() {
+        for bad in [
+            "",
+            "   ",
+            " C:\\video.mp4",
+            "--flag",
+            "-i",
+            "video\0.mp4",
+            "video\n.mp4",
+        ] {
+            let res = extract_pcm_stream(bad.to_string(), None, None, None).await;
+            assert!(
+                matches!(res, Err(AppError::Ingestion(IngestError::InvalidUrl(_)))),
+                "Expected InvalidUrl for {bad:?}, got {res:?}"
+            );
+        }
+
+        let missing = extract_pcm_stream(
+            "C:\\definitely_missing_neuroclip_audio_98765.wav".to_string(),
+            None,
+            None,
+            None,
+        )
+        .await;
+        assert!(matches!(
+            missing,
+            Err(AppError::Storage(StorageError::FileNotFound(_)))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_start_vod_ingestion_pipeline_emits_initial_task_id_across_all_stages() {
+        use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
+        use std::sync::{Arc, Mutex as StdMutex};
+
+        let _env_guard = ENV_LOCK.lock().await;
+        let nanos = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+        let temp_root = std::env::temp_dir().join(format!(
+            "neuroclip_ingest_taskid_{}_{nanos}",
+            std::process::id()
+        ));
+        let projects_dir = temp_root.join("projects");
+        let cache_dir = temp_root.join("cache");
+        std::fs::create_dir_all(&projects_dir).unwrap();
+        std::fs::create_dir_all(&cache_dir).unwrap();
+
+        let _proj_env =
+            ScopedEnvVar::set("NEUROCLIP_PROJECTS_DIR", &projects_dir.to_string_lossy());
+        let _cache_env = ScopedEnvVar::set("NEUROCLIP_CACHE_DIR", &cache_dir.to_string_lossy());
+        let _disk_env = ScopedEnvVar::set("NEUROCLIP_MOCK_DISK_FREE_MB", "20480");
+        let _meta_env = ScopedEnvVar::set(
+            "NEUROCLIP_MOCK_YTDLP_METADATA",
+            r#"{"id":"dQw4w9WgXcQ","title":"Contract Test VOD","duration":120.0,"uploader":"Tester"}"#,
+        );
+        let _ingest_env = ScopedEnvVar::set("NEUROCLIP_MOCK_INGEST_RUN", "1");
+
+        let emitted: Arc<StdMutex<Vec<IngestProgressPayload>>> =
+            Arc::new(StdMutex::new(Vec::new()));
+        let emitted_clone = Arc::clone(&emitted);
+
+        let opts = IngestOptions {
+            audio_only: true,
+            cookies_path: None,
+            browser_cookies: None,
+            custom_user_agent: None,
+            custom_cache_dir: None,
+            task_id: Some("task_client_1795000_abc123".to_string()),
+        };
+
+        let manifest = run_vod_ingestion_pipeline(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string(),
+            Some(opts),
+            move |payload| {
+                if let Ok(mut guard) = emitted_clone.lock() {
+                    guard.push(payload);
+                }
+            },
+        )
+        .await
+        .expect("Ingestion pipeline must succeed in mock mode");
+
+        // Manifest and storage paths retain the validated VOD ID
+        assert_eq!(manifest.vod_id, "dQw4w9WgXcQ");
+        assert!(projects_dir
+            .join("dQw4w9WgXcQ")
+            .join("vod_manifest.json")
+            .exists());
+        assert!(cache_dir.join("dQw4w9WgXcQ_audio.m4a").exists());
+
+        // Every progress payload (downloading_audio + complete) must carry initial_task_id
+        let events = emitted.lock().unwrap().clone();
+        assert!(
+            events.len() >= 2,
+            "Expected downloading_audio and complete payloads, got {events:?}"
+        );
+        assert!(
+            events
+                .iter()
+                .all(|e| e.task_id == "task_client_1795000_abc123"),
+            "Every ingest:progress payload must carry caller task_id, got: {events:?}"
+        );
+        assert_eq!(events[0].stage, "downloading_audio");
+        let last = events.last().unwrap();
+        assert_eq!(last.stage, "complete");
+        assert!((last.percent - 100.0).abs() < 1e-4);
+
+        let _ = std::fs::remove_dir_all(&temp_root);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_start_vod_ingestion_pipeline_live_ytdlp_stdout_emits_initial_task_id() {
+        use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
+        use std::sync::{Arc, Mutex as StdMutex};
+
+        let _env_guard = ENV_LOCK.lock().await;
+        let nanos = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+        let temp_root = std::env::temp_dir().join(format!(
+            "neuroclip_ingest_ytdlp_taskid_{}_{nanos}",
+            std::process::id()
+        ));
+        let projects_dir = temp_root.join("projects");
+        let cache_dir = temp_root.join("cache");
+        std::fs::create_dir_all(&projects_dir).unwrap();
+        std::fs::create_dir_all(&cache_dir).unwrap();
+
+        let out_m4a = cache_dir.join("yt_vid_789_audio.m4a");
+        let ytdlp_cmd = temp_root.join("mock_ytdlp_progress.cmd");
+        std::fs::write(
+            &ytdlp_cmd,
+            format!(
+                "@echo off\r\n\
+                 echo [download]  100.0%% of 12.00MiB at 4.50MiB/s ETA 00:00\r\n\
+                 echo MOCK_AUDIO> \"{}\"\r\n\
+                 exit /b 0\r\n",
+                out_m4a.display()
+            ),
+        )
+        .unwrap();
+
+        let _proj_env =
+            ScopedEnvVar::set("NEUROCLIP_PROJECTS_DIR", &projects_dir.to_string_lossy());
+        let _cache_env = ScopedEnvVar::set("NEUROCLIP_CACHE_DIR", &cache_dir.to_string_lossy());
+        let _disk_env = ScopedEnvVar::set("NEUROCLIP_MOCK_DISK_FREE_MB", "20480");
+        let _meta_env = ScopedEnvVar::set(
+            "NEUROCLIP_MOCK_YTDLP_METADATA",
+            r#"{"id":"yt_vid_789","title":"Live Stdout Contract VOD","duration":60.0}"#,
+        );
+        let _ingest_remove = ScopedEnvVar::remove("NEUROCLIP_MOCK_INGEST_RUN");
+        let _ytdlp_env = ScopedEnvVar::set("NEUROCLIP_YTDLP_PATH", &ytdlp_cmd.to_string_lossy());
+
+        let emitted: Arc<StdMutex<Vec<IngestProgressPayload>>> =
+            Arc::new(StdMutex::new(Vec::new()));
+        let emitted_clone = Arc::clone(&emitted);
+
+        let opts = IngestOptions {
+            audio_only: true,
+            cookies_path: None,
+            browser_cookies: None,
+            custom_user_agent: None,
+            custom_cache_dir: None,
+            task_id: Some("task_live_stdout_456".to_string()),
+        };
+
+        let manifest = run_vod_ingestion_pipeline(
+            "https://www.youtube.com/watch?v=yt_vid_789".to_string(),
+            Some(opts),
+            move |payload| {
+                if let Ok(mut guard) = emitted_clone.lock() {
+                    guard.push(payload);
+                }
+            },
+        )
+        .await
+        .expect("Ingestion pipeline with mock yt-dlp stdout must succeed");
+
+        assert_eq!(manifest.vod_id, "yt_vid_789");
+        let events = emitted.lock().unwrap().clone();
+        assert_eq!(events.len(), 2, "Expected 2 events, got {events:?}");
+        assert_eq!(events[0].task_id, "task_live_stdout_456");
+        assert_eq!(events[0].stage, "downloading_audio");
+        assert_eq!(events[1].task_id, "task_live_stdout_456");
+        assert_eq!(events[1].stage, "complete");
+
+        let _ = std::fs::remove_dir_all(&temp_root);
     }
 }

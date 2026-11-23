@@ -79,6 +79,16 @@ export function resolveStudioVideoPath(options: {
   return normalizeFilesystemPath(storeVideoPath) ?? normalizeFilesystemPath(storeVideoSrc);
 }
 
+const ActiveSegmentCounter: React.FC = () => {
+  const activeCount = useStudioStore((s) => s.activeSegmentIds.length);
+  return (
+    <span className="flex items-center space-x-1 font-mono text-[11px] text-accent-neuro">
+      <Sparkles className="h-3 w-3" />
+      <span>{activeCount} đang active</span>
+    </span>
+  );
+};
+
 export interface SubtitleStudioProps {
   readonly videoSrc?: string | null | undefined;
   readonly videoPath?: string | null | undefined;
@@ -103,8 +113,6 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
   const aspectRatio = useStudioStore((s) => s.aspectRatio);
   const preset916 = useStudioStore((s) => s.preset916);
   const storeSegments = useStudioStore((s) => s.segments);
-  const activeSegmentIds = useStudioStore((s) => s.activeSegmentIds);
-  const currentTime = useStudioStore((s) => s.currentTime);
   const duration = useStudioStore((s) => s.duration);
   const setVideoSrcInStore = useStudioStore((s) => s.setVideoSrc);
   const setSegmentsInStore = useStudioStore((s) => s.setSegments);
@@ -228,7 +236,7 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
         </div>
 
         <div className="w-full max-w-3xl pt-4">
-          <TimelineScrubber currentTime={currentTime} duration={duration} />
+          <TimelineScrubber duration={duration} />
         </div>
       </div>
 
@@ -243,10 +251,7 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
             </h2>
           </div>
           <div className="flex items-center space-x-3 text-xs text-slate-400">
-            <span className="flex items-center space-x-1 font-mono text-[11px] text-accent-neuro">
-              <Sparkles className="h-3 w-3" />
-              <span>{activeSegmentIds.length} đang active</span>
-            </span>
+            <ActiveSegmentCounter />
             <button
               type="button"
               data-testid="studio-export-button"

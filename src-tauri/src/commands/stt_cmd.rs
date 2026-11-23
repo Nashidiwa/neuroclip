@@ -6,6 +6,7 @@ use tauri::{command, Emitter};
 
 use crate::commands::config_cmd::AppState;
 use crate::config::hardware::{probe_system_hardware, HardwareProfile};
+use crate::core::storage::validate_vod_id;
 use crate::error::{AppError, SttError};
 use crate::stt::whisper_sidecar::ProgressCallback;
 use crate::stt::{
@@ -28,14 +29,19 @@ pub async fn start_whisper_transcription(
     model_name: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
+    let clean_clip_id = validate_vod_id(&clip_id)
+        .map_err(AppError::Storage)?
+        .to_string();
     let chosen_model = model_name.unwrap_or_else(|| "base.en-q5_k".to_string());
     let audio_file_path = PathBuf::from(audio_path);
 
-    // Verify model existence and integrity unless mock mode is active
+    // Verify model existence and integrity on blocking threadpool unless mock mode is active
     let model_path = if std::env::var("NEUROCLIP_MOCK_WHISPER_OUTPUT").is_ok() {
         PathBuf::from("mock_model.bin")
     } else {
-        let model_info = verify_model(&chosen_model, None)?;
+        let model_info = tokio::task::spawn_blocking(move || verify_model(&chosen_model, None))
+            .await
+            .map_err(|e| AppError::Internal(format!("Model verification task panicked: {e}")))??;
         PathBuf::from(model_info.path)
     };
 
@@ -53,7 +59,7 @@ pub async fn start_whisper_transcription(
     })
         as Arc<dyn Fn(crate::stt::SttProgressPayload) + Send + Sync>);
 
-    run_whisper_transcription(&clip_id, &audio_file_path, &config, on_progress).await
+    run_whisper_transcription(&clean_clip_id, &audio_file_path, &config, on_progress).await
 }
 
 /// Verify the cryptographic integrity of a local Whisper `Q5_K` or `CTranslate2` model.
@@ -63,7 +69,9 @@ pub async fn start_whisper_transcription(
 #[command]
 pub async fn verify_stt_model(model_name: Option<String>) -> Result<ModelInfo, AppError> {
     let target = model_name.unwrap_or_else(|| "base.en-q5_k".to_string());
-    verify_model(&target, None)
+    tokio::task::spawn_blocking(move || verify_model(&target, None))
+        .await
+        .map_err(|e| AppError::Internal(format!("Model verification task panicked: {e}")))?
 }
 
 pub use crate::commands::export_cmd::{
@@ -128,6 +136,10 @@ pub async fn transcribe_highlight_clip(
     is_music_mode: bool,
     app: tauri::AppHandle,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
+    let clean_clip_id = validate_vod_id(&clip_id)
+        .map_err(AppError::Storage)?
+        .to_string();
+
     // Resolve Groq API key (passed parameter or env fallback)
     let resolved_key = api_key
         .filter(|k| !k.trim().is_empty())
@@ -135,8 +147,12 @@ pub async fn transcribe_highlight_clip(
         .or_else(|| std::env::var("NEUROCLIP_GROQ_API_KEY").ok())
         .ok_or(AppError::Stt(SttError::InvalidApiKey))?;
 
-    let path = Path::new(&audio_path);
-    if !path.exists() {
+    let path = PathBuf::from(&audio_path);
+    let path_check = path.clone();
+    let exists = tokio::task::spawn_blocking(move || path_check.exists())
+        .await
+        .map_err(|e| AppError::Internal(format!("Audio path check task panicked: {e}")))?;
+    if !exists {
         return Err(AppError::Stt(SttError::SidecarExecutionFailed {
             details: format!("Audio file not found at path: {audio_path}"),
         }));
@@ -144,15 +160,20 @@ pub async fn transcribe_highlight_clip(
 
     // Prepare audio to 16kHz mono buffer
     let prep_config = AudioPrepConfig::default();
-    let audio_buf = match prepare_audio_to_buffer(path, &prep_config, None).await {
+    let audio_buf = match prepare_audio_to_buffer(&path, &prep_config, None).await {
         Ok(buf) => buf,
         Err(AppError::Sidecar(crate::error::SidecarError::BinaryNotFound { .. })) => {
-            let file_bytes = std::fs::read(path).map_err(|e| {
-                AppError::Stt(SttError::SidecarExecutionFailed {
-                    details: format!("Failed reading audio file: {e}"),
-                })
-            })?;
-            PreparedAudioBuffer::from_wav_bytes(&file_bytes)?
+            let fallback_path = path.clone();
+            tokio::task::spawn_blocking(move || {
+                let file_bytes = std::fs::read(&fallback_path).map_err(|e| {
+                    AppError::Stt(SttError::SidecarExecutionFailed {
+                        details: format!("Failed reading audio file: {e}"),
+                    })
+                })?;
+                PreparedAudioBuffer::from_wav_bytes(&file_bytes)
+            })
+            .await
+            .map_err(|e| AppError::Internal(format!("WAV fallback read task panicked: {e}")))??
         }
         Err(e) => return Err(e),
     };
@@ -169,7 +190,7 @@ pub async fn transcribe_highlight_clip(
     });
 
     let app_for_chunk = app.clone();
-    let clip_id_for_chunk = clip_id.clone();
+    let clip_id_for_chunk = clean_clip_id.clone();
     let emit_chunk = move |idx: usize, seg: &TranscriptSegment| {
         let _ = app_for_chunk.emit(
             "stt:chunk",
@@ -182,7 +203,7 @@ pub async fn transcribe_highlight_clip(
     };
 
     transcribe_highlight_clip_with_client(
-        &clip_id,
+        &clean_clip_id,
         &audio_buf.samples_f32,
         audio_buf.sample_rate as usize,
         is_music_mode,
@@ -209,6 +230,7 @@ pub async fn start_faster_whisper_transcription_with_profile(
     on_progress: Option<ProgressCallback>,
     on_chunk: Option<ChunkCallback<'_>>,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
+    let clean_clip_id = validate_vod_id(clip_id).map_err(AppError::Storage)?;
     let req_model = model
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -254,7 +276,7 @@ pub async fn start_faster_whisper_transcription_with_profile(
 
     if let Some(ref cb) = on_progress {
         cb(SttProgressPayload {
-            task_id: clip_id.to_string(),
+            task_id: clean_clip_id.to_string(),
             stage: "starting".to_string(),
             percent: 0.0,
             eta_sec: None,
@@ -263,7 +285,8 @@ pub async fn start_faster_whisper_transcription_with_profile(
         });
     }
 
-    let container = run_faster_whisper_worker(clip_id, audio_path, &config, on_progress).await?;
+    let container =
+        run_faster_whisper_worker(clean_clip_id, audio_path, &config, on_progress).await?;
 
     if let Some(chunk_cb) = on_chunk {
         for (idx, seg) in container.segments.iter().enumerate() {
@@ -295,6 +318,10 @@ pub async fn start_faster_whisper_transcription(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<TranscriptSegmentsContainer, AppError> {
+    let clean_clip_id = validate_vod_id(&clip_id)
+        .map_err(AppError::Storage)?
+        .to_string();
+
     let cached_profile = {
         let guard = state.hardware_profile.read().map_err(|e| {
             AppError::Internal(format!("Failed to acquire hardware profile read lock: {e}"))
@@ -305,7 +332,9 @@ pub async fn start_faster_whisper_transcription(
     let hardware_profile = if let Some(profile) = cached_profile {
         profile
     } else {
-        let probed = probe_system_hardware()?;
+        let probed = tokio::task::spawn_blocking(probe_system_hardware)
+            .await
+            .map_err(|e| AppError::Internal(format!("Hardware probe task panicked: {e}")))??;
         let mut guard = state.hardware_profile.write().map_err(|e| {
             AppError::Internal(format!(
                 "Failed to acquire hardware profile write lock: {e}"
@@ -321,7 +350,7 @@ pub async fn start_faster_whisper_transcription(
     });
 
     let app_for_chunk = app.clone();
-    let clip_id_for_chunk = clip_id.clone();
+    let clip_id_for_chunk = clean_clip_id.clone();
     let emit_chunk = move |idx: usize, seg: &TranscriptSegment| {
         let _ = app_for_chunk.emit(
             "stt:chunk",
@@ -334,7 +363,7 @@ pub async fn start_faster_whisper_transcription(
     };
 
     start_faster_whisper_transcription_with_profile(
-        &clip_id,
+        &clean_clip_id,
         Path::new(&audio_path),
         model.as_deref(),
         quantization.as_deref(),
@@ -542,5 +571,28 @@ mod tests {
 
         let captured_chunks = chunks.lock().unwrap().clone();
         assert_eq!(captured_chunks, vec![(0, "Vedal stop coding".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn test_stt_profile_helper_rejects_traversal_clip_id() {
+        let profile = mock_4gb_hardware_profile();
+        for bad in ["../escape", "a\\b", "CON", ""] {
+            let res = start_faster_whisper_transcription_with_profile(
+                bad,
+                Path::new("unused.wav"),
+                None,
+                None,
+                None,
+                None,
+                &profile,
+                None,
+                None,
+            )
+            .await;
+            assert!(
+                matches!(res, Err(AppError::Storage(_))),
+                "Expected Storage validation error for clip_id {bad:?}, got {res:?}"
+            );
+        }
     }
 }

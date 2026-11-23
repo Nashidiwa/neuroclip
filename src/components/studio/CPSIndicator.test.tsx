@@ -395,6 +395,13 @@ describe('TASK-M4-23: CPSIndicator & Manual Time Borrowing Engine', () => {
       // With max clip duration = 6.4s (gap = 400ms to video end)
       const borrowWithClipEnd = calculateBorrowDuration(lastSeg, undefined, 6.4);
       expect(borrowWithClipEnd).toBeCloseTo(0.4, 3);
+
+      // CPSIndicator reflects store duration when clamping final segment tooltip
+      act(() => {
+        useStudioStore.getState().setDuration(6.4);
+      });
+      render(<CPSIndicator segment={lastSeg} />);
+      expect(screen.getByTestId('borrow-silence-btn-last_seg')).toHaveTextContent('(+400ms)');
     });
 
     it('falls back to English transcript when Vietnamese subtitle is empty', () => {

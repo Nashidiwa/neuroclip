@@ -845,6 +845,7 @@ pub fn prune_silence(samples: &[f32], config: &VadConfig) -> Result<VadPruneResu
 /// Split audio into natural pause chunks (< 20MB) without cutting words (`AC-14.3`, `UT-14.3`).
 ///
 /// Cuts are strictly positioned at the midpoint of silence gaps between speech segments.
+#[allow(clippy::too_many_lines)]
 pub fn split_into_natural_pause_chunks(
     samples: &[f32],
     speech_segments: &[SpeechSegment],
@@ -862,12 +863,25 @@ pub fn split_into_natural_pause_chunks(
     };
     let total_duration_ms = ((samples.len() as u64) * 1000) / (sr as u64);
 
-    // 16-bit PCM equivalent size (2 bytes per sample)
+    // 16-bit PCM equivalent size (2 bytes per sample), reserving budget for lookback overlap + 44B WAV header + rounding slack
+    let overlap_bytes = ((split_config.overlap_ms as usize)
+        .saturating_mul(sr)
+        .saturating_mul(2))
+    .div_ceil(1000)
+    .saturating_add(44)
+    .saturating_add(64);
+    let effective_max_bytes = if split_config.max_chunk_size_bytes > overlap_bytes {
+        split_config.max_chunk_size_bytes - overlap_bytes
+    } else {
+        split_config.max_chunk_size_bytes
+    };
     let bytes_per_ms = (sr * 2) as f64 / 1000.0;
-    let max_duration_by_size_ms = (split_config.max_chunk_size_bytes as f64 / bytes_per_ms) as u64;
+    let max_duration_by_size_ms =
+        ((effective_max_bytes as f64 / bytes_per_ms).floor() as u64).max(1);
     let max_chunk_duration_ms = split_config
         .max_chunk_duration_ms
-        .min(max_duration_by_size_ms);
+        .min(max_duration_by_size_ms)
+        .max(1);
 
     if total_duration_ms <= max_chunk_duration_ms {
         // Fits in a single chunk
@@ -898,6 +912,7 @@ pub fn split_into_natural_pause_chunks(
 
     while current_chunk_start_ms < total_duration_ms {
         let target_end_ms = current_chunk_start_ms + max_chunk_duration_ms;
+        let max_allowed_end_ms = current_chunk_start_ms + max_duration_by_size_ms;
 
         if target_end_ms >= total_duration_ms {
             // Final chunk
@@ -915,38 +930,39 @@ pub fn split_into_natural_pause_chunks(
             break;
         }
 
-        // Find the best pause midpoint within [current_chunk_start_ms + min_chunk, target_end_ms]
+        // Find the best pause midpoint within [current_chunk_start_ms + 1000, target_end_ms]
         let candidate_cuts: Vec<u64> = pause_midpoints
             .iter()
             .copied()
             .filter(|&pt| pt > current_chunk_start_ms + 1000 && pt <= target_end_ms)
             .collect();
 
-        let cut_point_ms = if let Some(&best_cut) = candidate_cuts.last() {
-            best_cut
+        let (cut_point_ms, is_natural_pause_cut) = if let Some(&best_cut) = candidate_cuts.last() {
+            (best_cut, true)
         } else {
-            // If no natural pause in window, search for earliest pause after target_end_ms
-            // to avoid cutting a word
-            let future_cuts: Vec<u64> = pause_midpoints
+            // Search for earliest natural pause after target_end_ms, bounded strictly by max_allowed_end_ms
+            // so a chunk never overflows max_chunk_size_bytes (e.g. >20MB/25MB) on long unbroken speech.
+            let earliest_bounded_future = pause_midpoints
                 .iter()
                 .copied()
-                .filter(|&pt| pt > target_end_ms)
-                .collect();
+                .find(|&pt| pt > target_end_ms && pt <= max_allowed_end_ms);
 
-            if let Some(&earliest_future) = future_cuts.first() {
-                earliest_future
+            if let Some(earliest_future) = earliest_bounded_future {
+                (earliest_future, true)
             } else {
-                target_end_ms.min(total_duration_ms)
+                (max_allowed_end_ms.min(total_duration_ms), false)
             }
         };
 
-        // Verification invariant: cut_point_ms must never fall strictly inside an active speech segment
-        for seg in speech_segments {
-            if cut_point_ms > seg.start_ms && cut_point_ms < seg.end_ms {
-                return Err(AppError::Stt(SttError::VadProcessingFailed(format!(
-                    "AC-14.3 Invariant violation: cut point {cut_point_ms}ms falls inside speech segment [{}ms, {}ms]",
-                    seg.start_ms, seg.end_ms
-                ))));
+        if is_natural_pause_cut {
+            // Verification invariant: natural pause cut must never fall strictly inside an active speech segment
+            for seg in speech_segments {
+                if cut_point_ms > seg.start_ms && cut_point_ms < seg.end_ms {
+                    return Err(AppError::Stt(SttError::VadProcessingFailed(format!(
+                        "AC-14.3 Invariant violation: cut point {cut_point_ms}ms falls inside speech segment [{}ms, {}ms]",
+                        seg.start_ms, seg.end_ms
+                    ))));
+                }
             }
         }
 
@@ -967,6 +983,20 @@ pub fn split_into_natural_pause_chunks(
     }
 
     Ok(chunks)
+}
+
+/// Asynchronous wrapper running Silero VAD speech segmentation on the blocking threadpool (`CONVENTIONS.md` §2.2).
+pub async fn detect_speech_segments_async(
+    samples: Vec<f32>,
+    vad_config: VadConfig,
+) -> Result<Vec<SpeechSegment>, AppError> {
+    tokio::task::spawn_blocking(move || detect_speech_segments(&samples, &vad_config))
+        .await
+        .map_err(|e| {
+            AppError::Stt(SttError::VadProcessingFailed(format!(
+                "Tokio task execution failed during VAD speech detection: {e}"
+            )))
+        })?
 }
 
 /// Asynchronous wrapper dispatching CPU-heavy computation to blocking threadpool (`CONVENTIONS.md` §2.2).

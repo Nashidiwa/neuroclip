@@ -3,7 +3,7 @@
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
 **Phiên bản:** 2.4.0 (Phase 4: Implementation & Verification — M4.1–M4.7 Completed: TASK-M4-01..M4-26; Stabilization P0–P2 Done)  
-**Ngày cập nhật:** 2026-11-22  
+**Ngày cập nhật:** 2026-11-23  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`.
 
@@ -916,7 +916,7 @@
   - `src/utils/text_wrap.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Áp dụng thuật toán ngắt dòng bảo toàn cấu trúc ngữ pháp:
-    - Giới hạn tối đa $38 - 42\text{ ký tự/dòng}$, tối đa 2 dòng trên màn hình.
+    - Giới hạn tối đa $38 - 42\text{ ký tự/dòng}$ ($26\text{ ký tự/dòng}$ với preset dọc `9:16`); tham số `max_lines = 2` đóng vai trò **soft target** (ưu tiên bảo toàn trọn vẹn nội dung tiếng Việt và chỉ số CPS, cho phép $\ge 3$ dòng khi câu dài thay vì tự ý cắt/split làm sai lệch segment).
     - Không bao giờ ngắt đôi một từ ghép tiếng Việt ở cuối dòng (cấm ngắt *"bánh / mì"*, *"trí / tuệ"*).
   - Tính toán chỉ số tốc độ đọc CPS: $\text{CPS} = \text{Ký tự} / \text{Thời lượng (s)}$.
   - Áp dụng thuật toán **Mượn khoảng lặng (Time Borrowing)**:
@@ -1440,6 +1440,7 @@
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Nối hành động chọn/cắt clip trên `HighlightViewer.tsx` trong `App.tsx` với lệnh IPC `sliceVideoSegment` (`src/services/ipc/slice.ts`), hiển thị tiến độ qua `slice:progress` và hỗ trợ hủy (`cancelSliceVideoSegment`).
   - Khi cắt hoàn tất (`SliceResult.clipPath`), gọi `useStudioStore.getState().setVideoSrc(toLocalAssetUrl(clipPath), clipPath)` để nạp đồng thời `asset://` stream URL (`videoSrc`) và raw OS `videoPath` (`video_file_path`), đồng bộ segments từ `useTranscriptStore` vào `useStudioStore`, và chuyển sang tab `studio` (`<SubtitleStudio />`).
+  - *(Bổ sung theo Quyết định PO `2026-11-23`)*: Triển khai lệnh hủy trích xuất chat (`cancel_chat_extraction` trong `src-tauri/src/commands/chat_cmd.rs` dùng active token registry) và đánh giá chuyển `src-tauri/src/ingestion/twitch_gql.rs` từ subprocess `curl.exe` sang `reqwest` async HTTP client (kiểm chứng tương thích TLS/anti-bot với Twitch GQL); đồng thời nâng cấp đường dẫn xuất mặc định trên `ExportModal.tsx` (dùng `AppConfig` / thư mục cạnh video nguồn hoặc `tauri-plugin-dialog`) và chuẩn hóa xử lý relative path trong `premiere_xml.rs::path_to_file_url`.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: `HighlightCluster` + `VodManifest`.
   - Đầu ra: `SliceResult` (`clipPath`) $\rightarrow$ `useStudioStore` (`videoSrc`, `videoPath`, `segments`).
@@ -1449,6 +1450,7 @@
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
   - [ ] **AC-29B.1:** Click "Cắt Clip" trên `HighlightViewer` gọi đúng `sliceVideoSegment`, nhận `SliceResult.clipPath`, cập nhật `useStudioStore` (`videoSrc = asset://...`, `videoPath = OS path`) và mở tab `SubtitleStudio` mà không cần thao tác thủ công.
   - [ ] **AC-29B.2:** Mở `ExportModal` từ `SubtitleStudio` sau khi cắt từ `HighlightViewer` truyền đúng raw OS `video_file_path` (tuyệt đối không truyền `asset://` URL).
+  - [ ] **AC-29B.3 (Chat Cancel & Export Dialog Prep):** Lệnh `cancel_chat_extraction` hủy được tiến trình trích xuất chat đang chạy qua `chat:progress`; đánh giá xong phương án `reqwest` cho `twitch_gql.rs` và nâng cấp đường dẫn xuất mặc định không hardcode `C:\NeuroClip\export\`.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Frontend Pipeline Integration Test
   - *Unit & Integration Test Cases:*
@@ -1553,6 +1555,7 @@
   - `installer/nsis/hooks.nsi`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Cấu hình đóng gói bộ cài đặt chính thức cho Windows 10/11 64-bit sử dụng định dạng NSIS (`.exe`) và WiX (`.msi`).
+  - *(Bổ sung theo Quyết định PO `2026-11-23`)*: Thay `"csp": null` trong `src-tauri/tauri.conf.json` bằng chính sách **Content Security Policy (CSP)** tường minh cho WebView2 release (cho phép `'self'`, `asset:`, `http://asset.localhost`, `blob:`, `data:` cần cho Tailwind và `<video>`) và kiểm thử phát video `<video>` thực tế trên Windows WebView2 trước khi phát hành v1.
   - Đóng gói sẵn các file thực thi phụ trợ portable: `ffmpeg.exe` và `yt-dlp.exe` vào thư mục tài nguyên của app (`resources/sidecars/`).
   - Thiết lập icon ứng dụng (Neuro-sama icon đầy đủ các kích thước 32x32, 128x128, 256x256, 512x512).
   - Viết kịch bản NSIS hook:
@@ -1579,6 +1582,7 @@
     - [ ] **AC-32.1:** Kích thước bộ cài đặt NSIS đóng gói hoàn chỉnh $\le 120\text{MB}$.
     - [ ] **AC-32.2:** Cài đặt và gỡ cài đặt thành công trên máy Windows 10/11 sạch không cần quyền Administrator đặc biệt.
     - [ ] **AC-32.3:** Khởi chạy app ngay sau khi cài đặt hiển thị đúng Onboarding Wizard trong $\le 800\text{ms}$.
+    - [ ] **AC-32.4 (WebView2 CSP Release Gate):** `src-tauri/tauri.conf.json` cấu hình CSP tường minh (không còn `"csp": null`) và kiểm chứng phát video `asset://` + render Tailwind UI chạy bình thường trên bản build release Windows.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     npm run tauri build
@@ -1697,15 +1701,15 @@ npm run format:check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 npm run lint
 
-# 3. Kiểm tra kiểu tĩnh TypeScript (Zero-any) & Build Production Vite
+# 3. Kiểm tra kiểu tĩnh TypeScript (Zero-any; 92 files verified) & Build Production Vite (Vite 5.4)
 npm run typecheck
 npm run build
 
-# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (26 active test binaries [1 lib + 25 integration; [[bin]] test = false], 428 tests, song song)
+# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (27 active test binaries [1 lib: 239 + 26 integration: 231; [[bin]] test = false], 470 tests, song song)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
-# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend
-npm run test:vitest   # (hoặc npm run test:run — 36 files Vitest, 677 tests)
+# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend (tổng cộng 1,312 bài kiểm thử toàn repo: 470 Rust + 705 Vitest + 137 Node)
+npm run test:vitest   # (hoặc npm run test:run — 37 files Vitest, 705 tests)
 npm test              # Node Native Test Runner (53 suites, 137 tests: src/test/suite.node.test.ts)
 
 # 6. (Target M4-30) Chạy bài kiểm thử tích hợp & E2E Pipeline giả lập

@@ -66,11 +66,103 @@ struct GqlRequestPayload<'a> {
     extensions: GqlExtensions<'a>,
 }
 
+/// Extract the clean Twitch VOD ID from a URL, `vod_<digits>`, or `v<digits>` without
+/// truncating synthetic `vod_*` prefixes into `od_*`.
+#[must_use]
+pub fn extract_twitch_vod_id(vod_id: &str) -> &str {
+    const TWITCH_URL_PREFIXES: &[&str] = &[
+        "https://www.twitch.tv/videos/",
+        "http://www.twitch.tv/videos/",
+        "https://m.twitch.tv/videos/",
+        "http://m.twitch.tv/videos/",
+        "https://twitch.tv/videos/",
+        "http://twitch.tv/videos/",
+    ];
+
+    let trimmed = vod_id.trim();
+    let without_url = TWITCH_URL_PREFIXES
+        .iter()
+        .find_map(|prefix| {
+            trimmed
+                .get(..prefix.len())
+                .filter(|head| head.eq_ignore_ascii_case(prefix))
+                .map(|_| &trimmed[prefix.len()..])
+        })
+        .unwrap_or(trimmed);
+
+    let before_query = without_url
+        .split(['?', '#', '/'])
+        .next()
+        .unwrap_or(without_url);
+
+    if let Some(rest) = before_query.strip_prefix("vod_") {
+        if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+            return rest;
+        }
+        return before_query;
+    }
+
+    if let Some(rest) = before_query.strip_prefix('v') {
+        if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+            return rest;
+        }
+    }
+
+    before_query
+}
+
+async fn execute_twitch_gql_curl(
+    json_body: String,
+    cancel_token: &CancellationToken,
+) -> Result<Option<Vec<u8>>, AppError> {
+    // Execute request via Windows-native curl.exe subprocess
+    let mut cmd = Command::new("curl.exe");
+    cmd.args([
+        "-s",
+        "--max-time",
+        "15",
+        "-X",
+        "POST",
+        "-H",
+        &format!("Client-ID: {TWITCH_CLIENT_ID}"),
+        "-H",
+        "Content-Type: application/json",
+        "-H",
+        &format!("User-Agent: {TWITCH_USER_AGENT}"),
+        "-d",
+        &json_body,
+        TWITCH_GQL_ENDPOINT,
+    ]);
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| AppError::Internal(format!("Failed to spawn curl for Twitch GQL: {e}")))?;
+    assign_child_to_job_guard(&child);
+
+    let output = tokio::select! {
+        biased;
+        () = cancel_token.cancelled() => {
+            return Err(AppError::TaskCancelled);
+        }
+        res = child.wait_with_output() => {
+            res.map_err(|e| AppError::Internal(format!("Curl process execution failed: {e}")))?
+        }
+    };
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    Ok(Some(output.stdout))
+}
+
 /// Download Twitch VOD chat replay using Twitch GQL cursor pagination.
 ///
 /// If chat is missing, deleted, or expired, returns `ERR_INGEST_CHAT_UNAVAILABLE`
 /// within <= 200ms to allow soft fallback (ERR-05).
-#[allow(clippy::too_many_lines)]
 pub async fn fetch_twitch_vod_chat_gql<F>(
     vod_id: &str,
     output_ndjson_path: &Path,
@@ -79,6 +171,29 @@ pub async fn fetch_twitch_vod_chat_gql<F>(
 ) -> Result<u64, AppError>
 where
     F: Fn(ChatProgressPayload) + Send + Sync + 'static,
+{
+    fetch_twitch_vod_chat_gql_with_fetcher(
+        vod_id,
+        output_ndjson_path,
+        &cancel_token,
+        progress_callback,
+        |json_body| execute_twitch_gql_curl(json_body, &cancel_token),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_lines)]
+async fn fetch_twitch_vod_chat_gql_with_fetcher<F, Fetch, FetchFut>(
+    vod_id: &str,
+    output_ndjson_path: &Path,
+    cancel_token: &CancellationToken,
+    progress_callback: F,
+    mut fetch_page: Fetch,
+) -> Result<u64, AppError>
+where
+    F: Fn(ChatProgressPayload) + Send + Sync,
+    Fetch: FnMut(String) -> FetchFut,
+    FetchFut: std::future::Future<Output = Result<Option<Vec<u8>>, AppError>>,
 {
     // Fast mock check for unit / integration tests
     if std::env::var("NEUROCLIP_MOCK_CHAT_UNAVAILABLE").is_ok() {
@@ -105,14 +220,13 @@ where
         }
     }
 
-    // Clean vod_id (strip prefix if user entered full URL or v12345)
-    let clean_vod_id = vod_id
-        .trim_start_matches("https://www.twitch.tv/videos/")
-        .trim_start_matches("https://twitch.tv/videos/")
-        .trim_start_matches('v')
-        .split('?')
-        .next()
-        .unwrap_or(vod_id);
+    // Clean vod_id (strip prefix if user entered full URL, vod_<digits>, or v<digits>)
+    let clean_vod_id = extract_twitch_vod_id(vod_id);
+    if clean_vod_id.is_empty() {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "Twitch VOD ID cannot be empty".to_string(),
+        )));
+    }
 
     let out_file = File::create(output_ndjson_path).map_err(|e| {
         AppError::Storage(StorageError::DirectoryCreationFailed {
@@ -151,44 +265,14 @@ where
         let json_body = serde_json::to_string(&payload)
             .map_err(|e| AppError::Internal(format!("Failed to serialize GQL payload: {e}")))?;
 
-        // Execute request via Windows-native curl.exe subprocess
-        let mut cmd = Command::new("curl.exe");
-        cmd.args([
-            "-s",
-            "--max-time",
-            "15",
-            "-X",
-            "POST",
-            "-H",
-            &format!("Client-ID: {TWITCH_CLIENT_ID}"),
-            "-H",
-            "Content-Type: application/json",
-            "-H",
-            &format!("User-Agent: {TWITCH_USER_AGENT}"),
-            "-d",
-            &json_body,
-            TWITCH_GQL_ENDPOINT,
-        ]);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-
-        let child = cmd
-            .spawn()
-            .map_err(|e| AppError::Internal(format!("Failed to spawn curl for Twitch GQL: {e}")))?;
-        assign_child_to_job_guard(&child);
-
-        let output = child
-            .wait_with_output()
-            .await
-            .map_err(|e| AppError::Internal(format!("Curl process execution failed: {e}")))?;
-
-        if !output.status.success() {
+        let Some(stdout_bytes) = fetch_page(json_body).await? else {
             if page_index == 0 {
                 return Err(AppError::Ingestion(IngestError::ChatReplayUnavailable));
             }
             break;
-        }
+        };
 
-        let response_str = String::from_utf8_lossy(&output.stdout);
+        let response_str = String::from_utf8_lossy(&stdout_bytes);
         if response_str.trim().is_empty() {
             if page_index == 0 {
                 return Err(AppError::Ingestion(IngestError::ChatReplayUnavailable));
@@ -267,7 +351,7 @@ where
         page_index = page_index.saturating_add(1);
 
         progress_callback(ChatProgressPayload {
-            task_id: clean_vod_id.to_string(),
+            task_id: vod_id.to_string(),
             stage: "extracting_twitch_chat".to_string(),
             percent: 0.0, // unknown total length during stream
             messages_extracted: messages_count,
@@ -288,7 +372,7 @@ where
     }
 
     progress_callback(ChatProgressPayload {
-        task_id: clean_vod_id.to_string(),
+        task_id: vod_id.to_string(),
         stage: "completed".to_string(),
         percent: 100.0,
         messages_extracted: messages_count,
@@ -296,4 +380,139 @@ where
     });
 
     Ok(messages_count)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_twitch_vod_id_preserves_vod_prefix_and_strips_digits() {
+        assert_eq!(extract_twitch_vod_id("vod_123456"), "123456");
+        assert_eq!(extract_twitch_vod_id("vod_test_123"), "vod_test_123");
+        assert_eq!(extract_twitch_vod_id("v987654"), "987654");
+        assert_eq!(extract_twitch_vod_id("123456"), "123456");
+        assert_eq!(
+            extract_twitch_vod_id("https://www.twitch.tv/videos/2198765432?t=1h2m"),
+            "2198765432"
+        );
+        assert_eq!(
+            extract_twitch_vod_id("https://twitch.tv/videos/v555666"),
+            "555666"
+        );
+        assert_eq!(
+            extract_twitch_vod_id("https://m.twitch.tv/videos/123456"),
+            "123456"
+        );
+        assert_eq!(
+            extract_twitch_vod_id("http://m.twitch.tv/videos/v777888?t=5m"),
+            "777888"
+        );
+        assert_eq!(
+            extract_twitch_vod_id("HTTP://WWW.TWITCH.TV/videos/123456"),
+            "123456"
+        );
+        assert_eq!(
+            extract_twitch_vod_id("HTTPS://M.TWITCH.TV/VIDEOS/987654#chat"),
+            "987654"
+        );
+        assert_eq!(extract_twitch_vod_id("https://www.twitch.tv/videos/"), "");
+        assert_eq!(extract_twitch_vod_id("https://m.twitch.tv/videos/"), "");
+        assert_eq!(extract_twitch_vod_id("video_custom"), "video_custom");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_twitch_vod_chat_gql_cancelled_returns_task_cancelled() {
+        let temp_out = std::env::temp_dir().join(format!(
+            "neuroclip_twitch_cancel_{}.ndjson",
+            std::process::id()
+        ));
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let start = std::time::Instant::now();
+        let res = fetch_twitch_vod_chat_gql("vod_123456", &temp_out, token, |_| {}).await;
+        let _ = std::fs::remove_file(&temp_out);
+
+        assert!(matches!(res, Err(AppError::TaskCancelled)));
+        assert!(start.elapsed().as_millis() < 200);
+    }
+
+    #[tokio::test]
+    async fn test_live_gql_pagination_emits_caller_vod_id_while_querying_clean_id() {
+        use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
+        use std::sync::{Arc, Mutex};
+
+        let _env_guard = ENV_LOCK.lock().await;
+        let _unavail_clear = ScopedEnvVar::remove("NEUROCLIP_MOCK_CHAT_UNAVAILABLE");
+        let _file_clear = ScopedEnvVar::remove("NEUROCLIP_MOCK_TWITCH_CHAT_FILE");
+
+        for (caller_vod_id, expected_clean_id) in [("vod_123456", "123456"), ("v987654", "987654")]
+        {
+            let temp_out = std::env::temp_dir().join(format!(
+                "neuroclip_twitch_live_taskid_{caller_vod_id}_{}.ndjson",
+                std::process::id()
+            ));
+            let cancel = CancellationToken::new();
+            let payloads: Arc<Mutex<Vec<ChatProgressPayload>>> = Arc::new(Mutex::new(Vec::new()));
+            let payloads_clone = Arc::clone(&payloads);
+            let captured_requests: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+            let captured_requests_clone = Arc::clone(&captured_requests);
+            let page_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+            let count = fetch_twitch_vod_chat_gql_with_fetcher(
+                caller_vod_id,
+                &temp_out,
+                &cancel,
+                move |p| {
+                    payloads_clone.lock().unwrap().push(p);
+                },
+                move |body| {
+                    let reqs = Arc::clone(&captured_requests_clone);
+                    let counter = Arc::clone(&page_counter);
+                    async move {
+                        reqs.lock().unwrap().push(body);
+                        let idx = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        let response = if idx == 0 {
+                            r#"[{"data":{"video":{"comments":{"edges":[{"cursor":"cur_page_1","node":{"id":"m1","contentOffsetSeconds":12.5}}],"pageInfo":{"hasNextPage":true}}}}}]"#
+                        } else {
+                            r#"[{"data":{"video":{"comments":{"edges":[{"cursor":"cur_page_2","node":{"id":"m2","contentOffsetSeconds":45.0}}],"pageInfo":{"hasNextPage":false}}}}}]"#
+                        };
+                        Ok(Some(response.as_bytes().to_vec()))
+                    }
+                },
+            )
+            .await
+            .expect("Live GQL pagination mock must succeed");
+
+            assert_eq!(count, 2);
+
+            let requests = captured_requests.lock().unwrap();
+            assert_eq!(requests.len(), 2);
+            for req_body in requests.iter() {
+                let parsed: serde_json::Value = serde_json::from_str(req_body).unwrap();
+                assert_eq!(
+                    parsed[0]["variables"]["videoID"],
+                    serde_json::Value::String(expected_clean_id.to_string()),
+                    "Twitch GQL API request must continue sending clean_vod_id"
+                );
+            }
+
+            let emitted = payloads.lock().unwrap();
+            assert_eq!(emitted.len(), 3);
+            assert!(
+                emitted.iter().all(|p| p.task_id == caller_vod_id),
+                "All live chat:progress payloads must carry caller vod_id ({caller_vod_id}), got: {emitted:?}"
+            );
+            assert_eq!(emitted[0].stage, "extracting_twitch_chat");
+            assert_eq!(emitted[1].stage, "extracting_twitch_chat");
+            assert_eq!(emitted[2].stage, "completed");
+            assert!((emitted[2].percent - 100.0).abs() < 1e-4);
+
+            let written = std::fs::read_to_string(&temp_out).unwrap();
+            assert_eq!(written.lines().count(), 2);
+            let _ = std::fs::remove_file(&temp_out);
+        }
+    }
 }

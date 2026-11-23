@@ -208,6 +208,16 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
       expect(active.length).toBeGreaterThan(0);
       expect(elapsed).toBeLessThan(5.0); // O(log N + K) executes in well under 5ms
     });
+
+    it('should keep long segments (> 60s) active past 60s lookback', () => {
+      const segments: TranscriptSegment[] = [
+        makeSegment('long_1', 0.0, 120.0, 'neuro', 'Long singing caption', 'Phụ đề hát dài'),
+        makeSegment('short_2', 80.0, 85.0, 'vedal', 'Short interjection', 'Câu xen vào'),
+      ];
+
+      const activeAt90 = findActiveSegments(segments, 90.0);
+      expect(activeAt90.map((s) => s.segmentId)).toEqual(['long_1']);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -412,6 +422,38 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
         fireEvent.click(nudgeForwardBtn);
       });
       expect(useStudioStore.getState().currentTime).toBe(20.0);
+    });
+
+    it('seeks to effectiveCurrentTime (not stale 0 or prior scrubTime) on pointerDown -> pointerUp without onChange', () => {
+      const onSeek = vi.fn();
+      const { rerender } = render(
+        <TimelineScrubber currentTime={42.0} duration={120.0} onSeek={onSeek} />,
+      );
+
+      const slider = screen.getByTestId('timeline-slider') as HTMLInputElement;
+
+      // Click without dragging: pointerDown -> pointerUp without intermediate change event
+      act(() => {
+        fireEvent.pointerDown(slider);
+        fireEvent.pointerUp(slider);
+      });
+      expect(onSeek).toHaveBeenLastCalledWith(42.0);
+
+      // Scrub to 80.0 and release
+      act(() => {
+        fireEvent.pointerDown(slider);
+        fireEvent.change(slider, { target: { value: '80' } });
+        fireEvent.pointerUp(slider);
+      });
+      expect(onSeek).toHaveBeenLastCalledWith(80.0);
+
+      // Advance playback to 55.0, then click without dragging again: must seek to 55.0, not stale 80.0
+      rerender(<TimelineScrubber currentTime={55.0} duration={120.0} onSeek={onSeek} />);
+      act(() => {
+        fireEvent.pointerDown(slider);
+        fireEvent.pointerUp(slider);
+      });
+      expect(onSeek).toHaveBeenLastCalledWith(55.0);
     });
   });
 

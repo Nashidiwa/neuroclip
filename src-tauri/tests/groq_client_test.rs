@@ -790,3 +790,72 @@ async fn test_m4_15_transcribe_samples_with_progress_multi_chunk_and_camelcase_j
     assert_eq!(json_val["totalChunks"], 2);
     assert!(json_val.get("clip_id").is_none());
 }
+
+/// Regression test for bounded future cut & overlap budget on >10.9 min continuous speech
+#[test]
+fn test_continuous_12min_speech_respects_safe_chunk_bytes_with_overlap() {
+    let sample_rate = 16_000usize;
+    // 13 minutes total: continuous speech from 10s to 12m10s (730_000ms), then pause, then speech
+    let total_samples = 780 * sample_rate;
+    let dummy_samples = vec![0.0f32; total_samples];
+    let speech_segments = vec![
+        SpeechSegment {
+            start_ms: 10_000,
+            end_ms: 730_000,
+        },
+        SpeechSegment {
+            start_ms: 735_000,
+            end_ms: 770_000,
+        },
+    ];
+    let split_config = ChunkSplitConfig {
+        max_chunk_size_bytes: SAFE_CHUNK_BYTES,
+        max_chunk_duration_ms: 600_000,
+        overlap_ms: DEFAULT_OVERLAP_MS,
+    };
+
+    let chunks = split_into_natural_pause_chunks(
+        &dummy_samples,
+        &speech_segments,
+        &split_config,
+        sample_rate,
+    )
+    .expect("Continuous speech chunking must succeed without size overflow");
+
+    assert!(chunks.len() >= 2);
+    for (idx, chunk) in chunks.iter().enumerate() {
+        let start_with_overlap = if idx == 0 {
+            0u64
+        } else {
+            chunk.start_ms.saturating_sub(split_config.overlap_ms)
+        };
+        let duration_ms = chunk.end_ms - start_with_overlap;
+        let wav_bytes_estimate = 44 + ((duration_ms as usize) * sample_rate * 2) / 1000;
+        assert!(
+            wav_bytes_estimate <= SAFE_CHUNK_BYTES,
+            "Chunk {idx} with overlap + WAV header ({wav_bytes_estimate} B) exceeded SAFE_CHUNK_BYTES ({SAFE_CHUNK_BYTES} B)"
+        );
+    }
+}
+
+/// Verify transcribe_samples_with_progress handles >20MB continuous speech via async VAD without PayloadTooLarge
+#[tokio::test]
+async fn test_groq_transcribe_samples_continuous_speech_no_payload_too_large() {
+    let harness = MockHttpHarness::new();
+    let client = GroqClient::new("gsk_continuous_test_123456".to_string())
+        .expect("Client creation must succeed")
+        .with_mock_handler(harness.to_handler());
+
+    // 11.5 minutes of constant voiced-like non-zero signal (>20MB WAV)
+    let sample_rate = 16_000usize;
+    let samples = vec![0.25f32; sample_rate * 690];
+    let res = client
+        .transcribe_samples_with_progress("clip_continuous_11m", &samples, sample_rate, false, None)
+        .await;
+
+    assert!(
+        res.is_ok(),
+        "Continuous >20MB speech must chunk cleanly without PayloadTooLarge: {res:?}"
+    );
+    assert!(harness.request_count() >= 2);
+}

@@ -1,4 +1,4 @@
-# NeuroClip — AI Subtitle Studio
+# NeuroClip — AI Clip & Subtitle Studio
 
 <div align="center">
 
@@ -16,7 +16,7 @@
 [![React: v18.3](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests: 677 Vitest + 137 Node + 428 Rust](https://img.shields.io/badge/Tests-677%20Vitest%20%2B%20137%20Node%20%2B%20428%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
+[![Tests: 705 Vitest + 137 Node + 470 Rust](https://img.shields.io/badge/Tests-705%20Vitest%20%2B%20137%20Node%20%2B%20470%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
 [![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(26%2F33%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
@@ -53,7 +53,7 @@ Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô h�
 
 ```text
 [██████████████████████████░░░░░░░] 26 / 33 Tasks Hoàn thành (78.8% v1 Core)
-677 Vitest Tests Passing (36 files) • 137 Node Native Runner Tests Passing (53 suites) • 428 Rust Tests Passing (26 active binaries) • Zero Unhandled Panics
+705 Vitest Tests Passing (37 files) • 137 Node Native Runner Tests Passing (53 suites) • 470 Rust Tests Passing (27 active binaries) • Zero Unhandled Panics
 ```
 
 Toàn bộ 26 tasks thuộc 7 Milestones đầu tiên (`M4.1`–`M4.7`) đã hoàn thành và vượt qua toàn bộ cổng kiểm định tự động (cùng đợt Stabilization `P0`–`P2`):
@@ -289,9 +289,9 @@ graph TD
 | **Frontend Framework** | [React 18.3](https://react.dev/), [TypeScript 5.6](https://www.typescriptlang.org/) (Strict Mode) | Giao diện người dùng SPA hiện đại, kiểm tra kiểu nghiêm ngặt (Zero-any). |
 | **UI & Styling** | [Tailwind CSS 3.4](https://tailwindcss.com/), `clsx`, `tailwind-merge`, [Lucide Icons](https://lucide.dev/) | Hệ thống thiết kế Dark Theme Neuro-sama chuẩn **PO Option 1** (`#FFB6C1`, `#FF0055`, `#98FB98`, `#FFD700`, `#87CEEB`) với Acrylic/Mica backdrop. |
 | **State Management** | `src/stores/createStore.ts` (`React.useSyncExternalStore`, API tương thích [Zustand](https://github.com/pmndrs/zustand)) | Quản lý 8 stores nhẹ (kèm `useStudioStore`), memoized selector, chống race condition. |
-| **Build & Tooling** | [Vite 4.3](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier + `prettier-plugin-tailwindcss` | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
+| **Build & Tooling** | [Vite 5.4](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier + `prettier-plugin-tailwindcss` | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
 | **Pure Rust Neural VAD** | `tract-onnx` v0.21 + `silero_vad_16k.onnx` | Suy luận Silero VAD đồ thị tĩnh 16kHz thuần Rust (không cần DLL C++), kèm DSP fallback an toàn (`ADR-008`). |
-| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | **1,242 bài kiểm tra tự động** (**677 Vitest** [36 files] + **137 Node** [53 suites] + **428 Cargo Rust tests** [26 active binaries: 1 lib + 25 integration]). |
+| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | **1,312 bài kiểm tra tự động** (**705 Vitest** [37 files] + **137 Node** [53 suites] + **470 Cargo Rust tests** [27 active binaries: 1 lib + 26 integration]). |
 | **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest), `faster-whisper-worker`, `whisper.cpp` (`main.exe`) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch/YouTube, bóc băng giọng nói local INT8 / Q5_K. |
 
 ### Data Contracts & JSON Schemas (SSOT):
@@ -344,13 +344,13 @@ Dự án áp dụng quy chuẩn kiểm thử nghiêm ngặt, bao gồm cả các
 # Chạy bộ test hợp đồng & AST bằng Node.js Native Test Runner (137 tests, 53 suites)
 npm test
 
-# Chạy toàn bộ 677 bài kiểm thử bằng Vitest (36 files: Unit, Component, Adversarial)
+# Chạy toàn bộ 705 bài kiểm thử bằng Vitest (37 files: Unit, Component, Adversarial)
 npm run test:vitest   # hoặc: npm run test:run
 
-# Chạy toàn bộ 428 bài kiểm thử Rust backend song song (26 active binaries: 1 lib + 25 integration)
+# Chạy toàn bộ 470 bài kiểm thử Rust backend song song (27 active binaries: 1 lib + 26 integration)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
-# Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant) & build Vite
+# Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant: 92 files) & build Vite
 npm run typecheck
 npm run build
 
@@ -402,7 +402,7 @@ neuroclip/
 │   ├── styles/                 # Theme tokens (PO Option 1), globals.css, theme.css, theme.ts
 │   ├── types/                  # TypeScript Data Contracts (chat, export, highlight, range_slicer, transcript, translation)
 │   ├── utils/                  # text_wrap.ts (line wrap & CPS), cps.ts (Unicode CPS calculation & time borrowing assistant)
-│   ├── test/                   # Test Suites (Vitest 677 tests, Node runner 137 tests, typecheck.node.ts)
+│   ├── test/                   # Test Suites (Vitest 705 tests / 37 files, Node runner 137 tests / 53 suites, typecheck.node.ts)
 │   ├── App.tsx                 # Acrylic shell + 4-tab minimal workspace (overview / ingestion / highlights / studio)
 │   └── main.tsx                # Root mount bọc <GlobalErrorBoundary>
 ├── src-tauri/                  # BACKEND RUST CORE (TAURI V2 NATIVE)
@@ -423,7 +423,7 @@ neuroclip/
 │   │   ├── translation/        # `gemini_client.rs`, `prompt_builder.rs` (`Theatrical Framing`), `lore_dictionary.rs` (12 Swarm terms), `pronoun_matrix.rs` (PO Option 1), `diarization.rs` (Hybrid 3-stage), `line_wrapper.rs`, `cps_optimizer.rs` (Time Borrowing)
 │   │   ├── lib.rs              # Clippy denies/pedantic, đăng ký `asset://` & 43 IPC handlers
 │   │   └── main.rs             # Điểm vào thực thi ứng dụng Windows desktop
-│   ├── tests/                  # 25 Integration & adversarial test suites + `fixtures/silero_test.wav`
+│   ├── tests/                  # 26 Integration & adversarial test suites (gồm `remediation_m4_test.rs`) + `fixtures/silero_test.wav`
 │   ├── build.rs                # Tauri build script
 │   ├── Cargo.toml              # Khai báo crate dependencies, target Windows Win32 APIs
 │   ├── rustfmt.toml            # Quy chuẩn format code Rust (stable toolchain)
@@ -467,7 +467,7 @@ Dự án này được phát hành dưới giấy phép mã nguồn mở **GNU A
 Xem toàn văn giấy phép tại [`LICENSE`](LICENSE).
 
 ```text
-NeuroClip — AI Subtitle Studio
+NeuroClip — AI Clip & Subtitle Studio
 Copyright (C) 2026 Nashidiwa
 
 This program is free software: you can redistribute it and/or modify

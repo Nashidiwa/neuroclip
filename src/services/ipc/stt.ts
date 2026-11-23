@@ -13,11 +13,12 @@ import {
   type ModelInfo,
   type ModelInfoJson,
   type SttProgressPayload,
-  type SttProgressPayloadJson,
   type TranscriptSegment,
   type TranscriptSegmentJson,
   type TranscriptSegmentsContainer,
   type TranscriptSegmentsContainerJson,
+  isSttProgressPayloadJson,
+  isTranscriptSegmentJson,
   normalizeModelInfo,
   normalizeSttProgressPayload,
   normalizeTranscriptSegment,
@@ -53,6 +54,23 @@ export interface SttChunkPayloadJson {
   readonly chunk_index?: number | undefined;
   readonly chunkIndex?: number | undefined;
   readonly segment: TranscriptSegmentJson;
+}
+
+export function isSttChunkPayloadJson(val: unknown): val is SttChunkPayloadJson {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  const hasValidClipId =
+    (obj['clip_id'] === undefined || typeof obj['clip_id'] === 'string') &&
+    (obj['clipId'] === undefined || typeof obj['clipId'] === 'string');
+  const hasValidChunkIndex =
+    (obj['chunk_index'] === undefined ||
+      (typeof obj['chunk_index'] === 'number' && Number.isFinite(obj['chunk_index']))) &&
+    (obj['chunkIndex'] === undefined ||
+      (typeof obj['chunkIndex'] === 'number' && Number.isFinite(obj['chunkIndex'])));
+
+  return hasValidClipId && hasValidChunkIndex && isTranscriptSegmentJson(obj['segment']);
 }
 
 // ---------------------------------------------------------------------------
@@ -177,9 +195,15 @@ export { exportSubtitlesAss, exportSubtitlesSrt } from './export.ts';
 export async function listenSttProgress(
   callback: (payload: SttProgressPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<SttProgressPayloadJson>(STT_PROGRESS_EVENT, (event) => {
-    callback(normalizeSttProgressPayload(event.payload));
-  });
+  try {
+    return await listen<unknown>(STT_PROGRESS_EVENT, (event) => {
+      if (isSttProgressPayloadJson(event.payload)) {
+        callback(normalizeSttProgressPayload(event.payload));
+      }
+    });
+  } catch {
+    return () => {};
+  }
 }
 
 /**
@@ -191,12 +215,18 @@ export async function listenSttProgress(
 export async function listenSttChunk(
   callback: (payload: SttChunkPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<SttChunkPayloadJson>(STT_CHUNK_EVENT, (event) => {
-    const payload = event.payload;
-    callback({
-      clipId: payload.clip_id ?? payload.clipId ?? '',
-      chunkIndex: payload.chunk_index ?? payload.chunkIndex ?? 0,
-      segment: normalizeTranscriptSegment(payload.segment),
+  try {
+    return await listen<unknown>(STT_CHUNK_EVENT, (event) => {
+      if (isSttChunkPayloadJson(event.payload)) {
+        const payload = event.payload;
+        callback({
+          clipId: payload.clip_id ?? payload.clipId ?? '',
+          chunkIndex: payload.chunk_index ?? payload.chunkIndex ?? 0,
+          segment: normalizeTranscriptSegment(payload.segment),
+        });
+      }
     });
-  });
+  } catch {
+    return () => {};
+  }
 }

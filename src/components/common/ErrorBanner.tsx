@@ -1,4 +1,4 @@
-import { useState, type FC } from 'react';
+import { useEffect, useRef, useState, type FC } from 'react';
 import {
   AlertTriangle,
   AlertCircle,
@@ -42,6 +42,19 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
 }) => {
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
+  const mountedRef = useRef<boolean>(true);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
+  }, []);
 
   if (error === null || error === undefined) {
     return null;
@@ -61,8 +74,17 @@ export const ErrorBanner: FC<ErrorBannerProps> = ({
       ) {
         const payloadToCopy = JSON.stringify(errorObj, null, 2);
         await navigator.clipboard.writeText(payloadToCopy);
+        if (!mountedRef.current) return;
         setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000);
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = setTimeout(() => {
+          copyTimerRef.current = null;
+          if (mountedRef.current) {
+            setIsCopied(false);
+          }
+        }, 2000);
       }
     } catch {
       // Non-clipboard browser environments fallback

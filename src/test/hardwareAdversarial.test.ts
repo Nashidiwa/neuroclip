@@ -370,7 +370,7 @@ describe('TASK-M4-03: Adversarial Challenge Suite', () => {
         const domain1 = toHardwareProfile(noReason);
         expect(domain1.recommendationReason).toBeUndefined();
         const wire1 = toHardwareProfileJson(domain1);
-        expect(wire1.recommendation_reason).toBeUndefined();
+        expect(wire1.recommendation_reason).toBe('');
 
         // With reason
         const withReason: HardwareProfileJson = {

@@ -606,5 +606,27 @@ describe('TASK-M4-21: Virtualized Segment List & Realtime Editing Integration', 
       fireEvent.click(screen.getByTestId('segment-row-row_test'));
       expect(onSelect).toHaveBeenCalledWith(seg);
     });
+
+    it('clears pending userInteractionTimerRef timeout on unmount', () => {
+      vi.useFakeTimers();
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+      try {
+        const seg = makeSegment('timer_test', 0, 5, 'neuro', 'Hi', 'Chào');
+        useStudioStore.getState().setSegments([seg]);
+
+        const { unmount } = render(<VirtualizedSegmentList />);
+        const scrollContainer = screen.getByTestId('studio-segment-list');
+
+        fireEvent.wheel(scrollContainer);
+        unmount();
+
+        expect(clearTimeoutSpy).toHaveBeenCalled();
+        act(() => {
+          vi.advanceTimersByTime(3500);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

@@ -2,7 +2,7 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/CONVENTIONS.md`  
-**Phiên bản:** 1.0.0 (Ban hành chính thức tại Phase 3 — Đồng bộ Phase 4 `M4-01..M4-25`)  
+**Phiên bản:** 1.0.0 (Ban hành chính thức tại Phase 3 — Đồng bộ Phase 4 `M4-01..M4-26`)  
 **Chủ trì:** `@tech-lead`  
 **Căn cứ kỹ thuật & Pháp lý:**
 - Hiến pháp dự án: `AGENTS.md` (Zero-Guesswork Policy, Single Source of Truth, Gate Checks)
@@ -154,7 +154,7 @@ src-tauri/
 │       └── silero_vad_16k.onnx   # Mô hình Silero VAD v5 đồ thị tĩnh 16kHz (ADR-008)
 ├── src/
 │   ├── main.rs                   # Điểm vào ứng dụng, khởi tạo Tauri runtime
-│   ├── lib.rs                    # Clippy lints, đăng ký asset:// & 42 Tauri IPC commands (10 modules)
+│   ├── lib.rs                    # Clippy lints, đăng ký asset:// & 43 Tauri IPC commands (10 modules)
 │   ├── error/                    # Cây lỗi & mã lỗi hợp nhất (48 mã ERR_*)
 │   │   ├── mod.rs                # AppError, IpcErrorResponse, details(), is_recoverable()
 │   │   └── codes.rs              # 48 canonical ERR_* constants
@@ -218,14 +218,14 @@ src-tauri/
 │   │   ├── diarization.rs        # Hybrid context diarization + deterministic normalizer
 │   │   ├── line_wrapper.rs       # Ngắt dòng bảo toàn từ ghép tiếng Việt
 │   │   └── cps_optimizer.rs      # Tối ưu CPS & Time Borrowing
-│   ├── export/                   # Xuất bản NLE & Phụ đề (ADR-005, M4-24..M4-25; Target M4-26)
+│   ├── export/                   # Xuất bản NLE & Phụ đề (ADR-005, M4-24..M4-26)
 │   │   ├── mod.rs                # SubtitleProject, SpeakerStyle, UTF8_BOM, write_file_with_bom
 │   │   ├── ass_exporter.rs       # Xuất .ass UTF-8 with BOM theo target_layout (subtitle_export.rs re-export từ đây)
 │   │   ├── srt_exporter.rs       # Xuất .srt UTF-8 with BOM
 │   │   ├── capcut_draft.rs       # Sinh CapCut Draft JSON + Dual Export Safeguard
 │   │   ├── capcut_schema.rs      # DraftContent, DraftMetaInfo, canvas_config_for_layout
-│   │   └── [premiere_xml.rs]     # (Target M4-26) Sinh Premiere Pro / FCP7 XML (<xmeml version="4">)
-│   └── commands/                 # Cổng tiếp nhận 42 Tauri IPC Commands (10 modules)
+│   │   └── premiere_xml.rs       # Sinh Premiere Pro / FCP7 XML (<xmeml version="4">)
+│   └── commands/                 # Cổng tiếp nhận 43 Tauri IPC Commands (10 modules)
 │       ├── mod.rs
 │       ├── config_cmd.rs         # ping, get_app_config, save_app_config, get_hardware_profile, detect_hardware
 │       ├── log_cmd.rs            # get_recent_logs, clear_logs, log_frontend_event
@@ -236,8 +236,8 @@ src-tauri/
 │       ├── highlight_cmd.rs      # detect_highlights, get_highlight_clusters, toggle_highlight_bookmark, toggle_cluster_bookmark
 │       ├── slice_cmd.rs          # slice_video_segment, cancel_slice_video_segment
 │       ├── translation_cmd.rs    # translate_vietsub, test_gemini_connection, update_speaker_role, wrap_vietnamese_subtitles, optimize_transcript_cps
-│       └── export_cmd.rs         # export_subtitles_ass, export_subtitles_srt, export_subtitle_project, export_subtitles_project_ass, export_subtitles_project_srt, export_capcut_draft (Target M4-26: export_premiere_xml & export:progress)
-└── tests/                        # 24 Integration & Adversarial Rust test files + fixtures/silero_test.wav
+│       └── export_cmd.rs         # export_subtitles_ass, export_subtitles_srt, export_subtitle_project, export_subtitles_project_ass, export_subtitles_project_srt, export_capcut_draft, export_premiere_xml (phát export:progress)
+└── tests/                        # 26 Integration & Adversarial Rust test files (gồm remediation_m4_test.rs) + fixtures/silero_test.wav
 ```
 
 ---
@@ -308,7 +308,7 @@ File `tsconfig.json` bắt buộc kích hoạt chế độ nghiêm ngặt cao nh
 
 ### 3.3 Cấu Trúc Thư Mục Chuẩn `src/`
 
-*(Ghi chú: Cây thư mục dưới đây phản ánh cấu trúc thực tế đã triển khai qua `M4-01..M4-25` cùng các mục `[target M4-26..M4-29]` thuộc kiến trúc đích của Phase 4 — tuyệt đối không xem các file chưa tới milestone là thiếu sót của `M4-01..M4-25`.)*
+*(Ghi chú: Cây thư mục dưới đây phản ánh cấu trúc thực tế đã triển khai qua `M4-01..M4-26` cùng các mục `[target M4-27..M4-29]` thuộc kiến trúc đích của Phase 4 — tuyệt đối không xem các file chưa tới milestone là thiếu sót của `M4-01..M4-26`.)*
 
 ```
 index.html                        # Entry HTML gốc tại repo root
@@ -325,7 +325,7 @@ src/
 │   ├── [layout/]                 # (Target Phase 4) Header, Sidebar, WindowTitleBar, StatusBar
 │   ├── [onboarding/]             # (Target M4-27/M4-28) HardwareRecommendation, OnboardingWizardModal, ApiKeyTester
 │   ├── studio/                   # SubtitleStudio, VideoCanvas, TimelineScrubber, VirtualizedSegmentList, SegmentRow, TimecodeNudge, CharacterHotkeyBar, CPSIndicator & tests
-│   └── export/                   # ExportModal.tsx, ExportModal.test.tsx (CapCut Draft, .ass, .srt; Target M4-26 bổ sung Premiere XML & progress bar)
+│   └── export/                   # ExportModal.tsx, ExportModal.test.tsx (CapCut Draft, Premiere XML & progress bar, .ass, .srt)
 ├── hooks/                        # Custom React hooks (useStudioHotkeys.ts, useStudioHotkeys.test.ts)
 ├── stores/                       # Quản lý trạng thái client (createStore / Zustand-compatible API)
 │   ├── createStore.ts            # Store factory dùng React.useSyncExternalStore với API tương thích Zustand
@@ -350,7 +350,7 @@ src/
 │   │   ├── slice.ts              # slice_video_segment, cancel_slice_video_segment
 │   │   ├── stt.ts                # transcribe_highlight_clip, start_faster_whisper_transcription, stt:progress, stt:chunk
 │   │   ├── translation.ts        # translate_vietsub, test_gemini_connection, update_speaker_role, wrap_vietnamese_subtitles, optimize_transcript_cps, translation:progress
-│   │   └── export.ts             # exportSubtitlesAss, exportSubtitlesSrt, exportSubtitleProject, exportSubtitlesDual, exportSubtitlesProjectAss, exportSubtitlesProjectSrt, exportCapCutDraft (Target M4-26: exportPremiereXml)
+│   │   └── export.ts             # exportSubtitlesAss, exportSubtitlesSrt, exportSubtitleProject, exportSubtitlesDual, exportSubtitlesProjectAss, exportSubtitlesProjectSrt, exportCapCutDraft, exportPremiereXml, listenExportProgress
 │   ├── config/                   # hardware.ts, settings.ts
 │   └── logging/                  # index.ts, logger.ts, redactor.ts, types.ts
 ├── types/                        # Khai báo TypeScript types (khớp Data Contracts)
@@ -370,7 +370,7 @@ src/
 
 - **Kiến trúc State Management (`createStore` & Lộ trình nâng cấp `zustand`):**
   - Toàn bộ 8 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`, `useStudioStore.ts`) được xây dựng trên `src/stores/createStore.ts` sử dụng `React.useSyncExternalStore` với **API tương thích hoàn toàn với Zustand** (`createStore<T>(initializer)`, curried `createStore<T>()(initializer)`, `create` alias, `useStore(selector?, equalityFn?)` kèm snapshot memoization, `getState()`, `getInitialState()`, `setState(partial, replace?)`, `subscribe(listener)`).
-  - Kiến trúc này **chạy ổn định cho `M4-01..M4-25` không cần cài gói `zustand` rời**, đồng thời sẵn sàng tương thích nếu sau này chốt cài đặt gói `zustand` trong `package.json`, mà không làm thay đổi chữ ký API của các store hoặc component đang sử dụng.
+  - Kiến trúc này **chạy ổn định cho `M4-01..M4-26` không cần cài gói `zustand` rời**, đồng thời sẵn sàng tương thích nếu sau này chốt cài đặt gói `zustand` trong `package.json`, mà không làm thay đổi chữ ký API của các store hoặc component đang sử dụng.
 
 ### 3.4 Quy Ước Đặt Tên Toàn Diện (Naming Conventions)
 
@@ -409,7 +409,7 @@ Trong các VOD dài 4–8 tiếng, số lượng phân đoạn phụ đề có t
 ### 4.1 Quy Ước Định Danh & Chữ Ký Tauri Command
 
 - **Tên Command:** Đồng nhất viết theo dạng `snake_case` ở cả Rust backend và TypeScript frontend.
-- **42 Tauri Commands đã đăng ký trong `src-tauri/src/lib.rs` (10 modules):**
+- **43 Tauri Commands đã đăng ký trong `src-tauri/src/lib.rs` (10 modules):**
   - `config_cmd`: `ping`, `get_app_config`, `save_app_config`, `get_hardware_profile`, `detect_hardware`
   - `log_cmd`: `get_recent_logs`, `clear_logs`, `log_frontend_event`
   - `storage_cmd`: `check_preflight_storage`, `initialize_storage`, `initialize_project`, `clean_expired_cache`
@@ -419,7 +419,7 @@ Trong các VOD dài 4–8 tiếng, số lượng phân đoạn phụ đề có t
   - `highlight_cmd`: `detect_highlights`, `get_highlight_clusters`, `toggle_highlight_bookmark`, `toggle_cluster_bookmark`
   - `slice_cmd`: `slice_video_segment`, `cancel_slice_video_segment`
   - `translation_cmd`: `translate_vietsub`, `test_gemini_connection`, `update_speaker_role`, `wrap_vietnamese_subtitles`, `optimize_transcript_cps`
-  - `export_cmd`: `export_subtitles_ass`, `export_subtitles_srt`, `export_subtitle_project`, `export_subtitles_project_ass`, `export_subtitles_project_srt`, `export_capcut_draft` *(Target M4-26: `export_premiere_xml`)*
+  - `export_cmd`: `export_subtitles_ass`, `export_subtitles_srt`, `export_subtitle_project`, `export_subtitles_project_ass`, `export_subtitles_project_srt`, `export_capcut_draft`, `export_premiere_xml`
 - **Kiểu trả về chuẩn:** Mọi hàm command phía Rust phải trả về `Result<T, AppError>`.
 - **Ví dụ chữ ký Command:**
   ```rust
@@ -467,7 +467,7 @@ Các tiến trình dài hạn (tải audio, tính highlight, STT, dịch thuật
 | `stt:chunk` | `{ clip_id: string, chunk_index: number, segment: TranscriptSegment }` *(snake_case; `stt.ts` nhận cả camelCase)* | **Đã triển khai (`commands/stt_cmd.rs`):** Stream từng phân đoạn thoại bóc băng xong tức thì |
 | `translation:progress` | `{ clipId: string, translatedCount: number, totalCount: number }` *(camelCase)* | **Đã triển khai (`translation/mod.rs`, `translation_cmd.rs`):** Tiến độ dịch Vietsub theo lô |
 | `highlight:progress` | `{ taskId: string, stage: 'chat_parsing' \| 'audio_rms' \| 'clustering', percent: number }` | *(Target Phase 4 — hiện `detect_highlights` chạy đồng bộ trên `spawn_blocking`)* |
-| `export:progress` | `{ projectId: string, percent: number, currentStep: string }` | *(Target M4-26 — tiến độ xuất NLE & progress bar)* |
+| `export:progress` | `{ projectId: string, percent: number, currentStep: string }` | **Đã triển khai (`commands/export_cmd.rs`):** Tiến độ xuất NLE (Premiere XML & CapCut Draft) & progress bar |
 | `sidecar:status` | `{ binary: 'yt-dlp' \| 'ffmpeg', status: 'ready' \| 'updating' \| 'failed', message?: string }` | *(Target M4-29 — trạng thái tự cập nhật sidecar)* |
 
 - **Frontend Hook Quản Lý Event (`useTauriEvent`):**
@@ -709,7 +709,7 @@ tracing::info!(
   # Chạy clippy nghiêm ngặt (giữ nguyên clippy::pedantic, 0 warning)
   cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 
-  # Chạy toàn bộ test suites song song (25 active test binaries: 1 lib + 24 integration = 409 tests; [[bin]] test = false)
+  # Chạy toàn bộ test suites song song (27 active test binaries: 1 lib [239] + 26 integration [231] = 470 tests; [[bin]] test = false)
   cargo test --manifest-path src-tauri/Cargo.toml --all-targets
   ```
 
@@ -723,7 +723,7 @@ tracing::info!(
   - Kiểm thử cơ chế mượn khoảng lặng (Time Borrowing) khi căn chỉnh phụ đề.
 - **Lệnh chạy kiểm tra phía frontend (`package.json`):**
   ```powershell
-  # Kiểm tra TypeScript strict + zero-any invariant
+  # Kiểm tra TypeScript strict + zero-any invariant (92 files verified)
   npm run typecheck         # tsc --noEmit && node --experimental-strip-types src/test/typecheck.node.ts
 
   # Chạy linter ESLint 9
@@ -735,10 +735,10 @@ tracing::info!(
   # Build production Vite + TypeScript check
   npm run build             # tsc --noEmit && vite build
 
-  # Chạy Vitest unit & component tests (36 files, 667 tests)
+  # Chạy Vitest unit & component tests (37 files, 705 tests)
   npm run test:vitest       # hoặc: npm run test:run
 
-  # Chạy Node Native contract & AST test runner (52 suites, 135 tests)
+  # Chạy Node Native contract & AST test runner (53 suites, 137 tests)
   npm test                  # node --experimental-strip-types --test src/test/suite.node.test.ts
   ```
 

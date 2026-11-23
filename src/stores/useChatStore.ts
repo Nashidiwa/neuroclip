@@ -8,7 +8,7 @@
  * Strict adherence to docs/CONVENTIONS.md (zero-any, strict null safety).
  */
 
-import { createStore, type SetStateFn, type StoreHook } from './createStore.ts';
+import { createStore, type GetStateFn, type SetStateFn, type StoreHook } from './createStore.ts';
 import {
   type ChatEventsContainer,
   type ChatHeatmapResponse,
@@ -20,7 +20,7 @@ import {
   listenChatProgress,
   listenChatFallback,
 } from '../services/ipc/chat.ts';
-import { type IpcErrorResponse, parseIpcError } from '../services/ipc/error.ts';
+import { ERROR_CODES, type IpcErrorResponse, parseIpcError } from '../services/ipc/error.ts';
 
 // ---------------------------------------------------------------------------
 // Store Interface Contract
@@ -66,36 +66,114 @@ const initialChatState = {
   error: null,
 };
 
+let resetEpoch = 0;
+let extractSeq = 0;
+let eventsSeq = 0;
+let heatmapSeq = 0;
+
+let listenersPromise: Promise<void> | null = null;
+let activeListenersToken = 0;
 let progressUnlisten: (() => void) | null = null;
 let fallbackUnlisten: (() => void) | null = null;
 
-async function ensureChatListeners(set: SetStateFn<ChatState>): Promise<void> {
-  if (!progressUnlisten) {
-    try {
-      progressUnlisten = await listenChatProgress((payload) => {
-        set({ progress: payload });
-      });
-    } catch {
-      // Non-Tauri testing environment fallback
-    }
-  }
-
-  if (!fallbackUnlisten) {
-    try {
-      fallbackUnlisten = await listenChatFallback((payload) => {
-        set({
-          hasChatReplay: false,
-          fallbackNotice: payload,
-          isExtracting: false,
-        });
-      });
-    } catch {
-      // Non-Tauri testing environment fallback
-    }
+async function safeListenChat(register: () => Promise<() => void>): Promise<(() => void) | null> {
+  try {
+    return await register();
+  } catch {
+    return null;
   }
 }
 
+function ensureChatListeners(
+  set: SetStateFn<ChatState>,
+  get: GetStateFn<ChatState>,
+): Promise<void> {
+  if (progressUnlisten && fallbackUnlisten) {
+    return Promise.resolve();
+  }
+  if (listenersPromise) {
+    return listenersPromise;
+  }
+
+  const epochAtStart = resetEpoch;
+  const token = ++activeListenersToken;
+  const pending = (async () => {
+    const [nextProgressUnlisten, nextFallbackUnlisten] = await Promise.all([
+      progressUnlisten
+        ? Promise.resolve<(() => void) | null>(null)
+        : safeListenChat(() =>
+            listenChatProgress((payload) => {
+              const state = get();
+              if (!state.isExtracting) return;
+              if (
+                state.vodId !== null &&
+                payload.taskId.length > 0 &&
+                payload.taskId !== state.vodId
+              ) {
+                return;
+              }
+              set({ progress: payload });
+            }),
+          ),
+      fallbackUnlisten
+        ? Promise.resolve<(() => void) | null>(null)
+        : safeListenChat(() =>
+            listenChatFallback((payload) => {
+              const state = get();
+              if (!state.isExtracting) return;
+              if (
+                state.vodId !== null &&
+                payload.taskId.length > 0 &&
+                payload.taskId !== state.vodId
+              ) {
+                return;
+              }
+              set({
+                hasChatReplay: false,
+                fallbackNotice: payload,
+                isExtracting: false,
+                error: null,
+              });
+            }),
+          ),
+    ]);
+
+    if (epochAtStart !== resetEpoch) {
+      nextProgressUnlisten?.();
+      nextFallbackUnlisten?.();
+      if (activeListenersToken === token) {
+        listenersPromise = null;
+      }
+      return;
+    }
+
+    if (nextProgressUnlisten) {
+      if (progressUnlisten) {
+        nextProgressUnlisten();
+      } else {
+        progressUnlisten = nextProgressUnlisten;
+      }
+    }
+    if (nextFallbackUnlisten) {
+      if (fallbackUnlisten) {
+        nextFallbackUnlisten();
+      } else {
+        fallbackUnlisten = nextFallbackUnlisten;
+      }
+    }
+
+    if (activeListenersToken === token) {
+      listenersPromise = null;
+    }
+  })();
+
+  listenersPromise = pending;
+  return pending;
+}
+
 function cleanupChatListeners(): void {
+  ++activeListenersToken;
+  listenersPromise = null;
   if (progressUnlisten) {
     progressUnlisten();
     progressUnlisten = null;
@@ -110,15 +188,23 @@ function cleanupChatListeners(): void {
 // Chat Store Instance
 // ---------------------------------------------------------------------------
 
-export const useChatStore = createStore<ChatState>((set) => ({
+export const useChatStore = createStore<ChatState>((set, get) => ({
   ...initialChatState,
 
   setVodId: (vodId: string | null) => {
+    if (get().vodId !== vodId) {
+      ++extractSeq;
+      ++eventsSeq;
+      ++heatmapSeq;
+      set({ vodId, isExtracting: false, progress: null });
+      return;
+    }
     set({ vodId });
   },
 
   extractChat: async (vodId: string, url: string): Promise<string> => {
-    void ensureChatListeners(set);
+    const seq = ++extractSeq;
+    const epoch = resetEpoch;
     set({
       vodId,
       isExtracting: true,
@@ -127,7 +213,16 @@ export const useChatStore = createStore<ChatState>((set) => ({
     });
 
     try {
+      await ensureChatListeners(set, get);
+      if (seq !== extractSeq || epoch !== resetEpoch) {
+        return '';
+      }
+
       const filePath = await startChatExtraction(vodId, url);
+      if (seq !== extractSeq || epoch !== resetEpoch) {
+        return filePath;
+      }
+
       set({
         isExtracting: false,
         hasChatReplay: true,
@@ -137,7 +232,9 @@ export const useChatStore = createStore<ChatState>((set) => ({
       // Automatically load heatmap for dashboard visualization
       try {
         const heatmap = await getChatVelocityHeatmap(vodId);
-        set({ chatHeatmap: heatmap });
+        if (seq === extractSeq && epoch === resetEpoch) {
+          set({ chatHeatmap: heatmap });
+        }
       } catch {
         // Optional telemetry failure
       }
@@ -145,10 +242,27 @@ export const useChatStore = createStore<ChatState>((set) => ({
       return filePath;
     } catch (err: unknown) {
       const ipcError = parseIpcError(err);
-      set({
-        isExtracting: false,
-        error: ipcError,
-      });
+      if (seq === extractSeq && epoch === resetEpoch) {
+        if (ipcError.code === ERROR_CODES.INGEST_CHAT_UNAVAILABLE) {
+          const existingFallback = get().fallbackNotice;
+          set({
+            isExtracting: false,
+            hasChatReplay: false,
+            error: null,
+            fallbackNotice: existingFallback ?? {
+              taskId: vodId,
+              code: ipcError.code,
+              message: ipcError.message,
+              audioFallbackActive: true,
+            },
+          });
+        } else {
+          set({
+            isExtracting: false,
+            error: ipcError,
+          });
+        }
+      }
       throw ipcError;
     }
   },
@@ -158,25 +272,37 @@ export const useChatStore = createStore<ChatState>((set) => ({
     limit?: number,
     offset?: number,
   ): Promise<ChatEventsContainer> => {
+    const seq = ++eventsSeq;
+    const epoch = resetEpoch;
     try {
       const container = await getChatEvents(vodId, limit, offset);
-      set({ chatEvents: container });
+      if (seq === eventsSeq && epoch === resetEpoch) {
+        set({ chatEvents: container });
+      }
       return container;
     } catch (err: unknown) {
       const ipcError = parseIpcError(err);
-      set({ error: ipcError });
+      if (seq === eventsSeq && epoch === resetEpoch) {
+        set({ error: ipcError });
+      }
       throw ipcError;
     }
   },
 
   fetchHeatmap: async (vodId: string, windowSec?: number): Promise<ChatHeatmapResponse> => {
+    const seq = ++heatmapSeq;
+    const epoch = resetEpoch;
     try {
       const heatmap = await getChatVelocityHeatmap(vodId, windowSec);
-      set({ chatHeatmap: heatmap });
+      if (seq === heatmapSeq && epoch === resetEpoch) {
+        set({ chatHeatmap: heatmap });
+      }
       return heatmap;
     } catch (err: unknown) {
       const ipcError = parseIpcError(err);
-      set({ error: ipcError });
+      if (seq === heatmapSeq && epoch === resetEpoch) {
+        set({ error: ipcError });
+      }
       throw ipcError;
     }
   },
@@ -190,6 +316,10 @@ export const useChatStore = createStore<ChatState>((set) => ({
   },
 
   reset: () => {
+    ++resetEpoch;
+    ++extractSeq;
+    ++eventsSeq;
+    ++heatmapSeq;
     cleanupChatListeners();
     set({ ...initialChatState });
   },

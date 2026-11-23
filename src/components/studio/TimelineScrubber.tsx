@@ -48,63 +48,33 @@ export interface TimelineScrubberProps {
 
 const SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] as const;
 
-export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
-  currentTime: propCurrentTime,
-  duration: propDuration,
-  isPlaying: propIsPlaying,
-  isMuted: propIsMuted,
-  volume: propVolume,
-  playbackRate: propPlaybackRate,
-  preset916: propPreset916,
-  aspectRatio: propAspectRatio,
-  onSeek,
-  onTogglePlay,
-  onToggleMute,
-  onVolumeChange,
-  onPresetChange,
-  onAspectRatioChange,
-  className = '',
-}) => {
-  // Store subscriptions (fallback if props are not provided)
-  const storeCurrentTime = useStudioStore((s) => s.currentTime);
-  const storeDuration = useStudioStore((s) => s.duration);
-  const storeIsPlaying = useStudioStore((s) => s.isPlaying);
-  const storeIsMuted = useStudioStore((s) => s.isMuted);
-  const storeVolume = useStudioStore((s) => s.volume);
-  const storePlaybackRate = useStudioStore((s) => s.playbackRate);
-  const storePreset916 = useStudioStore((s) => s.preset916);
-  const storeAspectRatio = useStudioStore((s) => s.aspectRatio);
+interface TimelineProgressTrackProps {
+  readonly propCurrentTime: number | undefined;
+  readonly effectiveDuration: number;
+  readonly onSeek: ((time: number) => void) | undefined;
+}
 
+const TimelineProgressTrack: React.FC<TimelineProgressTrackProps> = ({
+  propCurrentTime,
+  effectiveDuration,
+  onSeek,
+}) => {
+  const storeCurrentTime = useStudioStore((s) =>
+    propCurrentTime !== undefined ? propCurrentTime : s.currentTime,
+  );
   const seekToStore = useStudioStore((s) => s.seekTo);
-  const togglePlayStore = useStudioStore((s) => s.togglePlay);
-  const toggleMuteStore = useStudioStore((s) => s.toggleMute);
-  const setVolumeStore = useStudioStore((s) => s.setVolume);
-  const setPreset916Store = useStudioStore((s) => s.setPreset916);
-  const setAspectRatioStore = useStudioStore((s) => s.setAspectRatio);
-  const setPlaybackRateStore = useStudioStore((s) => s.setPlaybackRate);
   const setIsScrubbingStore = useStudioStore((s) => s.setIsScrubbing);
 
-  // Effective values
   const effectiveCurrentTime = propCurrentTime !== undefined ? propCurrentTime : storeCurrentTime;
-  const effectiveDuration = propDuration !== undefined ? propDuration : storeDuration;
-  const effectiveIsPlaying = propIsPlaying !== undefined ? propIsPlaying : storeIsPlaying;
-  const effectiveIsMuted = propIsMuted !== undefined ? propIsMuted : storeIsMuted;
-  const effectiveVolume = propVolume !== undefined ? propVolume : storeVolume;
-  const effectivePlaybackRate =
-    propPlaybackRate !== undefined ? propPlaybackRate : storePlaybackRate;
-  const effectivePreset = propPreset916 ?? storePreset916;
-  const effectiveAspectRatio = propAspectRatio ?? storeAspectRatio;
-
-  // Local state for smooth scrubbing
   const [isLocalScrubbing, setIsLocalScrubbing] = useState<boolean>(false);
   const [scrubTime, setScrubTime] = useState<number>(0);
+  const isActiveScrubRef = useRef<boolean>(false);
+  const scrubTimeRef = useRef<number>(effectiveCurrentTime);
   const rafHandleRef = useRef<number | null>(null);
 
-  // Time displayed: if currently dragging/scrubbing, use local scrubTime
   const displayTime = isLocalScrubbing ? scrubTime : effectiveCurrentTime;
   const forceHours = effectiveDuration >= 3600;
 
-  // Cleanup pending rAF on unmount
   useEffect(() => {
     return () => {
       if (rafHandleRef.current !== null) {
@@ -114,7 +84,6 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     };
   }, []);
 
-  // Dispatch seek action throttled via requestAnimationFrame (ED-20.1)
   const dispatchSeekThrottled = useCallback(
     (targetTime: number) => {
       if (rafHandleRef.current !== null) {
@@ -133,7 +102,6 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
     [onSeek, seekToStore],
   );
 
-  // Direct unthrottled seek for clicks / jump buttons / final drag release
   const dispatchSeekImmediate = useCallback(
     (targetTime: number) => {
       if (rafHandleRef.current !== null) {
@@ -155,14 +123,18 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   );
 
   const handleSliderPointerDown = useCallback(() => {
+    isActiveScrubRef.current = true;
+    scrubTimeRef.current = effectiveCurrentTime;
+    setScrubTime(effectiveCurrentTime);
     setIsLocalScrubbing(true);
     setIsScrubbingStore(true);
-  }, [setIsScrubbingStore]);
+  }, [effectiveCurrentTime, setIsScrubbingStore]);
 
   const handleSliderChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = parseFloat(e.target.value);
       if (Number.isFinite(val)) {
+        scrubTimeRef.current = val;
         setScrubTime(val);
         dispatchSeekThrottled(val);
       }
@@ -171,10 +143,93 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
   );
 
   const handleSliderPointerUp = useCallback(() => {
+    const targetTime = isActiveScrubRef.current ? scrubTimeRef.current : effectiveCurrentTime;
+    isActiveScrubRef.current = false;
     setIsLocalScrubbing(false);
     setIsScrubbingStore(false);
-    dispatchSeekImmediate(scrubTime);
-  }, [dispatchSeekImmediate, setIsScrubbingStore, scrubTime]);
+    dispatchSeekImmediate(targetTime);
+  }, [dispatchSeekImmediate, effectiveCurrentTime, setIsScrubbingStore]);
+
+  return (
+    <div className="flex flex-col space-y-1">
+      <div className="relative flex items-center">
+        <input
+          type="range"
+          data-testid="timeline-slider"
+          min={0}
+          max={effectiveDuration > 0 ? effectiveDuration : 100}
+          step={0.01}
+          value={displayTime}
+          onPointerDown={handleSliderPointerDown}
+          onChange={handleSliderChange}
+          onPointerUp={handleSliderPointerUp}
+          disabled={effectiveDuration <= 0}
+          aria-label="Thanh tua thời gian video"
+          className="focus:outline-hidden h-2 w-full cursor-pointer appearance-none rounded-lg bg-bg-tertiary accent-accent-neuro disabled:opacity-50"
+        />
+      </div>
+
+      {/* Timecode and Progress display */}
+      <div className="flex items-center justify-between font-mono text-xs text-slate-300">
+        <span data-testid="timeline-timecode" className="font-semibold text-accent-neuro">
+          {formatStudioTimecode(displayTime, forceHours)} /{' '}
+          {formatStudioTimecode(effectiveDuration, forceHours)}
+        </span>
+        <span className="text-[11px] text-slate-400">
+          {effectiveDuration > 0
+            ? `${Math.min(100, Math.max(0, (displayTime / effectiveDuration) * 100)).toFixed(1)}%`
+            : '0.0%'}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
+  currentTime: propCurrentTime,
+  duration: propDuration,
+  isPlaying: propIsPlaying,
+  isMuted: propIsMuted,
+  volume: propVolume,
+  playbackRate: propPlaybackRate,
+  preset916: propPreset916,
+  aspectRatio: propAspectRatio,
+  onSeek,
+  onTogglePlay,
+  onToggleMute,
+  onVolumeChange,
+  onPresetChange,
+  onAspectRatioChange,
+  className = '',
+}) => {
+  // Store subscriptions (fallback if props are not provided; currentTime lives in TimelineProgressTrack)
+  const storeDuration = useStudioStore((s) =>
+    propDuration !== undefined ? propDuration : s.duration,
+  );
+  const storeIsPlaying = useStudioStore((s) => s.isPlaying);
+  const storeIsMuted = useStudioStore((s) => s.isMuted);
+  const storeVolume = useStudioStore((s) => s.volume);
+  const storePlaybackRate = useStudioStore((s) => s.playbackRate);
+  const storePreset916 = useStudioStore((s) => s.preset916);
+  const storeAspectRatio = useStudioStore((s) => s.aspectRatio);
+
+  const seekToStore = useStudioStore((s) => s.seekTo);
+  const togglePlayStore = useStudioStore((s) => s.togglePlay);
+  const toggleMuteStore = useStudioStore((s) => s.toggleMute);
+  const setVolumeStore = useStudioStore((s) => s.setVolume);
+  const setPreset916Store = useStudioStore((s) => s.setPreset916);
+  const setAspectRatioStore = useStudioStore((s) => s.setAspectRatio);
+  const setPlaybackRateStore = useStudioStore((s) => s.setPlaybackRate);
+
+  // Effective values
+  const effectiveDuration = propDuration !== undefined ? propDuration : storeDuration;
+  const effectiveIsPlaying = propIsPlaying !== undefined ? propIsPlaying : storeIsPlaying;
+  const effectiveIsMuted = propIsMuted !== undefined ? propIsMuted : storeIsMuted;
+  const effectiveVolume = propVolume !== undefined ? propVolume : storeVolume;
+  const effectivePlaybackRate =
+    propPlaybackRate !== undefined ? propPlaybackRate : storePlaybackRate;
+  const effectivePreset = propPreset916 ?? storePreset916;
+  const effectiveAspectRatio = propAspectRatio ?? storeAspectRatio;
 
   const handleTogglePlay = useCallback(() => {
     if (onTogglePlay) {
@@ -228,10 +283,20 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
 
   const handleNudge = useCallback(
     (deltaSec: number) => {
-      const nextTime = Math.max(0, Math.min(effectiveDuration, displayTime + deltaSec));
-      dispatchSeekImmediate(nextTime);
+      const baseTime =
+        propCurrentTime !== undefined ? propCurrentTime : useStudioStore.getState().currentTime;
+      const nextTime = Math.max(0, Math.min(effectiveDuration, baseTime + deltaSec));
+      const clamped = Math.max(
+        0,
+        Math.min(effectiveDuration > 0 ? effectiveDuration : nextTime, nextTime),
+      );
+      if (onSeek) {
+        onSeek(clamped);
+      } else {
+        seekToStore(clamped);
+      }
     },
-    [displayTime, dispatchSeekImmediate, effectiveDuration],
+    [effectiveDuration, onSeek, propCurrentTime, seekToStore],
   );
 
   const handleSpeedSelect = useCallback(
@@ -250,37 +315,11 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
       className={`flex w-full select-none flex-col space-y-2 rounded-xl border border-border-dark bg-bg-secondary/70 p-3 shadow-acrylic ${className}`}
     >
       {/* Top Bar: Timeline Scrubber Slider Track */}
-      <div className="flex flex-col space-y-1">
-        <div className="relative flex items-center">
-          <input
-            type="range"
-            data-testid="timeline-slider"
-            min={0}
-            max={effectiveDuration > 0 ? effectiveDuration : 100}
-            step={0.01}
-            value={displayTime}
-            onPointerDown={handleSliderPointerDown}
-            onChange={handleSliderChange}
-            onPointerUp={handleSliderPointerUp}
-            disabled={effectiveDuration <= 0}
-            aria-label="Thanh tua thời gian video"
-            className="focus:outline-hidden h-2 w-full cursor-pointer appearance-none rounded-lg bg-bg-tertiary accent-accent-neuro disabled:opacity-50"
-          />
-        </div>
-
-        {/* Timecode and Progress display */}
-        <div className="flex items-center justify-between font-mono text-xs text-slate-300">
-          <span data-testid="timeline-timecode" className="font-semibold text-accent-neuro">
-            {formatStudioTimecode(displayTime, forceHours)} /{' '}
-            {formatStudioTimecode(effectiveDuration, forceHours)}
-          </span>
-          <span className="text-[11px] text-slate-400">
-            {effectiveDuration > 0
-              ? `${Math.min(100, Math.max(0, (displayTime / effectiveDuration) * 100)).toFixed(1)}%`
-              : '0.0%'}
-          </span>
-        </div>
-      </div>
+      <TimelineProgressTrack
+        propCurrentTime={propCurrentTime}
+        effectiveDuration={effectiveDuration}
+        onSeek={onSeek}
+      />
 
       {/* Bottom Bar: Transport Controls & Preset Selection */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-dark/60 pt-1">

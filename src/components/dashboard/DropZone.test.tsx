@@ -295,4 +295,35 @@ describe('DropZone (TASK-M4-07)', () => {
       clickSpy.mockRestore();
     }
   });
+
+  it('skips state updates and onImportSuccess if unmounted while importLocalVideo is pending', async () => {
+    let resolveImport!: (val: ReturnType<typeof buildMockManifest>) => void;
+    mockInvoke.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveImport = resolve;
+        }),
+    );
+
+    const onImportSuccess = vi.fn();
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { unmount } = render(<DropZone onImportSuccess={onImportSuccess} />);
+
+      fireEvent.change(screen.getByTestId('dropzone-path-input'), {
+        target: { value: 'D:\\Videos\\unmount_test.mp4' },
+      });
+      fireEvent.click(screen.getByTestId('dropzone-path-submit'));
+
+      unmount();
+
+      await act(async () => {
+        resolveImport(buildMockManifest('D:\\Videos\\unmount_test.mp4'));
+      });
+
+      expect(onImportSuccess).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });

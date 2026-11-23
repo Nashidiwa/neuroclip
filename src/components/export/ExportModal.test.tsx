@@ -716,4 +716,48 @@ describe('ExportModal Component', () => {
       });
     });
   });
+
+  it('clears copy-feedback timer on unmount and handles listenExportProgress rejection safely', async () => {
+    vi.useFakeTimers();
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+    vi.mocked(exportIpc.listenExportProgress).mockRejectedValueOnce(new Error('No Tauri runtime'));
+    vi.mocked(exportIpc.exportSubtitlesProjectAss).mockResolvedValueOnce(
+      'C:\\NeuroClip\\export\\Vedal & Neuro Clip.ass',
+    );
+
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    try {
+      const { unmount } = render(
+        <ExportModal isOpen={true} onClose={mockOnClose} project={mockProject} />,
+      );
+
+      fireEvent.click(screen.getByTestId('export-format-ass'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('export-submit-button'));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('copy-export-path-button')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('copy-export-path-button'));
+        await Promise.resolve();
+      });
+
+      unmount();
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(2500);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

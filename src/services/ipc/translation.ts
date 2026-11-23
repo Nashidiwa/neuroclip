@@ -18,7 +18,7 @@ import {
 import {
   type TranslateVietsubOptions,
   type TranslationProgressPayload,
-  type TranslationProgressPayloadJson,
+  isTranslationProgressPayloadJson,
   normalizeTranslationProgressPayload,
 } from '../../types/translation.ts';
 
@@ -170,7 +170,13 @@ export async function optimizeTranscriptCps(
 export async function listenTranslationProgress(
   callback: (payload: TranslationProgressPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<TranslationProgressPayloadJson>('translation:progress', (event) => {
-    callback(normalizeTranslationProgressPayload(event.payload));
-  });
+  try {
+    return await listen<unknown>('translation:progress', (event) => {
+      if (isTranslationProgressPayloadJson(event.payload)) {
+        callback(normalizeTranslationProgressPayload(event.payload));
+      }
+    });
+  } catch {
+    return () => {};
+  }
 }

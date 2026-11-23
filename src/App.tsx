@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
   Sparkles,
   Monitor,
@@ -72,15 +73,35 @@ export const App: React.FC = () => {
   const clearHighlightError = useHighlightStore((s) => s.clearError);
 
   const activeVodId = highlightVodId ?? chatVodId ?? manifest?.vodId ?? null;
+  const isLocalFileManifest = manifest?.sourceType === 'local_file';
+  const canDetectHighlights =
+    Boolean(activeVodId) &&
+    manifest !== null &&
+    manifest.vodId === activeVodId &&
+    Number.isFinite(manifest.durationSeconds) &&
+    manifest.durationSeconds > 0;
 
   useEffect(() => {
     setBackdropConfig(resolveBackdropConfig(isAcrylicSupported));
   }, [isAcrylicSupported]);
 
   const handleManifestReady = (nextManifest: VodManifest): void => {
-    useIngestionStore.setState({ manifest: nextManifest });
+    useIngestionStore.setState({
+      manifest: nextManifest,
+      error: null,
+      ...(nextManifest.sourceType === 'local_file' ? { url: '' } : {}),
+    });
+
+    if (useChatStore.getState().vodId !== nextManifest.vodId) {
+      useChatStore.getState().reset();
+    }
     useChatStore.getState().setVodId(nextManifest.vodId);
+
+    if (useHighlightStore.getState().vodId !== nextManifest.vodId) {
+      useHighlightStore.getState().reset();
+    }
     useHighlightStore.getState().setVodId(nextManifest.vodId);
+
     void initializeProject(
       nextManifest.vodId,
       nextManifest.title,
@@ -93,14 +114,14 @@ export const App: React.FC = () => {
   };
 
   const handleExtractChat = (): void => {
-    if (!activeVodId || !ingestionUrl.trim()) return;
+    if (!activeVodId || isLocalFileManifest || !ingestionUrl.trim()) return;
     void extractChat(activeVodId, ingestionUrl).catch(() => {});
   };
 
   const handleDetectHighlights = (): void => {
-    if (!activeVodId) return;
-    const duration = manifest?.durationSeconds ?? 0;
-    const audioPath = manifest?.audioPath;
+    if (!activeVodId || !canDetectHighlights || !manifest) return;
+    const duration = manifest.durationSeconds;
+    const audioPath = manifest.audioPath;
     void detectHighlightsForVod(activeVodId, duration, audioPath ? { audioPath } : undefined).catch(
       () => {},
     );
@@ -108,12 +129,8 @@ export const App: React.FC = () => {
 
   const handleWindowMinimize = (): void => {
     try {
-      void import('@tauri-apps/api/window')
-        .then(({ getCurrentWindow }) => {
-          void getCurrentWindow()
-            .minimize()
-            .catch(() => {});
-        })
+      void getCurrentWindow()
+        .minimize()
         .catch(() => {});
     } catch {
       // Non-tauri browser environment fallback
@@ -122,12 +139,8 @@ export const App: React.FC = () => {
 
   const handleWindowMaximize = (): void => {
     try {
-      void import('@tauri-apps/api/window')
-        .then(({ getCurrentWindow }) => {
-          void getCurrentWindow()
-            .toggleMaximize()
-            .catch(() => {});
-        })
+      void getCurrentWindow()
+        .toggleMaximize()
         .catch(() => {});
     } catch {
       // Non-tauri browser environment fallback
@@ -136,12 +149,8 @@ export const App: React.FC = () => {
 
   const handleWindowClose = (): void => {
     try {
-      void import('@tauri-apps/api/window')
-        .then(({ getCurrentWindow }) => {
-          void getCurrentWindow()
-            .close()
-            .catch(() => {});
-        })
+      void getCurrentWindow()
+        .close()
         .catch(() => {});
     } catch {
       // Non-tauri browser environment fallback
@@ -478,7 +487,7 @@ export const App: React.FC = () => {
                   >
                     {isCheckingStorage ? 'Đang kiểm tra ổ đĩa...' : 'Kiểm tra ổ đĩa'}
                   </button>
-                  {activeVodId && ingestionUrl.trim().length > 0 && (
+                  {activeVodId && !isLocalFileManifest && ingestionUrl.trim().length > 0 && (
                     <button
                       type="button"
                       onClick={handleExtractChat}
@@ -536,12 +545,22 @@ export const App: React.FC = () => {
               )}
 
               {activeVodId && (
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end gap-3">
+                  {!canDetectHighlights && (
+                    <span className="text-[11px] text-amber-300">
+                      Cần nạp VOD có thời lượng hợp lệ (&gt; 0s) trước khi phân tích Highlight.
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={handleDetectHighlights}
-                    disabled={isLoadingHighlights}
-                    className="rounded-lg border border-accent-neuro/40 bg-accent-neuro/20 px-3 py-1.5 text-xs text-accent-neuro transition-colors hover:bg-accent-neuro/30 disabled:opacity-50"
+                    disabled={isLoadingHighlights || !canDetectHighlights}
+                    title={
+                      canDetectHighlights
+                        ? 'Phân tích khoảnh khắc Highlight từ Chat và Âm thanh'
+                        : 'Cần nạp VOD manifest có thời lượng > 0s để phân tích Highlight'
+                    }
+                    className="rounded-lg border border-accent-neuro/40 bg-accent-neuro/20 px-3 py-1.5 text-xs text-accent-neuro transition-colors hover:bg-accent-neuro/30 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Phân tích Highlight
                   </button>

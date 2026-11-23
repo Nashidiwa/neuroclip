@@ -13,6 +13,7 @@
 import React, { useCallback } from 'react';
 import { Clock, AlertTriangle } from 'lucide-react';
 import type { TranscriptSegment } from '../../types/transcript.ts';
+import { useStudioStore } from '../../stores/useStudioStore.ts';
 import {
   evaluateSegmentCps,
   calculateBorrowDuration,
@@ -23,6 +24,7 @@ import {
 export interface CPSIndicatorProps {
   readonly segment: TranscriptSegment;
   readonly nextSegment?: TranscriptSegment | undefined;
+  readonly maxClipDurationSec?: number | undefined;
   readonly onBorrowSilence?: ((segmentId: string, deltaSec: number) => void) | undefined;
   readonly className?: string | undefined;
 }
@@ -30,17 +32,25 @@ export interface CPSIndicatorProps {
 export const CPSIndicator: React.FC<CPSIndicatorProps> = ({
   segment,
   nextSegment,
+  maxClipDurationSec: propMaxClipDurationSec,
   onBorrowSilence,
   className = '',
 }) => {
   const segId = segment.segmentId ?? segment.segment_id;
+  const storeDuration = useStudioStore((s) => s.duration);
+  const effectiveMaxClipDurationSec =
+    propMaxClipDurationSec !== undefined
+      ? propMaxClipDurationSec
+      : storeDuration > 0
+        ? storeDuration
+        : undefined;
   const { cps, rating, isOverSpeed } = evaluateSegmentCps(segment);
 
   const allowableBorrowSec = isOverSpeed
     ? calculateBorrowDuration(
         segment,
         nextSegment,
-        undefined,
+        effectiveMaxClipDurationSec,
         DEFAULT_MAX_BORROW_MS,
         DEFAULT_MIN_GAP_MS,
       )

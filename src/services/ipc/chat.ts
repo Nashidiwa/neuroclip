@@ -38,6 +38,36 @@ export interface ChatFallbackPayload {
   readonly audioFallbackActive: boolean;
 }
 
+export function isChatProgressPayload(val: unknown): val is ChatProgressPayload {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['taskId'] === 'string' &&
+    typeof obj['stage'] === 'string' &&
+    typeof obj['percent'] === 'number' &&
+    Number.isFinite(obj['percent']) &&
+    typeof obj['messagesExtracted'] === 'number' &&
+    Number.isFinite(obj['messagesExtracted']) &&
+    typeof obj['currentOffsetSec'] === 'number' &&
+    Number.isFinite(obj['currentOffsetSec'])
+  );
+}
+
+export function isChatFallbackPayload(val: unknown): val is ChatFallbackPayload {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['taskId'] === 'string' &&
+    typeof obj['code'] === 'string' &&
+    typeof obj['message'] === 'string' &&
+    typeof obj['audioFallbackActive'] === 'boolean'
+  );
+}
+
 // ---------------------------------------------------------------------------
 // IPC Invoke Wrappers
 // ---------------------------------------------------------------------------
@@ -117,9 +147,15 @@ export async function getChatVelocityHeatmap(
 export async function listenChatProgress(
   callback: (payload: ChatProgressPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<ChatProgressPayload>('chat:progress', (event) => {
-    callback(event.payload);
-  });
+  try {
+    return await listen<unknown>('chat:progress', (event) => {
+      if (isChatProgressPayload(event.payload)) {
+        callback(event.payload);
+      }
+    });
+  } catch {
+    return () => {};
+  }
 }
 
 /**
@@ -128,7 +164,13 @@ export async function listenChatProgress(
 export async function listenChatFallback(
   callback: (payload: ChatFallbackPayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<ChatFallbackPayload>('chat:fallback', (event) => {
-    callback(event.payload);
-  });
+  try {
+    return await listen<unknown>('chat:fallback', (event) => {
+      if (isChatFallbackPayload(event.payload)) {
+        callback(event.payload);
+      }
+    });
+  } catch {
+    return () => {};
+  }
 }

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -20,8 +20,9 @@ use crate::ingestion::buffer::{
     create_bounded_audio_channel, AudioChunk, AudioRingBuffer, DEFAULT_CHUNK_SIZE_BYTES,
     DEFAULT_QUEUE_CAPACITY,
 };
-use crate::ingestion::cookies::{build_bot_defense_args, CookieSource};
+use crate::ingestion::cookies::{try_build_bot_defense_args, CookieSource};
 use crate::ingestion::validator::AudioStreamValidator;
+use crate::sidecar::{drain_pipe_lossy, resolve_sidecar_binary, LossyLineReader};
 
 /// Standard payload emitted periodically through the `ingest:progress` Tauri event stream.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -354,6 +355,36 @@ pub fn parse_ytdlp_progress_line(line: &str) -> Option<(f64, f64, u64)> {
     Some((percent, speed_kbps, eta_sec))
 }
 
+/// Validate that an external VOD/stream URL uses `http://` or `https://` and contains no
+/// leading whitespace, leading `-` (CLI flag injection), or control/`\0` characters.
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] with [`IngestError::InvalidUrl`] if validation fails.
+pub fn validate_http_url(url: &str) -> Result<&str, AppError> {
+    if url.is_empty() || url.trim().is_empty() {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "URL cannot be empty".to_string(),
+        )));
+    }
+    if url.chars().any(|c| c.is_control() || c == '\0') {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "URL contains control or NUL characters".to_string(),
+        )));
+    }
+    if url.chars().next().is_some_and(char::is_whitespace) || url.starts_with('-') {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            "URL must not start with whitespace or '-'".to_string(),
+        )));
+    }
+    let trimmed = url.trim();
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return Err(AppError::Ingestion(IngestError::InvalidUrl(
+            trimmed.to_string(),
+        )));
+    }
+    Ok(trimmed)
+}
+
 /// Probe online VOD metadata using `yt-dlp --dump-single-json`.
 ///
 /// Fast rejection guardrail (AC-06.5): Rejects live streams (`is_live == true`) in <= 500ms
@@ -363,17 +394,8 @@ pub async fn probe_vod_metadata(
     cookie_source: &CookieSource,
     custom_ua: Option<&str>,
 ) -> Result<VodMetadata, AppError> {
-    let trimmed_url = url.trim();
-    if trimmed_url.is_empty() {
-        return Err(AppError::Ingestion(IngestError::InvalidUrl(
-            "URL cannot be empty".to_string(),
-        )));
-    }
-    if !trimmed_url.starts_with("http://") && !trimmed_url.starts_with("https://") {
-        return Err(AppError::Ingestion(IngestError::InvalidUrl(
-            trimmed_url.to_string(),
-        )));
-    }
+    let trimmed_url = validate_http_url(url)?;
+    let defense_args = try_build_bot_defense_args(cookie_source, custom_ua)?;
 
     // Check mock override environment variable for automated testing
     if let Ok(mock_json) = std::env::var("NEUROCLIP_MOCK_YTDLP_METADATA") {
@@ -391,7 +413,8 @@ pub async fn probe_vod_metadata(
         "--no-warnings".to_string(),
         "--no-playlist".to_string(),
     ];
-    args.extend(build_bot_defense_args(cookie_source, custom_ua));
+    args.extend(defense_args);
+    args.push("--".to_string());
     args.push(trimmed_url.to_string());
 
     let ytdlp_bin = resolve_ytdlp_binary();
@@ -455,14 +478,8 @@ pub async fn resolve_video_stream_url(
     cookie_source: &CookieSource,
     custom_ua: Option<&str>,
 ) -> Result<String, AppError> {
-    let trimmed_url = original_url.trim();
-    if trimmed_url.is_empty()
-        || (!trimmed_url.starts_with("http://") && !trimmed_url.starts_with("https://"))
-    {
-        return Err(AppError::Ingestion(IngestError::InvalidUrl(
-            trimmed_url.to_string(),
-        )));
-    }
+    let trimmed_url = validate_http_url(original_url)?;
+    let defense_args = try_build_bot_defense_args(cookie_source, custom_ua)?;
 
     if let Ok(mock_stream_url) = std::env::var("NEUROCLIP_MOCK_YTDLP_STREAM_URL") {
         let candidate = mock_stream_url
@@ -484,7 +501,8 @@ pub async fn resolve_video_stream_url(
         "--no-warnings".to_string(),
         "--no-playlist".to_string(),
     ];
-    args.extend(build_bot_defense_args(cookie_source, custom_ua));
+    args.extend(defense_args);
+    args.push("--".to_string());
     args.push(trimmed_url.to_string());
 
     let ytdlp_bin = resolve_ytdlp_binary();
@@ -554,6 +572,9 @@ pub async fn download_audio_stream<F>(
 where
     F: Fn(IngestProgressPayload) + Send + Sync + 'static,
 {
+    let validated_url = validate_http_url(url)?;
+    let defense_args = try_build_bot_defense_args(cookie_source, custom_ua)?;
+
     // Pre-flight disk space check: enforce 5GB minimum threshold
     check_disk_space(Some(output_dir))?;
 
@@ -591,8 +612,9 @@ where
         audio_file_template.to_string_lossy().to_string(),
         "--no-playlist".to_string(),
     ];
-    args.extend(build_bot_defense_args(cookie_source, custom_ua));
-    args.push(url.to_string());
+    args.extend(defense_args);
+    args.push("--".to_string());
+    args.push(validated_url.to_string());
 
     let mut cmd = Command::new(&ytdlp_bin);
     cmd.args(&args)
@@ -627,19 +649,33 @@ where
 
     let mut guard = ChildProcessGuard::new(child);
 
-    // Concurrent stderr draining to prevent buffer stalls
+    // Concurrent stderr draining with bounded tail ring buffer + streaming bot-block detection
     let stderr_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
-        let mut collected = Vec::new();
+        const STDERR_TAIL_LIMIT: usize = 64;
+        let mut reader = LossyLineReader::new(stderr);
+        let mut tail = std::collections::VecDeque::with_capacity(STDERR_TAIL_LIMIT);
+        let mut bot_blocked_hint: Option<String> = None;
         while let Ok(Some(line)) = reader.next_line().await {
-            if collected.len() < 30 {
-                collected.push(line);
+            let lower = line.to_ascii_lowercase();
+            if bot_blocked_hint.is_none()
+                && (lower.contains("403")
+                    || lower.contains("429")
+                    || lower.contains("sign in to confirm"))
+            {
+                bot_blocked_hint = Some(line.clone());
             }
+            if tail.len() >= STDERR_TAIL_LIMIT {
+                tail.pop_front();
+            }
+            tail.push_back(line);
         }
-        collected.join("\n")
+        (
+            tail.into_iter().collect::<Vec<_>>().join("\n"),
+            bot_blocked_hint,
+        )
     });
 
-    let mut stdout_reader = BufReader::new(stdout).lines();
+    let mut stdout_reader = LossyLineReader::new(stdout);
     let mut last_emit_instant = Instant::now();
 
     loop {
@@ -649,6 +685,7 @@ where
                 if let Some(child) = guard.child_mut() {
                     let _ = child.start_kill();
                 }
+                stderr_task.abort();
                 return Err(AppError::TaskCancelled);
             }
             line_res = stdout_reader.next_line() => {
@@ -669,6 +706,7 @@ where
                     }
                     Ok(None) => break,
                     Err(_) => {
+                        stderr_task.abort();
                         return Err(AppError::Ingestion(IngestError::NetworkStreamDropped));
                     }
                 }
@@ -676,28 +714,39 @@ where
         }
     }
 
-    let status = match guard.child_mut() {
-        Some(child) => child.wait().await.map_err(|e| {
+    let status = if let Some(child) = guard.child_mut() {
+        child.wait().await.map_err(|e| {
+            stderr_task.abort();
             AppError::Sidecar(SidecarError::ExecutionFailed {
                 binary: "yt-dlp".to_string(),
                 exit_code: None,
                 details: e.to_string(),
             })
-        })?,
-        None => {
-            return Err(AppError::Sidecar(SidecarError::ExecutionFailed {
-                binary: "yt-dlp".to_string(),
-                exit_code: None,
-                details: "Child process already terminated".to_string(),
-            }));
-        }
+        })?
+    } else {
+        stderr_task.abort();
+        return Err(AppError::Sidecar(SidecarError::ExecutionFailed {
+            binary: "yt-dlp".to_string(),
+            exit_code: None,
+            details: "Child process already terminated".to_string(),
+        }));
     };
 
-    let stderr_output = stderr_task.await.unwrap_or_default();
+    let (stderr_output, bot_blocked_hint) = stderr_task.await.unwrap_or_default();
 
     if !status.success() {
-        if stderr_output.contains("403") || stderr_output.contains("Sign in to confirm") {
-            return Err(AppError::Ingestion(IngestError::BotBlocked(stderr_output)));
+        let lower_tail = stderr_output.to_ascii_lowercase();
+        if bot_blocked_hint.is_some()
+            || lower_tail.contains("403")
+            || lower_tail.contains("429")
+            || lower_tail.contains("sign in to confirm")
+        {
+            let details = if stderr_output.is_empty() {
+                bot_blocked_hint.unwrap_or_default()
+            } else {
+                stderr_output
+            };
+            return Err(AppError::Ingestion(IngestError::BotBlocked(details)));
         }
         return Err(AppError::Ingestion(IngestError::ExtractionFailed(
             stderr_output,
@@ -778,8 +827,7 @@ pub async fn start_ffmpeg_pcm_stream(
 
     // Drain stderr concurrently to prevent Windows anonymous pipe deadlocks
     tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
-        while let Ok(Some(_line)) = reader.next_line().await {}
+        drain_pipe_lossy(stderr).await;
     });
 
     let guard = ChildProcessGuard::new(child);
@@ -1022,23 +1070,11 @@ pub fn generate_vod_manifest(
 }
 
 fn resolve_ytdlp_binary() -> String {
-    if let Ok(p) = std::env::var("NEUROCLIP_YTDLP_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "yt-dlp".to_string()
+    resolve_sidecar_binary("yt-dlp", "NEUROCLIP_YTDLP_PATH")
 }
 
 fn resolve_ffmpeg_binary() -> String {
-    if let Ok(p) = std::env::var("NEUROCLIP_FFMPEG_PATH") {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    "ffmpeg".to_string()
+    resolve_sidecar_binary("ffmpeg", "NEUROCLIP_FFMPEG_PATH")
 }
 
 #[cfg(test)]
@@ -1150,5 +1186,69 @@ mod tests {
             assert!(windows[0].rms_energy > 0.0);
             assert_eq!(windows[1].window_index, 1);
         }
+    }
+
+    #[test]
+    fn test_validate_http_url_rejects_flag_injection_and_control_chars() {
+        assert!(validate_http_url("https://www.twitch.tv/videos/12345").is_ok());
+        assert!(validate_http_url("http://example.com/stream.mp4").is_ok());
+
+        for bad in [
+            "",
+            "   ",
+            " https://www.youtube.com/watch?v=1",
+            "--exec=calc",
+            "-o",
+            "ftp://example.com/video.mp4",
+            "https://www.youtube.com/watch?v=1\0",
+            "https://www.youtube.com/watch?v=1\n",
+        ] {
+            let res = validate_http_url(bad);
+            assert!(
+                matches!(res, Err(AppError::Ingestion(IngestError::InvalidUrl(_)))),
+                "Expected InvalidUrl for {bad:?}, got {res:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ytdlp_entrypoints_reject_flag_urls_and_bad_cookies() {
+        let temp_dir = std::env::temp_dir();
+        let err_dl = download_audio_stream(
+            "--exec=calc",
+            &temp_dir,
+            "vod_bad_url",
+            &CookieSource::None,
+            None,
+            |_| {},
+            CancellationToken::new(),
+        )
+        .await;
+        assert!(matches!(
+            err_dl,
+            Err(AppError::Ingestion(IngestError::InvalidUrl(_)))
+        ));
+
+        let err_cookie = probe_vod_metadata(
+            "https://www.youtube.com/watch?v=123",
+            &CookieSource::File("-evil.txt".to_string()),
+            None,
+        )
+        .await;
+        assert!(matches!(
+            err_cookie,
+            Err(AppError::Ingestion(IngestError::InvalidUrl(_)))
+        ));
+
+        let err_ua = resolve_video_stream_url(
+            "https://www.youtube.com/watch?v=123",
+            &CookieSource::None,
+            Some("Mozilla/5.0\r\nInjected"),
+        )
+        .await;
+        assert!(matches!(
+            err_ua,
+            Err(AppError::Ingestion(IngestError::InvalidUrl(_)))
+        ));
     }
 }

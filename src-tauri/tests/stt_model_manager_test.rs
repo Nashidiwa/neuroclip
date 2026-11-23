@@ -163,3 +163,24 @@ fn test_m4_16_no_placeholder_hashes_and_empty_model_rejection() {
     assert!(info.is_verified);
     assert!(info.size_bytes > 0);
 }
+
+#[test]
+fn test_verify_model_rejects_traversal_model_name_without_custom_path() {
+    for bad in [
+        "../../Windows/System32/evil",
+        "../secret",
+        "sub/model",
+        "sub\\model",
+        "C:evil",
+        "CON",
+        "model\0name",
+        "   ",
+    ] {
+        let res = verify_model(bad, None);
+        assert!(
+            res.is_err(),
+            "verify_model({bad:?}, None) must reject traversal/invalid name"
+        );
+        assert_eq!(res.unwrap_err().code(), "ERR_STT_MODEL_NOT_FOUND");
+    }
+}

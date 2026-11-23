@@ -4,12 +4,14 @@
 //! `docs/ARCHITECTURE.md` §4.2, `docs/adr/ADR-003`, and `docs/TASK_BOARD.md` TASK-M4-13.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Emitter;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::storage::{resolve_cache_dir, resolve_projects_dir};
+use crate::core::storage::{
+    resolve_vod_project_dir as core_resolve_vod_project_dir, validate_vod_id,
+};
 use crate::error::{AppError, IngestError, StorageError};
 use crate::ingestion::cookies::CookieSource;
 use crate::ingestion::range_slicer::{execute_range_slice, RangeSliceRequest, SliceResult};
@@ -57,30 +59,59 @@ pub fn cancel_slice_task_token(task_id: &str) -> bool {
     false
 }
 
-/// Resolve the project directory for a given VOD ID.
-#[must_use]
-pub fn resolve_vod_project_dir(vod_id: &str) -> PathBuf {
-    let p = std::path::Path::new(vod_id);
-    if p.is_absolute() && p.exists() {
-        return p.to_path_buf();
-    }
-    let projects_dir = resolve_projects_dir();
-    let candidate = projects_dir.join(vod_id);
-    if candidate.exists() {
-        candidate
-    } else {
-        resolve_cache_dir().join(vod_id)
+/// Resolve and validate the project directory for a given VOD ID (`projects/<vod_id>` or `cache/<vod_id>`).
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `vod_id` fails path-traversal validation.
+pub fn resolve_vod_project_dir(vod_id: &str) -> Result<PathBuf, AppError> {
+    core_resolve_vod_project_dir(vod_id)
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn resolve_clip_output_path(
+    clips_dir: &Path,
+    start_sec: f64,
+    end_sec: f64,
+    cluster_id: Option<&str>,
+    output_filename: Option<&str>,
+) -> PathBuf {
+    let fallback_name = || {
+        let safe_cluster = cluster_id
+            .and_then(|cid| Path::new(cid).file_name())
+            .and_then(|f| f.to_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty() && !s.contains(".."));
+        match safe_cluster {
+            Some(cid) => format!("clip_{cid}.mp4"),
+            None => format!("clip_{}_{}.mp4", start_sec as u64, end_sec as u64),
+        }
+    };
+
+    match output_filename {
+        Some(name) => {
+            // Guard against path traversal by only taking the filename component
+            let clean_name = Path::new(name)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .filter(|s| !s.trim().is_empty());
+            match clean_name {
+                Some(file_name) => clips_dir.join(file_name),
+                None => clips_dir.join(fallback_name()),
+            }
+        }
+        None => clips_dir.join(fallback_name()),
     }
 }
 
-/// Internal slice video segment execution logic, callable without a Tauri AppHandle.
-#[allow(
-    clippy::too_many_lines,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
-)]
-pub async fn slice_video_segment_internal(
-    vod_id: &str,
+struct SliceTarget<'a> {
+    project_dir: &'a Path,
+    vod_id: &'a str,
+}
+
+/// Internal slice video segment execution logic targeting an explicit `project_dir`.
+#[allow(clippy::too_many_lines)]
+async fn slice_video_segment_in_dir(
+    target: SliceTarget<'_>,
     start_sec: f64,
     end_sec: f64,
     cluster_id: Option<&str>,
@@ -88,40 +119,45 @@ pub async fn slice_video_segment_internal(
     custom_input_source: Option<&str>,
     app: Option<&tauri::AppHandle>,
 ) -> Result<SliceResult, AppError> {
-    let project_dir = resolve_vod_project_dir(vod_id);
-
+    let project_dir = target.project_dir;
+    let vod_id = target.vod_id;
     let clips_dir = project_dir.join("clips");
-    std::fs::create_dir_all(&clips_dir).map_err(|e| {
-        AppError::Storage(StorageError::DirectoryCreationFailed {
-            path: clips_dir.display().to_string(),
-            details: e.to_string(),
-        })
-    })?;
-
-    let output_path = match output_filename {
-        Some(name) => {
-            // Guard against path traversal by only taking the filename component
-            let file_name = std::path::Path::new(name)
-                .file_name()
-                .and_then(|f| f.to_str())
-                .filter(|s| !s.trim().is_empty());
-            match file_name {
-                Some(clean_name) => clips_dir.join(clean_name),
-                None => match cluster_id {
-                    Some(cid) => clips_dir.join(format!("clip_{cid}.mp4")),
-                    None => {
-                        clips_dir.join(format!("clip_{}_{}.mp4", start_sec as u64, end_sec as u64))
-                    }
-                },
-            }
-        }
-        None => match cluster_id {
-            Some(cid) => clips_dir.join(format!("clip_{cid}.mp4")),
-            None => clips_dir.join(format!("clip_{}_{}.mp4", start_sec as u64, end_sec as u64)),
-        },
-    };
-
     let manifest_path = project_dir.join("vod_manifest.json");
+    let has_custom_input = custom_input_source.is_some();
+
+    let clips_dir_for_prep = clips_dir.clone();
+    let manifest_path_for_prep = manifest_path.clone();
+    let disk_manifest = tokio::task::spawn_blocking(move || {
+        std::fs::create_dir_all(&clips_dir_for_prep).map_err(|e| {
+            AppError::Storage(StorageError::DirectoryCreationFailed {
+                path: clips_dir_for_prep.display().to_string(),
+                details: e.to_string(),
+            })
+        })?;
+
+        if !has_custom_input && manifest_path_for_prep.exists() {
+            let bytes = std::fs::read(&manifest_path_for_prep).map_err(|e| {
+                AppError::Storage(StorageError::FileNotFound(format!(
+                    "Không thể đọc vod_manifest.json tại '{}': {e}",
+                    manifest_path_for_prep.display()
+                )))
+            })?;
+
+            let manifest: VodManifest = serde_json::from_slice(&bytes).map_err(|e| {
+                AppError::Ingestion(IngestError::ExtractionFailed(format!(
+                    "Lỗi phân giải vod_manifest.json: {e}"
+                )))
+            })?;
+            Ok::<_, AppError>(Some(manifest))
+        } else {
+            Ok::<_, AppError>(None)
+        }
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Slice directory preparation task panicked: {e}")))??;
+
+    let output_path =
+        resolve_clip_output_path(&clips_dir, start_sec, end_sec, cluster_id, output_filename);
 
     let mut loaded_manifest: Option<VodManifest> = None;
     let mut had_cached_stream_url = false;
@@ -129,20 +165,7 @@ pub async fn slice_video_segment_internal(
     let (input_source, is_online, clamped_end_sec) = if let Some(src) = custom_input_source {
         let is_remote = src.starts_with("http://") || src.starts_with("https://");
         (src.to_string(), is_remote, end_sec)
-    } else if manifest_path.exists() {
-        let bytes = std::fs::read(&manifest_path).map_err(|e| {
-            AppError::Storage(StorageError::FileNotFound(format!(
-                "Không thể đọc vod_manifest.json tại '{}': {e}",
-                manifest_path.display()
-            )))
-        })?;
-
-        let mut manifest: VodManifest = serde_json::from_slice(&bytes).map_err(|e| {
-            AppError::Ingestion(IngestError::ExtractionFailed(format!(
-                "Lỗi phân giải vod_manifest.json: {e}"
-            )))
-        })?;
-
+    } else if let Some(mut manifest) = disk_manifest {
         // Clamp end_sec to manifest duration if manifest duration is positive and finite
         let clamped = if manifest.duration_seconds > 0.0 && end_sec > manifest.duration_seconds {
             manifest.duration_seconds
@@ -183,7 +206,11 @@ pub async fn slice_video_segment_internal(
                     resolve_video_stream_url(orig_url, &CookieSource::None, None).await?;
                 manifest.video_stream_url = Some(resolved.clone());
                 if let Ok(updated_bytes) = serde_json::to_vec_pretty(&manifest) {
-                    let _ = std::fs::write(&manifest_path, updated_bytes);
+                    let write_path = manifest_path.clone();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        let _ = std::fs::write(&write_path, updated_bytes);
+                    })
+                    .await;
                 }
                 resolved
             } else {
@@ -259,7 +286,11 @@ pub async fn slice_video_segment_internal(
                     {
                         manifest.video_stream_url = Some(refreshed_url.clone());
                         if let Ok(updated_bytes) = serde_json::to_vec_pretty(&manifest) {
-                            let _ = std::fs::write(&manifest_path, updated_bytes);
+                            let write_path = manifest_path.clone();
+                            let _ = tokio::task::spawn_blocking(move || {
+                                let _ = std::fs::write(&write_path, updated_bytes);
+                            })
+                            .await;
                         }
                         let retry_request = RangeSliceRequest {
                             input_source: refreshed_url,
@@ -296,6 +327,46 @@ pub async fn slice_video_segment_internal(
     slice_result
 }
 
+/// Internal slice video segment execution logic, callable without a Tauri AppHandle.
+///
+/// Accepts existing absolute project directories for integration tests while strictly validating
+/// all non-absolute VOD identifiers via [`crate::core::storage::resolve_vod_project_dir`].
+pub async fn slice_video_segment_internal(
+    vod_id: &str,
+    start_sec: f64,
+    end_sec: f64,
+    cluster_id: Option<&str>,
+    output_filename: Option<&str>,
+    custom_input_source: Option<&str>,
+    app: Option<&tauri::AppHandle>,
+) -> Result<SliceResult, AppError> {
+    let vod_id_owned = vod_id.to_string();
+    let project_dir = tokio::task::spawn_blocking(move || {
+        let candidate = Path::new(&vod_id_owned);
+        if candidate.is_absolute() && candidate.exists() {
+            Ok(candidate.to_path_buf())
+        } else {
+            core_resolve_vod_project_dir(&vod_id_owned)
+        }
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Slice project dir resolution panicked: {e}")))??;
+
+    slice_video_segment_in_dir(
+        SliceTarget {
+            project_dir: &project_dir,
+            vod_id,
+        },
+        start_sec,
+        end_sec,
+        cluster_id,
+        output_filename,
+        custom_input_source,
+        app,
+    )
+    .await
+}
+
 /// Slices a highlight segment from online stream m3u8 or local file without re-encoding.
 ///
 /// Complies with:
@@ -304,7 +375,7 @@ pub async fn slice_video_segment_internal(
 /// - AC-13.3 & ED-13.1: Zero initial freeze, PTS normalized, drift <= 50ms
 ///
 /// # Errors
-/// Returns `AppError` if parameters are invalid, manifest is missing, or slicing fails.
+/// Returns `AppError` if parameters are invalid, `vod_id` fails traversal validation, manifest is missing, or slicing fails.
 #[tauri::command]
 pub async fn slice_video_segment(
     vod_id: String,
@@ -315,8 +386,21 @@ pub async fn slice_video_segment(
     custom_input_source: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<SliceResult, AppError> {
-    slice_video_segment_internal(
-        &vod_id,
+    let clean_id = validate_vod_id(&vod_id)
+        .map_err(AppError::Storage)?
+        .to_string();
+    let clean_id_for_dir = clean_id.clone();
+    let project_dir =
+        tokio::task::spawn_blocking(move || core_resolve_vod_project_dir(&clean_id_for_dir))
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!("Slice project dir resolution panicked: {e}"))
+            })??;
+    slice_video_segment_in_dir(
+        SliceTarget {
+            project_dir: &project_dir,
+            vod_id: &clean_id,
+        },
         start_sec,
         end_sec,
         cluster_id.as_deref(),
@@ -336,4 +420,70 @@ pub async fn slice_video_segment(
 #[allow(clippy::needless_pass_by_value)]
 pub fn cancel_slice_video_segment(task_id: String) -> Result<bool, AppError> {
     Ok(cancel_slice_task_token(&task_id))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_vod_project_dir_rejects_traversal_and_absolute_paths() {
+        for bad in [
+            "",
+            "   ",
+            "..",
+            "../outside",
+            "..\\outside",
+            "vod/sub",
+            "vod\\sub",
+            "C:\\Windows\\System32",
+            "D:vod_123",
+            "\\\\server\\share\\vod",
+        ] {
+            let res = resolve_vod_project_dir(bad);
+            assert!(
+                matches!(res, Err(AppError::Storage(_))),
+                "Expected Storage error for invalid vod_id {bad:?}, got {res:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_slice_video_segment_internal_rejects_relative_traversal() {
+        let res = slice_video_segment_internal(
+            "../../outside_dir",
+            0.0,
+            10.0,
+            None,
+            None,
+            Some("D:/Videos/test.mp4"),
+            None,
+        )
+        .await;
+        assert!(
+            matches!(res, Err(AppError::Storage(_))),
+            "Expected Storage error for traversal vod_id, got {res:?}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_clip_output_path_sanitizes_cluster_id_and_filename() {
+        let clips_dir = Path::new("C:\\NeuroClip\\projects\\vod_1\\clips");
+        let path_from_cluster =
+            resolve_clip_output_path(clips_dir, 10.0, 20.0, Some("../../evil_cluster"), None);
+        assert_eq!(path_from_cluster.parent(), Some(clips_dir));
+        assert_eq!(
+            path_from_cluster.file_name().and_then(|s| s.to_str()),
+            Some("clip_evil_cluster.mp4")
+        );
+
+        let path_from_filename =
+            resolve_clip_output_path(clips_dir, 10.0, 20.0, None, Some("..\\..\\escaped.mp4"));
+        assert_eq!(path_from_filename.parent(), Some(clips_dir));
+        assert_eq!(
+            path_from_filename.file_name().and_then(|s| s.to_str()),
+            Some("escaped.mp4")
+        );
+    }
 }

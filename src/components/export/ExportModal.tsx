@@ -100,6 +100,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const mountedRef = useRef<boolean>(true);
   const isOpenRef = useRef<boolean>(isOpen);
   const exportRunIdRef = useRef<number>(0);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevIsOpenRef = useRef<boolean>(false);
   const prevProjectIdRef = useRef<string>(project.projectId);
   const prevFormatRef = useRef<ExportFormat>(format);
@@ -111,6 +112,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     return () => {
       mountedRef.current = false;
       exportRunIdRef.current += 1;
+      if (copyTimerRef.current !== null) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -183,14 +188,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           setExportProgress(payload);
         }
       }),
-    ).then((unlisten) => {
-      if (typeof unlisten !== 'function') return;
-      if (!isMounted) {
-        unlisten();
-      } else {
-        unlistenFn = unlisten;
-      }
-    });
+    )
+      .then((unlisten) => {
+        if (typeof unlisten !== 'function') return;
+        if (!isMounted) {
+          unlisten();
+        } else {
+          unlistenFn = unlisten;
+        }
+      })
+      .catch(() => {
+        // Non-Tauri / degraded listener fallback
+      });
 
     return () => {
       isMounted = false;
@@ -213,8 +222,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     try {
       if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(textToCopy);
+        if (!mountedRef.current || !isOpenRef.current) return;
         setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000);
+        if (copyTimerRef.current !== null) {
+          clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = setTimeout(() => {
+          copyTimerRef.current = null;
+          if (mountedRef.current) {
+            setIsCopied(false);
+          }
+        }, 2000);
       }
     } catch {
       // Fallback

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ErrorBanner } from './ErrorBanner';
 import { ERROR_CODES, IpcErrorResponse } from '@/services/ipc/error';
 
@@ -226,5 +226,44 @@ describe('TASK-M4-02: ErrorBanner Component (AC-02.2 & IT-02.2)', () => {
       'Tải tài nguyên thất bại từ server ngoại vi',
     );
     expect(screen.getByTestId('icon-recoverable')).toBeInTheDocument();
+  });
+
+  it('clears copy-feedback timer cleanly on unmount', async () => {
+    vi.useFakeTimers();
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    try {
+      const errorPayload: IpcErrorResponse = {
+        code: ERROR_CODES.TRANSLATE_API_FAILED,
+        message: 'Lỗi dịch thuật',
+        details: 'Stack trace info',
+        recoverable: true,
+      };
+
+      const { unmount } = render(<ErrorBanner error={errorPayload} />);
+      fireEvent.click(screen.getByTestId('toggle-details-btn'));
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('copy-details-btn'));
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('Đã sao chép!')).toBeInTheDocument();
+
+      unmount();
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(2500);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

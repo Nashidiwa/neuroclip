@@ -2,7 +2,7 @@
 # Dự án: NeuroClip — Windows Desktop Application
 
 **Mã tài liệu:** `docs/ARCHITECTURE.md`  
-**Phiên bản:** 1.0.0 (Phase 2: Architecture Design & Data Contracts — Đã đồng bộ Phase 4 `M4-01..M4-25`)  
+**Phiên bản:** 1.0.0 (Phase 2: Architecture Design & Data Contracts — Đã đồng bộ Phase 4 `M4-01..M4-26`)  
 **Chủ trì:** `@lead-architect`  
 **Căn cứ pháp lý:** Phê duyệt của Product Owner ngày 2026-11-05 trên 7 quyết định kỹ thuật RFC-001 (`ADR-001` đến `ADR-007`), phê duyệt ngày 2026-11-16 cho Pure Rust `tract-onnx` Silero VAD (`RFC-002` $\rightarrow$ `ADR-008`), và `docs/PRD.md` (v1.3.0)  
 **Nguyên tắc chỉ đạo:** Single Source of Truth (SSOT), Zero-Guesswork Policy, Memory Safety, Defensive Fault-Tolerance  
@@ -112,8 +112,8 @@ graph TD
 ## 3. CHI TIẾT CÁC PHÂN HỆ VÀ TẦNG HỆ THỐNG
 
 ### 3.1 Tầng Giao diện Người dùng (Presentation Layer - React/TypeScript)
-- **Công nghệ nền tảng:** React 18.3, TypeScript 5.6 (Strict Mode, zero-any), Tailwind CSS 3.4, Lucide Icons, Vite 4.3.
-- **Trình quản lý Trạng thái (State Management):** Toàn bộ 8 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`, `useStudioStore.ts`) được xây dựng trên **`src/stores/createStore.ts`** (`React.useSyncExternalStore`) với **API tương thích Zustand** (`createStore`, `create`, `getState`, `getInitialState`, `setState`, `subscribe`, memoized selector + `equalityFn`). Các task `M4-20..M4-25` chạy ổn định trực tiếp trên `createStore.ts` (không cài gói `zustand` rời); `useHardwareStore.ts` thuộc `Target M4-27`.
+- **Công nghệ nền tảng:** React 18.3, TypeScript 5.6 (Strict Mode, zero-any), Tailwind CSS 3.4, Lucide Icons, Vite 5.4.
+- **Trình quản lý Trạng thái (State Management):** Toàn bộ 8 store hiện tại (`settingsStore.ts`, `useProjectStore.ts`, `useIngestionStore.ts`, `useChatStore.ts`, `useHighlightStore.ts`, `useTranscriptStore.ts`, `useLogStore.ts`, `useStudioStore.ts`) được xây dựng trên **`src/stores/createStore.ts`** (`React.useSyncExternalStore`) với **API tương thích Zustand** (`createStore`, `create`, `getState`, `getInitialState`, `setState`, `subscribe`, memoized selector + `equalityFn`). Các task `M4-20..M4-26` chạy ổn định trực tiếp trên `createStore.ts` (không cài gói `zustand` rời); `useHardwareStore.ts` thuộc `Target M4-27`.
 - **Hiện trạng Shell & Lộ trình thành phần giao diện:**
   - `main.tsx` bọc `<App />` trong `<GlobalErrorBoundary>`; `App.tsx` hiện tại render Acrylic Dark Theme cùng shell 4 tab tối giản (`overview`, `ingestion` gắn `IngestionDashboard` + `DropZone`, `highlights` gắn `HighlightViewer`, `studio` gắn `SubtitleStudio`) không gọi IPC lúc mount.
   - Các thành phần UI trọng tâm Phase 4 (`M4-06..M4-28`):
@@ -121,7 +121,7 @@ graph TD
     2. `IngestionDashboard` & `DropZone` *(đã triển khai tại `M4-06`/`M4-07`)*: Hỗ trợ dán URL (Twitch/YouTube) kèm Audio-First hoặc kéo thả file video cục bộ.
     3. `HighlightViewer` *(đã triển khai tại `M4-12`)*: Danh sách thẻ highlight xếp theo điểm số, lý do nổi bật và bookmark *(nối end-to-end với `sliceVideoSegment` $\rightarrow$ `useStudioStore` tại `TASK-M4-29B`)*.
     4. `SubtitleStudio` *(đã triển khai tại `M4-20..M4-23`, nối `ExportModal` tại `M4-25`)*: Trình soạn thảo phụ đề tinh gọn với HTML5 Video/`asset://` canvas, danh sách ảo hóa custom `useVirtualizer`, bàn phím số 1-chạm đổi màu theo chuẩn **PO Option 1** (`1`: Vedal `#98FB98`, `2`: Neuro `#FFB6C1`, `3`: Evil `#FF0055`, `4`: Guest `#FFD700`, `5`: Chat `#87CEEB`), và đèn cảnh báo CPS.
-    5. `ExportModal` *(đã triển khai tại `M4-25`, `src/components/export/ExportModal.tsx`)*: Giao diện xuất **CapCut PC Draft JSON** (kèm Dual Export `.ass`/`.srt`), `.ass` (UTF-8 with BOM), `.srt` (UTF-8 with BOM); xuất **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)** & export progress bar (`export:progress`) thuộc `Target M4-26`.
+    5. `ExportModal` *(đã triển khai tại `M4-25..M4-26`, `src/components/export/ExportModal.tsx`)*: Giao diện xuất **CapCut PC Draft JSON** (kèm Dual Export `.ass`/`.srt`), **Premiere Pro XML / FCP7 XML (`<xmeml version="4">`)** kèm export progress bar (`export:progress`), `.ass` (UTF-8 with BOM), và `.srt` (UTF-8 with BOM).
 
 ### 3.2 Tầng Lõi Điều phối Hệ thống (Tauri v2 Rust Core)
 Được viết bằng Rust để đảm bảo **an toàn bộ nhớ tuyệt đối** và **tốc độ thực thi tối đa**:
@@ -152,7 +152,7 @@ graph TD
   - `draft_content.json`: Chứa timeline video đã cắt, track âm thanh, và track phụ đề văn bản hoàn chỉnh.
   - `draft_meta_info.json`: Metadata phiên làm việc của CapCut.
 - **Dual Export Safeguard & `.ASS`/`.SRT` *(Đã triển khai `M4-24..M4-25`: `export/{mod.rs, ass_exporter.rs, srt_exporter.rs}`, facade `stt/subtitle_export.rs`)*:** Luôn tự động xuất kèm file phụ đề độc lập `.ass` (chuẩn màu style nhân vật cho Aegisub, `PlayResX`/`PlayResY` theo `target_layout`, UTF-8 with BOM) và `.srt` (UTF-8 with BOM) vào cùng thư mục dự án để người dùng không bao giờ mất dữ liệu nếu CapCut cập nhật phiên bản mới.
-- **Premiere Pro XML Exporter *(Target `M4-26`: `export/premiere_xml.rs`, `commands/export_cmd.rs`)*:** Sinh file XML chuẩn Final Cut Pro 7 / Premiere XML (`<xmeml version="4">`) tương thích 100% với Adobe Premiere Pro và DaVinci Resolve, kèm streaming tiến độ `export:progress` về `ExportModal.tsx`.
+- **Premiere Pro XML Exporter *(Đã triển khai `M4-26`: `export/premiere_xml.rs`, `commands/export_cmd.rs`)*:** Sinh file XML chuẩn Final Cut Pro 7 / Premiere XML (`<xmeml version="4">`) tương thích 100% với Adobe Premiere Pro và DaVinci Resolve, kèm streaming tiến độ `export:progress` về `ExportModal.tsx`.
 
 ---
 
@@ -329,18 +329,18 @@ sequenceDiagram
 
 Tất cả các giao tiếp giữa Rust Backend và TypeScript Frontend, cũng như các tệp lưu trữ trên đĩa, đều phải tuân thủ nghiêm ngặt các JSON Schemas có kiểu tĩnh dưới đây:
 
-### 5.0 Hợp đồng IPC Đã Chốt (`M4-01..M4-25`) & Mở rộng Mục tiêu (`M4-26+`)
+### 5.0 Hợp đồng IPC Đã Chốt (`M4-01..M4-26`) & Mở rộng Mục tiêu (`M4-27+`)
 
-- **Các Tauri IPC Commands & Events trọng tâm đã triển khai (`42` commands across `10` modules, `M4-01..M4-25`):**
+- **Các Tauri IPC Commands & Events trọng tâm đã triển khai (`43` commands across `10` modules, `M4-01..M4-26`):**
   - `import_local_video(filePath, customCacheDir?, taskId?) -> VodManifest` (`commands/ingest_cmd.rs`, `services/ipc/ingestion.ts`) cùng giao thức `asset://` Range streaming (`206 Partial Content`, `core/custom_protocol.rs`).
   - `start_faster_whisper_transcription(clipId, audioPath, model?, quantization?, device?, guardrailPolicy?) -> TranscriptSegmentsContainer` (`commands/stt_cmd.rs`, `services/ipc/stt.ts`), với `GuardrailPolicy = "auto_downgrade" | "strict_reject"`.
   - `transcribe_highlight_clip(clipId, audioPath, apiKey?, isMusicMode) -> TranscriptSegmentsContainer` (`commands/stt_cmd.rs`, `stt/groq_client.rs`).
   - `translate_vietsub(clipId, container, apiKey?, model?, stylePreset?, castMembers?) -> TranscriptSegmentsContainer` (`commands/translation_cmd.rs`, `M4-17..M4-18`), kèm `TranslateVietsubOptions` trong `src/types/translation.ts` đã triển khai đầy đủ `stylePreset` (`"TikTok Gen Z Trend"` | `"Formal Subber"`) và `castMembers` tại `TASK-M4-18`.
   - `wrap_vietnamese_subtitles` & `optimize_transcript_cps` (`commands/translation_cmd.rs`, `M4-19`) cho ngắt dòng bảo toàn từ ghép tiếng Việt và tối ưu Time Borrowing.
-  - `export_subtitles_ass`, `export_subtitles_srt`, `export_subtitle_project`, `export_subtitles_project_ass`, `export_subtitles_project_srt`, và `export_capcut_draft(project, options)` (`commands/export_cmd.rs`, `services/ipc/export.ts`, `src/types/export.ts`, `M4-24..M4-25`).
-  - **Kênh sự kiện đã nối (`CONVENTIONS.md` §4.2):** `sidecar:progress` (`{ task_id, percentage, current_fps, eta_sec }`), `ingest:progress`, `chat:progress`, `chat:fallback`, `slice:progress`, `stt:progress` (camelCase `{ taskId, stage, percent, etaSec?, currentChunk, totalChunks }`), `stt:chunk` (snake_case `{ clip_id, chunk_index, segment }`), `translation:progress` (camelCase `{ clipId, translatedCount, totalCount }`).
-- **Mục tiêu kế tiếp (`TASK-M4-26`):**
-  - Bổ sung `export_premiere_xml` (`export/premiere_xml.rs`, chuẩn FCP7 XML `<xmeml version="4">`) và event streaming **`export:progress`** (`{ projectId, percent, currentStep }`) kết nối progress bar trên `ExportModal.tsx`.
+  - `export_subtitles_ass`, `export_subtitles_srt`, `export_subtitle_project`, `export_subtitles_project_ass`, `export_subtitles_project_srt`, `export_capcut_draft(project, options)`, và `export_premiere_xml(project, options)` (`commands/export_cmd.rs`, `export/premiere_xml.rs`, `services/ipc/export.ts`, `src/types/export.ts`, `M4-24..M4-26`).
+  - **Kênh sự kiện đã nối (`CONVENTIONS.md` §4.2):** `sidecar:progress` (`{ task_id, percentage, current_fps, eta_sec }`), `ingest:progress`, `chat:progress`, `chat:fallback`, `slice:progress`, `stt:progress` (camelCase `{ taskId, stage, percent, etaSec?, currentChunk, totalChunks }`), `stt:chunk` (snake_case `{ clip_id, chunk_index, segment }`), `translation:progress` (camelCase `{ clipId, translatedCount, totalCount }`), và `export:progress` (`{ projectId, percent, currentStep }` cho Premiere XML & CapCut Draft kết nối progress bar trên `ExportModal.tsx`).
+- **Mục tiêu mở rộng kế tiếp (`M4.8` / `TASK-M4-27..M4-29`):**
+  - Hoàn thiện UI Onboarding & Hardware Probe (`OnboardingWizardModal`, `HardwareRecommendation`, `useHardwareStore`), Windows Credential Locker (`core/keyring.rs`), `SidecarUpdater` (`sidecar/updater.rs`), và nối luồng end-to-end `HighlightViewer` → `sliceVideoSegment` → `useStudioStore` (`TASK-M4-29B`).
 
 ### 5.1 `hardware_profile.json`
 Mô tả thông số phần cứng được phát hiện và đề xuất cấu hình của Onboarding Wizard:

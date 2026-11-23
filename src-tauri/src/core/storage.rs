@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::error::{AppError, IngestError, StorageError};
+use crate::error::{AppError, ExportError, IngestError, StorageError};
 
 /// Minimum disk space required before starting ingestion (5GB = 5120MB).
 pub const MIN_DISK_SPACE_MB: u64 = 5120;
@@ -322,12 +322,53 @@ pub fn validate_project_id(project_id: &str) -> Result<&str, StorageError> {
     Ok(trimmed)
 }
 
-/// Validate a VOD identifier as a single safe path segment (no traversal, separators, or prefixes).
+/// Check whether a filename stem (case-insensitive) matches a Windows reserved DOS device name.
+fn is_windows_reserved_device_name(name: &str) -> bool {
+    let base = name.split('.').next().unwrap_or(name);
+    matches!(
+        base.to_ascii_uppercase().as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    )
+}
+
+/// Validate a VOD identifier as a single safe path segment (no traversal, separators, prefixes,
+/// leading/trailing whitespace, Windows-illegal filename characters, trailing dot/space,
+/// or Windows reserved device names).
 ///
 /// # Errors
-/// Returns [`StorageError::DirectoryCreationFailed`] if `vod_id` is empty, contains path separators,
-/// `..`, NUL bytes, drive prefixes/UNC/root components, or is an absolute path.
+/// Returns [`StorageError::DirectoryCreationFailed`] if `vod_id` is empty, has leading/trailing
+/// whitespace, contains path separators, `..`, NUL/control bytes, Windows-illegal chars
+/// (`< > " | ? *`), trailing `.`/space, Windows reserved device names (`CON`, `PRN`, `AUX`,
+/// `NUL`, `COM1..9`, `LPT1..9`), drive prefixes/UNC/root components, or is an absolute path.
 pub fn validate_vod_id(vod_id: &str) -> Result<&str, StorageError> {
+    if vod_id.chars().any(char::is_control) {
+        return Err(StorageError::DirectoryCreationFailed {
+            path: vod_id.to_string(),
+            details: "VOD ID contains forbidden control characters".to_string(),
+        });
+    }
+
     let trimmed = vod_id.trim();
     if trimmed.is_empty() {
         return Err(StorageError::DirectoryCreationFailed {
@@ -335,17 +376,33 @@ pub fn validate_vod_id(vod_id: &str) -> Result<&str, StorageError> {
             details: "VOD ID cannot be empty".to_string(),
         });
     }
+    if vod_id != trimmed {
+        return Err(StorageError::DirectoryCreationFailed {
+            path: vod_id.to_string(),
+            details: "VOD ID must not contain leading or trailing whitespace".to_string(),
+        });
+    }
 
     let path = Path::new(trimmed);
-    let has_forbidden_chars = trimmed.contains(['/', '\\', ':', '\0']) || trimmed.contains("..");
+    let has_forbidden_chars = trimmed
+        .contains(['/', '\\', ':', '\0', '<', '>', '"', '|', '?', '*'])
+        || trimmed.contains("..");
+    let has_trailing_dot_or_space =
+        trimmed.ends_with('.') || vod_id.ends_with(' ') || trimmed.ends_with(' ');
+    let is_reserved_device = is_windows_reserved_device_name(trimmed);
     let mut components = path.components();
     let is_single_normal = matches!(components.next(), Some(std::path::Component::Normal(_)))
         && components.next().is_none();
 
-    if has_forbidden_chars || path.is_absolute() || !is_single_normal {
+    if has_forbidden_chars
+        || has_trailing_dot_or_space
+        || is_reserved_device
+        || path.is_absolute()
+        || !is_single_normal
+    {
         return Err(StorageError::DirectoryCreationFailed {
             path: vod_id.to_string(),
-            details: "VOD ID contains forbidden path traversal, separator, or drive prefix"
+            details: "VOD ID contains forbidden path traversal, separator, Windows-illegal character, or reserved device name"
                 .to_string(),
         });
     }
@@ -528,6 +585,183 @@ pub fn clean_expired_cache(
     Ok(stats)
 }
 
+fn strip_windows_verbatim_prefix(path: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let raw = path.to_string_lossy();
+        if let Some(unc_rest) = raw.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{unc_rest}"));
+        }
+        if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped);
+        }
+    }
+    path
+}
+
+fn reject_traversal_or_nul(path: &Path) -> Result<(), StorageError> {
+    let raw = path.to_string_lossy();
+    if raw.trim().is_empty() || raw.contains('\0') {
+        return Err(StorageError::DirectoryCreationFailed {
+            path: raw.to_string(),
+            details: "Path cannot be empty or contain NUL bytes".to_string(),
+        });
+    }
+    if path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(StorageError::DirectoryCreationFailed {
+            path: raw.to_string(),
+            details: "Path traversal ('..') is forbidden".to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn canonicalize_with_ancestor(path: &Path) -> Result<PathBuf, AppError> {
+    reject_traversal_or_nul(path).map_err(AppError::Storage)?;
+    if !path.is_absolute() {
+        return Err(AppError::Storage(StorageError::DirectoryCreationFailed {
+            path: path.display().to_string(),
+            details: "Path must be absolute".to_string(),
+        }));
+    }
+
+    let mut tail_segments: Vec<std::ffi::OsString> = Vec::new();
+    let mut cursor = Some(path);
+    while let Some(current) = cursor {
+        if current.exists() {
+            let base = fs::canonicalize(current).map_err(|e| {
+                AppError::Storage(StorageError::DirectoryCreationFailed {
+                    path: current.display().to_string(),
+                    details: e.to_string(),
+                })
+            })?;
+            let mut resolved = strip_windows_verbatim_prefix(base);
+            for seg in tail_segments.iter().rev() {
+                resolved.push(seg);
+            }
+            return Ok(resolved);
+        }
+        if let Some(name) = current.file_name() {
+            tail_segments.push(name.to_os_string());
+        }
+        cursor = current.parent();
+    }
+
+    Err(AppError::Storage(StorageError::DirectoryCreationFailed {
+        path: path.display().to_string(),
+        details: "No existing ancestor volume/root found for path".to_string(),
+    }))
+}
+
+fn normalize_path_segments_for_compare(path: &Path) -> Vec<String> {
+    let clean = strip_windows_verbatim_prefix(path.to_path_buf());
+    clean
+        .components()
+        .filter(|c| !matches!(c, std::path::Component::CurDir))
+        .map(|c| {
+            let s = c.as_os_str().to_string_lossy();
+            #[cfg(windows)]
+            {
+                s.to_ascii_lowercase()
+            }
+            #[cfg(not(windows))]
+            {
+                s.to_string()
+            }
+        })
+        .collect()
+}
+
+/// Verify that `candidate` resolves inside at least one directory in `allowed_roots`.
+///
+/// Canonicalizes the deepest existing ancestor to defeat symlinks, junctions, `..` traversal,
+/// and case/verbatim-prefix variations on Windows.
+///
+/// # Errors
+/// Returns [`AppError::Storage`] if `candidate` is empty, relative, contains `..`/NUL,
+/// or resolves outside all `allowed_roots`.
+pub fn ensure_path_within_roots(
+    candidate: &Path,
+    allowed_roots: &[&Path],
+) -> Result<PathBuf, AppError> {
+    let resolved_candidate = canonicalize_with_ancestor(candidate)?;
+    let candidate_segments = normalize_path_segments_for_compare(&resolved_candidate);
+
+    for root in allowed_roots {
+        if let Ok(resolved_root) = canonicalize_with_ancestor(root) {
+            let root_segments = normalize_path_segments_for_compare(&resolved_root);
+            if !root_segments.is_empty() && candidate_segments.starts_with(&root_segments) {
+                return Ok(resolved_candidate);
+            }
+        }
+    }
+
+    Err(AppError::Storage(StorageError::DirectoryCreationFailed {
+        path: candidate.display().to_string(),
+        details: "Path is outside allowed NeuroClip workspace directories".to_string(),
+    }))
+}
+
+/// Validate a user-selected export output path (blocking `..` traversal and OS system folders).
+///
+/// Preserves arbitrary user-selected export destinations (e.g. `Desktop`, `Videos`, custom drives)
+/// while blocking path traversal (`..`), NUL bytes, and writes into OS protected directories.
+///
+/// # Errors
+/// Returns [`AppError::Export`] with [`ExportError::FileWriteFailed`] if validation fails.
+pub fn validate_user_export_path(output_path: &Path) -> Result<(), AppError> {
+    reject_traversal_or_nul(output_path).map_err(|e| {
+        AppError::Export(ExportError::FileWriteFailed {
+            path: output_path.display().to_string(),
+            details: e.to_string(),
+        })
+    })?;
+
+    #[cfg(windows)]
+    {
+        if output_path.is_absolute() {
+            let resolved = canonicalize_with_ancestor(output_path)
+                .unwrap_or_else(|_| output_path.to_path_buf());
+            let norm = resolved.to_string_lossy().to_ascii_lowercase();
+            let temp_norm = strip_windows_verbatim_prefix(std::env::temp_dir())
+                .to_string_lossy()
+                .to_ascii_lowercase();
+
+            if !norm.starts_with(&temp_norm) {
+                let mut protected_prefixes = vec![
+                    r"c:\windows\system32".to_string(),
+                    r"c:\windows\syswow64".to_string(),
+                    r"c:\windows\winsxs".to_string(),
+                    r"c:\program files".to_string(),
+                    r"c:\program files (x86)".to_string(),
+                ];
+                if let Ok(sys_root) = std::env::var("SystemRoot") {
+                    let sr = sys_root.trim().trim_end_matches('\\').to_ascii_lowercase();
+                    if !sr.is_empty() {
+                        protected_prefixes.push(format!(r"{sr}\system32"));
+                        protected_prefixes.push(format!(r"{sr}\syswow64"));
+                        protected_prefixes.push(format!(r"{sr}\winsxs"));
+                    }
+                }
+                for prefix in &protected_prefixes {
+                    if norm == *prefix || norm.starts_with(&format!(r"{prefix}\")) {
+                        return Err(AppError::Export(ExportError::FileWriteFailed {
+                            path: output_path.display().to_string(),
+                            details: "Cannot write export files inside OS system directories"
+                                .to_string(),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 pub(crate) mod test_env {
     use std::ffi::OsString;
@@ -644,6 +878,28 @@ pub mod tests {
             "\\\\server\\share",
             "\\\\?\\C:\\evil",
             "vod\0id",
+            "vod<1>",
+            "vod>2",
+            "vod\"3",
+            "vod|4",
+            "vod?5",
+            "vod*6",
+            "vod_trailing.",
+            "vod_trailing ",
+            "vod_tab\t",
+            "\tvod_leading_tab",
+            " vod_leading_space",
+            "vod_mid\ttab",
+            "CON",
+            "con",
+            "PRN",
+            "AUX",
+            "NUL",
+            "nul.json",
+            "COM1",
+            "com9",
+            "LPT1",
+            "lpt9",
         ];
 
         for bad in invalid_ids {
@@ -686,6 +942,25 @@ pub mod tests {
         );
 
         let _ = fs::remove_dir_all(&temp_root);
+    }
+
+    #[test]
+    fn test_validate_vod_id_rejects_leading_trailing_whitespace_and_tabs() {
+        for bad in [
+            "vod_tab\t",
+            "\tvod_leading_tab",
+            " vod_leading_space",
+            "vod_trailing_space ",
+            " vod_both ",
+            "vod\nnewline",
+        ] {
+            let res = validate_vod_id(bad);
+            assert!(
+                matches!(res, Err(StorageError::DirectoryCreationFailed { .. })),
+                "Expected DirectoryCreationFailed for {bad:?}, got {res:?}"
+            );
+        }
+        assert_eq!(validate_vod_id("vod_clean_123").unwrap(), "vod_clean_123");
     }
 
     #[test]
@@ -750,5 +1025,38 @@ pub mod tests {
         let elapsed = start.elapsed();
         // AC-05.1 SLA: execution within 50ms
         assert!(elapsed < Duration::from_millis(50));
+    }
+
+    #[test]
+    fn test_ensure_path_within_roots_and_validate_user_export_path() {
+        let root = unique_temp_dir("neuroclip_containment_root");
+        let child = root.join("sub").join("file.json");
+        let outside = unique_temp_dir("neuroclip_containment_outside").join("file.json");
+        let _ = fs::create_dir_all(&root);
+
+        assert!(ensure_path_within_roots(&child, &[root.as_path()]).is_ok());
+        assert!(ensure_path_within_roots(&outside, &[root.as_path()]).is_err());
+        assert!(
+            ensure_path_within_roots(&root.join("..").join("escape"), &[root.as_path()]).is_err()
+        );
+        assert!(
+            ensure_path_within_roots(Path::new("relative/file.json"), &[root.as_path()]).is_err()
+        );
+
+        assert!(validate_user_export_path(&child).is_ok());
+        assert!(validate_user_export_path(Path::new("../outside.xml")).is_err());
+        #[cfg(windows)]
+        {
+            assert!(
+                validate_user_export_path(Path::new(r"C:\Windows\System32\drivers\etc\hosts"))
+                    .is_err()
+            );
+            assert!(
+                validate_user_export_path(Path::new(r"C:\Program Files\NeuroClip\out.xml"))
+                    .is_err()
+            );
+        }
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

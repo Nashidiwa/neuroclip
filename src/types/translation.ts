@@ -59,6 +59,30 @@ export interface TranslatedSegmentItem {
 }
 
 /**
+ * Runtime type guard validating wire JSON `translation:progress` event payloads.
+ */
+export function isTranslationProgressPayloadJson(
+  val: unknown,
+): val is TranslationProgressPayloadJson {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  const clipId = typeof obj['clipId'] === 'string' ? obj['clipId'] : obj['clip_id'];
+  const translatedCount =
+    typeof obj['translatedCount'] === 'number' ? obj['translatedCount'] : obj['translated_count'];
+  const totalCount = typeof obj['totalCount'] === 'number' ? obj['totalCount'] : obj['total_count'];
+
+  return (
+    typeof clipId === 'string' &&
+    typeof translatedCount === 'number' &&
+    Number.isFinite(translatedCount) &&
+    typeof totalCount === 'number' &&
+    Number.isFinite(totalCount)
+  );
+}
+
+/**
  * Normalize wire JSON `translation:progress` event into frontend domain model.
  */
 export function normalizeTranslationProgressPayload(

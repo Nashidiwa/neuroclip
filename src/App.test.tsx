@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { invoke } from '@tauri-apps/api/core';
 import App from './App';
 import { GlobalErrorBoundary } from './components/common/ErrorBoundary';
 import { useProjectStore } from './stores/useProjectStore';
@@ -10,6 +11,22 @@ import { useIngestionStore } from './stores/useIngestionStore';
 import { useChatStore } from './stores/useChatStore';
 import { useHighlightStore } from './stores/useHighlightStore';
 import { normalizeHighlightCluster } from './types/highlight';
+import { ERROR_CODES } from './services/ipc/error';
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+  convertFileSrc: vi.fn((filePath: string) => `asset://localhost/${filePath}`),
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));
+
+vi.mock('@tauri-apps/api/webviewWindow', () => ({
+  getCurrentWebviewWindow: () => ({
+    onDragDropEvent: vi.fn().mockResolvedValue(() => {}),
+  }),
+}));
 import {
   loadTheme,
   resolveBackdropConfig,
@@ -242,6 +259,114 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
       } finally {
         consoleErrorSpy.mockRestore();
       }
+    });
+
+    it('clears stale URL/error and hides Trích xuất Chat after importing a local_file manifest', async () => {
+      const mockedInvoke = vi.mocked(invoke);
+      mockedInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'import_local_video') {
+          return {
+            vod_id: 'local_vod_99',
+            source_type: 'local_file',
+            original_url: null,
+            title: 'local_clip.mp4',
+            streamer: null,
+            duration_seconds: 120,
+            audio_path: 'C:\\cache\\local_vod_99.wav',
+            chat_file_path: null,
+            video_stream_url: null,
+            local_video_path: 'D:\\Videos\\local_clip.mp4',
+            created_at: '2026-11-22T00:00:00Z',
+          };
+        }
+        return null;
+      });
+
+      useIngestionStore.setState({
+        url: 'https://www.twitch.tv/videos/999999',
+        error: {
+          code: ERROR_CODES.INGEST_EXTRACTION_FAILED,
+          message: 'Old error',
+          recoverable: true,
+        },
+      });
+      useChatStore.setState({ vodId: 'old_online_vod' });
+
+      render(<App />);
+      fireEvent.click(screen.getByTestId('tab-ingestion'));
+
+      fireEvent.change(screen.getByTestId('dropzone-path-input'), {
+        target: { value: 'D:\\Videos\\local_clip.mp4' },
+      });
+      fireEvent.click(screen.getByTestId('dropzone-path-submit'));
+
+      await waitFor(() => {
+        expect(useIngestionStore.getState().manifest?.vodId).toBe('local_vod_99');
+      });
+
+      expect(useIngestionStore.getState().url).toBe('');
+      expect(useIngestionStore.getState().error).toBeNull();
+      expect(screen.queryByRole('button', { name: /Trích xuất Chat/i })).not.toBeInTheDocument();
+    });
+
+    it('disables Phân tích Highlight when manifest duration <= 0 or unavailable', () => {
+      const mockedInvoke = vi.mocked(invoke);
+      useHighlightStore.setState({ vodId: 'vod_no_manifest' });
+
+      render(<App />);
+      fireEvent.click(screen.getByTestId('tab-highlights'));
+
+      const detectBtn = screen.getByRole('button', { name: 'Phân tích Highlight' });
+      expect(detectBtn).toBeDisabled();
+      fireEvent.click(detectBtn);
+      expect(mockedInvoke).not.toHaveBeenCalledWith('detect_highlights', expect.anything());
+    });
+
+    it('renders amber ERR-05 fallback notice without duplicate red ErrorBanner on ERR_INGEST_CHAT_UNAVAILABLE', async () => {
+      const mockedInvoke = vi.mocked(invoke);
+      mockedInvoke.mockRejectedValueOnce({
+        code: ERROR_CODES.INGEST_CHAT_UNAVAILABLE,
+        message: 'Chat replay không khả dụng.',
+        recoverable: true,
+      });
+
+      useIngestionStore.setState({
+        url: 'https://www.twitch.tv/videos/12345',
+        manifest: {
+          vodId: 'vod_chat_missing',
+          sourceType: 'twitch_vod',
+          originalUrl: 'https://www.twitch.tv/videos/12345',
+          title: 'VOD',
+          streamer: 'Vedal',
+          durationSeconds: 300,
+          audioPath: 'C:\\cache\\audio.m4a',
+          chatFilePath: null,
+          videoStreamUrl: null,
+          localVideoPath: null,
+          createdAt: '2026-11-22T00:00:00Z',
+          vod_id: 'vod_chat_missing',
+          source_type: 'twitch_vod',
+          original_url: 'https://www.twitch.tv/videos/12345',
+          duration_seconds: 300,
+          audio_path: 'C:\\cache\\audio.m4a',
+          chat_file_path: null,
+          video_stream_url: null,
+          local_video_path: null,
+          created_at: '2026-11-22T00:00:00Z',
+        },
+      });
+
+      render(<App />);
+      fireEvent.click(screen.getByTestId('tab-ingestion'));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Trích xuất Chat/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('status')).toHaveTextContent('Chat replay không khả dụng.');
+      });
+      expect(screen.queryByText('Lỗi trích xuất Chat Replay')).not.toBeInTheDocument();
     });
   });
 });

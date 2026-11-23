@@ -21,7 +21,7 @@ use crate::stt::transcript_parser::{
     CONFIDENCE_FLAG_THRESHOLD, CPS_FLAG_THRESHOLD, DEFAULT_SPEAKER_ID,
 };
 use crate::stt::vad::{
-    detect_speech_segments, split_into_natural_pause_chunks, ChunkSplitConfig, VadConfig,
+    detect_speech_segments_async, split_into_natural_pause_chunks, ChunkSplitConfig, VadConfig,
 };
 use crate::stt::whisper_sidecar::{ProgressCallback, SttProgressPayload};
 
@@ -418,9 +418,9 @@ impl GroqClient {
             return Ok(result);
         }
 
-        // Multi-chunk path: run Silero VAD to detect natural pause boundaries
+        // Multi-chunk path: run Silero VAD on blocking threadpool to detect natural pause boundaries
         let vad_config = VadConfig::default();
-        let speech_segments = detect_speech_segments(samples, &vad_config)?;
+        let speech_segments = detect_speech_segments_async(samples.to_vec(), vad_config).await?;
 
         let split_config = ChunkSplitConfig {
             max_chunk_size_bytes: SAFE_CHUNK_BYTES,
@@ -493,10 +493,18 @@ impl GroqClient {
             let chunk_buf = PreparedAudioBuffer::from_f32(chunk_slice.to_vec(), sr as u32);
             let chunk_wav = chunk_buf.to_wav_bytes()?;
 
-            // Invariant: chunk payload must never exceed 20MB
-            if chunk_wav.len() > SAFE_CHUNK_BYTES {
+            // Hard ceiling check at 25MB Groq limit; warn if above 20MB soft threshold
+            if chunk_wav.len() > MAX_PAYLOAD_BYTES {
                 let size_mb = chunk_wav.len() as f32 / (1024.0 * 1024.0);
                 return Err(AppError::Stt(SttError::PayloadTooLarge { size_mb }));
+            }
+            if chunk_wav.len() > SAFE_CHUNK_BYTES {
+                warn!(
+                    clip_id = %clip_id,
+                    chunk_index = idx,
+                    size_bytes = chunk_wav.len(),
+                    "Groq STT chunk exceeded 20MB soft threshold but remains under 25MB hard ceiling"
+                );
             }
 
             let time_offset_sec = start_with_overlap_ms as f64 / 1000.0;

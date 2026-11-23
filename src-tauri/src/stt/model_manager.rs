@@ -9,6 +9,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use crate::core::storage::validate_vod_id;
 use crate::error::{AppError, SttError};
 
 /// 64KB chunk buffer size for streaming SHA-256 computation (< 128KB heap overhead).
@@ -173,6 +174,36 @@ pub fn compute_file_sha256(path: &Path) -> Result<String, AppError> {
     Ok(format!("{result:x}"))
 }
 
+fn resolve_uncatalogued_model_filename(
+    model_name: &str,
+    enforce_single_component: bool,
+) -> Result<String, AppError> {
+    if enforce_single_component {
+        let safe_name = validate_vod_id(model_name).map_err(|_| {
+            AppError::Stt(SttError::ModelNotFound {
+                path: model_name.to_string(),
+            })
+        })?;
+        let mut comps = Path::new(safe_name).components();
+        let is_single_normal =
+            matches!(comps.next(), Some(std::path::Component::Normal(_))) && comps.next().is_none();
+        if !is_single_normal {
+            return Err(AppError::Stt(SttError::ModelNotFound {
+                path: model_name.to_string(),
+            }));
+        }
+    }
+    let clean_name = model_name.trim();
+    let is_bin = Path::new(clean_name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"));
+    Ok(if is_bin {
+        clean_name.to_string()
+    } else {
+        format!("{clean_name}.bin")
+    })
+}
+
 /// Verify the existence and cryptographic SHA-256 integrity of a Whisper model file.
 ///
 /// Fast fails with `SttError::ModelNotFound` if missing, or `SttError::ModelIntegrityFailed`
@@ -186,15 +217,10 @@ pub fn verify_model(model_name: &str, custom_path: Option<&Path>) -> Result<Mode
     let (filename, expected_hash) = if let Some(entry) = catalog_entry {
         (entry.filename.to_string(), entry.expected_sha256)
     } else {
-        let is_bin = Path::new(model_name)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"));
-        let fname = if is_bin {
-            model_name.to_string()
-        } else {
-            format!("{model_name}.bin")
-        };
-        (fname, None)
+        (
+            resolve_uncatalogued_model_filename(model_name, custom_path.is_none())?,
+            None,
+        )
     };
 
     let target_path = match custom_path {

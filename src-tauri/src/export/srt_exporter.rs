@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::error::AppError;
 use crate::export::{write_file_with_bom, SubtitleProject};
 use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer};
+use crate::translation::cps_optimizer::effective_segment_text;
 
 /// Format time in seconds to standard SRT timecode `HH:MM:SS,mmm` (milliseconds, 3 digits).
 ///
@@ -44,7 +45,7 @@ pub fn generate_srt_script_from_segments(segments: &[TranscriptSegment]) -> Stri
         let seq = idx + 1;
         let start_tc = format_srt_timecode(seg.start_sec);
         let end_tc = format_srt_timecode(seg.end_sec);
-        let raw_text = seg.text_vi.as_deref().unwrap_or(&seg.text_en);
+        let raw_text = effective_segment_text(seg);
         let clean_text = raw_text.trim();
 
         let _ = writeln!(out, "{seq}");
@@ -233,5 +234,39 @@ pub mod tests {
             "SRT generation for 300 segments took {}ms, expected <= 200ms",
             elapsed.as_millis()
         );
+    }
+
+    #[test]
+    fn test_empty_and_whitespace_text_vi_falls_back_to_text_en() {
+        let segments = vec![
+            TranscriptSegment {
+                segment_id: "seg_empty".to_string(),
+                start_sec: 0.0,
+                end_sec: 1.5,
+                speaker_id: "neuro".to_string(),
+                text_en: "English SRT one".to_string(),
+                text_vi: Some(String::new()),
+                confidence: 0.95,
+                cps_score: 12.0,
+                is_flagged_for_review: false,
+                words: vec![],
+            },
+            TranscriptSegment {
+                segment_id: "seg_ws".to_string(),
+                start_sec: 2.0,
+                end_sec: 3.5,
+                speaker_id: "vedal".to_string(),
+                text_en: "English SRT two".to_string(),
+                text_vi: Some("   \t  ".to_string()),
+                confidence: 0.95,
+                cps_score: 12.0,
+                is_flagged_for_review: false,
+                words: vec![],
+            },
+        ];
+
+        let srt = generate_srt_script_from_segments(&segments);
+        assert!(srt.contains("1\n00:00:00,000 --> 00:00:01,500\nEnglish SRT one\n"));
+        assert!(srt.contains("2\n00:00:02,000 --> 00:00:03,500\nEnglish SRT two\n"));
     }
 }

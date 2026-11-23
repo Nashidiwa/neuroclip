@@ -119,7 +119,6 @@ export function findActiveSegments(
   const active: TranscriptSegment[] = [];
   const visited = new Set<string>();
   const startScan = candidateIdx >= 0 ? candidateIdx : 0;
-  const MAX_LOOKBACK_SEC = 60.0; // Dialogue safety horizon in seconds
 
   // 2. Scan backwards from candidateIdx to collect earlier segments that still span timeSec
   for (let i = startScan; i >= 0; i--) {
@@ -127,10 +126,6 @@ export function findActiveSegments(
     if (!seg) continue;
     const segStart = seg.startSec ?? seg.start_sec;
     const segEnd = seg.endSec ?? seg.end_sec;
-
-    if (timeSec - segStart > MAX_LOOKBACK_SEC) {
-      break; // Safe boundary cutoff
-    }
 
     if (segStart <= timeSec && segEnd >= timeSec) {
       const id = seg.segmentId ?? seg.segment_id;
@@ -270,6 +265,14 @@ const INITIAL_STATE = {
   selectedSegmentIds: [] as readonly string[],
 };
 
+function areStringArraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export const useStudioStore = createStore<StudioState>((set, get) => ({
   ...INITIAL_STATE,
 
@@ -289,14 +292,15 @@ export const useStudioStore = createStore<StudioState>((set, get) => ({
 
   setCurrentTime: (time) => {
     const validTime = Number.isFinite(time) && time >= 0 ? time : 0;
-    const currentSegments = get().segments;
-    const active = findActiveSegments(currentSegments, validTime);
+    const prevState = get();
+    const active = findActiveSegments(prevState.segments, validTime);
     const activeIds = active.map((s) => s.segmentId ?? s.segment_id);
+    const activeUnchanged = areStringArraysEqual(prevState.activeSegmentIds, activeIds);
 
     set({
       currentTime: validTime,
-      activeSegments: active,
-      activeSegmentIds: activeIds,
+      activeSegments: activeUnchanged ? prevState.activeSegments : active,
+      activeSegmentIds: activeUnchanged ? prevState.activeSegmentIds : activeIds,
     });
   },
 

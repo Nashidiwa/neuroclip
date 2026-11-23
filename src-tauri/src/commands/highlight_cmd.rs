@@ -5,7 +5,10 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::core::storage::resolve_vod_project_dir;
+use crate::core::storage::{
+    ensure_path_within_roots, resolve_cache_dir, resolve_projects_dir, resolve_vod_project_dir,
+    validate_vod_id,
+};
 use crate::error::{AppError, HighlightError, StorageError};
 use crate::highlight::cluster::{
     generate_clusters_from_fused_series, HighlightCluster, HighlightClustersContainer,
@@ -95,53 +98,82 @@ pub async fn detect_highlights(
     chat_events_path: Option<String>,
     audio_path: Option<String>,
 ) -> Result<HighlightClustersContainer, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id)?;
-    std::fs::create_dir_all(&project_dir).map_err(|e| {
-        AppError::Storage(StorageError::DirectoryCreationFailed {
-            path: project_dir.display().to_string(),
-            details: e.to_string(),
-        })
-    })?;
+    tokio::task::spawn_blocking(move || {
+        let clean_id = validate_vod_id(&vod_id)
+            .map_err(AppError::Storage)?
+            .to_string();
+        let project_dir = resolve_vod_project_dir(&clean_id)?;
+        std::fs::create_dir_all(&project_dir).map_err(|e| {
+            AppError::Storage(StorageError::DirectoryCreationFailed {
+                path: project_dir.display().to_string(),
+                details: e.to_string(),
+            })
+        })?;
 
-    // Determine paths for chat and audio
-    let resolved_chat_path: Option<PathBuf> = chat_events_path.map(PathBuf::from).or_else(|| {
-        let p_json = project_dir.join("chat_events.json");
-        if p_json.exists() {
-            Some(p_json)
+        let projects_vod_dir = resolve_projects_dir().join(&clean_id);
+        let cache_root = resolve_cache_dir();
+        let allowed_roots = [
+            project_dir.as_path(),
+            projects_vod_dir.as_path(),
+            cache_root.as_path(),
+        ];
+
+        // Determine paths for chat and audio (strictly contained in VOD workspace or cache)
+        let resolved_chat_path: Option<PathBuf> = if let Some(raw_path) = chat_events_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(ensure_path_within_roots(
+                Path::new(raw_path),
+                &allowed_roots,
+            )?)
         } else {
-            let p_ndjson = project_dir.join("chat_events.ndjson");
-            if p_ndjson.exists() {
-                Some(p_ndjson)
+            let p_json = project_dir.join("chat_events.json");
+            if p_json.exists() {
+                Some(p_json)
             } else {
-                None
+                let p_ndjson = project_dir.join("chat_events.ndjson");
+                if p_ndjson.exists() {
+                    Some(p_ndjson)
+                } else {
+                    None
+                }
             }
-        }
-    });
+        };
 
-    let resolved_audio_path: Option<PathBuf> = audio_path.map(PathBuf::from).or_else(|| {
-        let p_wav = project_dir.join(format!("{vod_id}.audio.wav"));
-        if p_wav.exists() {
-            Some(p_wav)
+        let resolved_audio_path: Option<PathBuf> = if let Some(raw_path) = audio_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(ensure_path_within_roots(
+                Path::new(raw_path),
+                &allowed_roots,
+            )?)
         } else {
-            let manifest_path = project_dir.join("vod_manifest.json");
-            if manifest_path.exists() {
-                if let Ok(bytes) = std::fs::read(&manifest_path) {
-                    if let Ok(manifest) = serde_json::from_slice::<VodManifest>(&bytes) {
-                        let p = PathBuf::from(manifest.audio_path);
-                        if p.exists() {
-                            return Some(p);
+            let p_wav = project_dir.join(format!("{clean_id}.audio.wav"));
+            if p_wav.exists() {
+                Some(p_wav)
+            } else {
+                let manifest_path = project_dir.join("vod_manifest.json");
+                let mut manifest_audio: Option<PathBuf> = None;
+                if manifest_path.exists() {
+                    if let Ok(bytes) = std::fs::read(&manifest_path) {
+                        if let Ok(manifest) = serde_json::from_slice::<VodManifest>(&bytes) {
+                            let p = PathBuf::from(manifest.audio_path);
+                            if p.exists() {
+                                manifest_audio = Some(p);
+                            }
                         }
                     }
                 }
+                manifest_audio
             }
-            None
-        }
-    });
+        };
 
-    let vod_id_clone = vod_id.clone();
-    let container = tokio::task::spawn_blocking(move || {
         run_highlight_detection_blocking(
-            &vod_id_clone,
+            &clean_id,
             duration_seconds,
             &project_dir,
             resolved_chat_path.as_deref(),
@@ -149,9 +181,7 @@ pub async fn detect_highlights(
         )
     })
     .await
-    .map_err(|e| AppError::Highlight(HighlightError::WorkerPanicked(e.to_string())))??;
-
-    Ok(container)
+    .map_err(|e| AppError::Highlight(HighlightError::WorkerPanicked(e.to_string())))?
 }
 
 /// Retrieve saved highlight clusters from `highlight_clusters.json` for a VOD.
@@ -162,28 +192,33 @@ pub async fn detect_highlights(
 pub async fn get_highlight_clusters(
     vod_id: String,
 ) -> Result<HighlightClustersContainer, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id)?;
-    let output_json_path = project_dir.join("highlight_clusters.json");
+    tokio::task::spawn_blocking(move || {
+        let project_dir = resolve_vod_project_dir(&vod_id)?;
+        let output_json_path = project_dir.join("highlight_clusters.json");
 
-    if !output_json_path.exists() {
-        return Err(AppError::Storage(StorageError::FileNotFound(
-            output_json_path.display().to_string(),
-        )));
-    }
+        if !output_json_path.exists() {
+            return Err(AppError::Storage(StorageError::FileNotFound(
+                output_json_path.display().to_string(),
+            )));
+        }
 
-    let bytes = std::fs::read(&output_json_path).map_err(|e| {
-        AppError::Storage(StorageError::FileNotFound(format!(
-            "Failed to read highlight_clusters.json: {e}"
-        )))
-    })?;
+        let bytes = std::fs::read(&output_json_path).map_err(|e| {
+            AppError::Storage(StorageError::FileNotFound(format!(
+                "Failed to read highlight_clusters.json: {e}"
+            )))
+        })?;
 
-    let container: HighlightClustersContainer = serde_json::from_slice(&bytes).map_err(|e| {
-        AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-            "Failed to parse highlight_clusters.json: {e}"
-        )))
-    })?;
+        let container: HighlightClustersContainer =
+            serde_json::from_slice(&bytes).map_err(|e| {
+                AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+                    "Failed to parse highlight_clusters.json: {e}"
+                )))
+            })?;
 
-    Ok(container)
+        Ok(container)
+    })
+    .await
+    .map_err(|e| AppError::Highlight(HighlightError::WorkerPanicked(e.to_string())))?
 }
 
 /// Toggle or set bookmark status on a specific highlight cluster.
@@ -196,58 +231,62 @@ pub async fn toggle_highlight_bookmark(
     cluster_id: String,
     bookmarked: Option<bool>,
 ) -> Result<HighlightCluster, AppError> {
-    let project_dir = resolve_vod_project_dir(&vod_id)?;
-    let output_json_path = project_dir.join("highlight_clusters.json");
+    tokio::task::spawn_blocking(move || {
+        let project_dir = resolve_vod_project_dir(&vod_id)?;
+        let output_json_path = project_dir.join("highlight_clusters.json");
 
-    if !output_json_path.exists() {
-        return Err(AppError::Storage(StorageError::FileNotFound(
-            output_json_path.display().to_string(),
-        )));
-    }
+        if !output_json_path.exists() {
+            return Err(AppError::Storage(StorageError::FileNotFound(
+                output_json_path.display().to_string(),
+            )));
+        }
 
-    let bytes = std::fs::read(&output_json_path).map_err(|e| {
-        AppError::Storage(StorageError::FileNotFound(format!(
-            "Failed to read highlight_clusters.json: {e}"
-        )))
-    })?;
-
-    let mut container: HighlightClustersContainer =
-        serde_json::from_slice(&bytes).map_err(|e| {
-            AppError::Highlight(HighlightError::ChatParsingFailed(format!(
-                "Failed to parse highlight_clusters.json: {e}"
+        let bytes = std::fs::read(&output_json_path).map_err(|e| {
+            AppError::Storage(StorageError::FileNotFound(format!(
+                "Failed to read highlight_clusters.json: {e}"
             )))
         })?;
 
-    let mut updated_cluster: Option<HighlightCluster> = None;
+        let mut container: HighlightClustersContainer =
+            serde_json::from_slice(&bytes).map_err(|e| {
+                AppError::Highlight(HighlightError::ChatParsingFailed(format!(
+                    "Failed to parse highlight_clusters.json: {e}"
+                )))
+            })?;
 
-    for cluster in &mut container.clusters {
-        if cluster.cluster_id == cluster_id {
-            let next_state = bookmarked.unwrap_or(!cluster.is_bookmarked);
-            cluster.is_bookmarked = next_state;
-            updated_cluster = Some(cluster.clone());
-            break;
+        let mut updated_cluster: Option<HighlightCluster> = None;
+
+        for cluster in &mut container.clusters {
+            if cluster.cluster_id == cluster_id {
+                let next_state = bookmarked.unwrap_or(!cluster.is_bookmarked);
+                cluster.is_bookmarked = next_state;
+                updated_cluster = Some(cluster.clone());
+                break;
+            }
         }
-    }
 
-    let result = updated_cluster.ok_or_else(|| {
-        AppError::Storage(StorageError::FileNotFound(format!(
-            "Cluster with ID '{cluster_id}' not found in {vod_id}"
-        )))
-    })?;
+        let result = updated_cluster.ok_or_else(|| {
+            AppError::Storage(StorageError::FileNotFound(format!(
+                "Cluster with ID '{cluster_id}' not found in {vod_id}"
+            )))
+        })?;
 
-    // Persist updated container back to disk
-    let serialized = serde_json::to_vec_pretty(&container).map_err(|e| {
-        AppError::Internal(format!("Failed to serialize highlight_clusters.json: {e}"))
-    })?;
+        // Persist updated container back to disk
+        let serialized = serde_json::to_vec_pretty(&container).map_err(|e| {
+            AppError::Internal(format!("Failed to serialize highlight_clusters.json: {e}"))
+        })?;
 
-    std::fs::write(&output_json_path, serialized).map_err(|e| {
-        AppError::Internal(format!(
-            "Failed to write updated highlight_clusters.json at '{}': {e}",
-            output_json_path.display()
-        ))
-    })?;
+        std::fs::write(&output_json_path, serialized).map_err(|e| {
+            AppError::Internal(format!(
+                "Failed to write updated highlight_clusters.json at '{}': {e}",
+                output_json_path.display()
+            ))
+        })?;
 
-    Ok(result)
+        Ok(result)
+    })
+    .await
+    .map_err(|e| AppError::Highlight(HighlightError::WorkerPanicked(e.to_string())))?
 }
 
 /// Alias command matching frontend IPC call `toggle_cluster_bookmark`.
@@ -304,5 +343,73 @@ mod tests {
                 "toggle_highlight_bookmark must reject {bad:?}, got {toggle_res:?}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_detect_highlights_rejects_paths_outside_workspace() {
+        let _env_guard = crate::core::storage::test_env::ENV_LOCK.lock().await;
+        let root =
+            std::env::temp_dir().join(format!("neuroclip_hl_containment_{}", std::process::id()));
+        let projects_root = root.join("projects");
+        let cache_root = root.join("cache");
+        let outside_dir = root.join("outside");
+        let _ = std::fs::create_dir_all(&projects_root);
+        let _ = std::fs::create_dir_all(&cache_root);
+        let _ = std::fs::create_dir_all(&outside_dir);
+        let _p_env = crate::core::storage::test_env::ScopedEnvVar::set(
+            "NEUROCLIP_PROJECTS_DIR",
+            &projects_root.to_string_lossy(),
+        );
+        let _c_env = crate::core::storage::test_env::ScopedEnvVar::set(
+            "NEUROCLIP_CACHE_DIR",
+            &cache_root.to_string_lossy(),
+        );
+
+        let outside_chat = outside_dir.join("secret.json");
+        let outside_audio = outside_dir.join("secret.wav");
+
+        let chat_res = detect_highlights(
+            "vod_containment_test".to_string(),
+            60.0,
+            Some(outside_chat.to_string_lossy().to_string()),
+            None,
+        )
+        .await;
+        assert!(matches!(
+            chat_res,
+            Err(AppError::Storage(
+                StorageError::DirectoryCreationFailed { .. }
+            ))
+        ));
+
+        let audio_res = detect_highlights(
+            "vod_containment_test".to_string(),
+            60.0,
+            None,
+            Some(outside_audio.to_string_lossy().to_string()),
+        )
+        .await;
+        assert!(matches!(
+            audio_res,
+            Err(AppError::Storage(
+                StorageError::DirectoryCreationFailed { .. }
+            ))
+        ));
+
+        let traversal_res = detect_highlights(
+            "vod_containment_test".to_string(),
+            60.0,
+            Some("../../etc/passwd".to_string()),
+            None,
+        )
+        .await;
+        assert!(matches!(
+            traversal_res,
+            Err(AppError::Storage(
+                StorageError::DirectoryCreationFailed { .. }
+            ))
+        ));
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -6,6 +6,7 @@ use std::path::Path;
 use std::time::Instant;
 use tauri::{command, Emitter};
 
+use crate::core::storage::validate_user_export_path;
 use crate::error::AppError;
 use crate::export::capcut_schema::canvas_config_for_layout;
 use crate::export::premiere_xml::{build_premiere_xml, write_premiere_xml_bytes};
@@ -45,9 +46,14 @@ pub async fn export_subtitles_ass(
     container: TranscriptSegmentsContainer,
     output_path: String,
 ) -> Result<String, AppError> {
-    let path = Path::new(&output_path);
-    export_ass_file(&container, path)?;
-    Ok(output_path)
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&output_path);
+        validate_user_export_path(path)?;
+        export_ass_file(&container, path)?;
+        Ok(output_path)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("ASS export task panicked: {e}")))?
 }
 
 /// Export transcript segments into a standard SubRip (`.srt`) subtitle file with UTF-8 BOM.
@@ -59,9 +65,14 @@ pub async fn export_subtitles_srt(
     container: TranscriptSegmentsContainer,
     output_path: String,
 ) -> Result<String, AppError> {
-    let path = Path::new(&output_path);
-    export_srt_file(&container, path)?;
-    Ok(output_path)
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&output_path);
+        validate_user_export_path(path)?;
+        export_srt_file(&container, path)?;
+        Ok(output_path)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("SRT export task panicked: {e}")))?
 }
 
 /// Export and serialize a full [`SubtitleProject`] adhering to Schema 5.6 JSON format.
@@ -73,9 +84,14 @@ pub async fn export_subtitle_project(
     project: SubtitleProject,
     output_path: String,
 ) -> Result<String, AppError> {
-    let path = Path::new(&output_path);
-    export_subtitle_project_json(&project, path)?;
-    Ok(output_path)
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&output_path);
+        validate_user_export_path(path)?;
+        export_subtitle_project_json(&project, path)?;
+        Ok(output_path)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Subtitle project export task panicked: {e}")))?
 }
 
 /// Export an existing [`SubtitleProject`] directly into an Advanced SubStation Alpha (`.ass`) file with UTF-8 BOM.
@@ -87,9 +103,14 @@ pub async fn export_subtitles_project_ass(
     project: SubtitleProject,
     output_path: String,
 ) -> Result<String, AppError> {
-    let path = Path::new(&output_path);
-    export_ass_project_file(&project, path)?;
-    Ok(output_path)
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&output_path);
+        validate_user_export_path(path)?;
+        export_ass_project_file(&project, path)?;
+        Ok(output_path)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("ASS project export task panicked: {e}")))?
 }
 
 /// Export an existing [`SubtitleProject`] directly into a SubRip (`.srt`) file with UTF-8 BOM.
@@ -101,9 +122,14 @@ pub async fn export_subtitles_project_srt(
     project: SubtitleProject,
     output_path: String,
 ) -> Result<String, AppError> {
-    let path = Path::new(&output_path);
-    export_srt_project_file(&project, path)?;
-    Ok(output_path)
+    tokio::task::spawn_blocking(move || {
+        let path = Path::new(&output_path);
+        validate_user_export_path(path)?;
+        export_srt_project_file(&project, path)?;
+        Ok(output_path)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("SRT project export task panicked: {e}")))?
 }
 
 /// Execute CapCut PC Draft export while streaming monotonic progress steps via `on_progress`.
@@ -142,6 +168,10 @@ where
         ),
         None => (project.video_file_path.as_deref(), None),
     };
+
+    if let Some(root) = custom_root {
+        validate_user_export_path(root)?;
+    }
 
     let result = export_capcut_draft_folder(project, v_path, custom_root)?;
 
@@ -204,6 +234,7 @@ where
         current_step: "Đang xác thực bố cục và thông số Premiere XML...".to_string(),
     });
 
+    validate_user_export_path(output_path)?;
     canvas_config_for_layout(&project.target_layout)?;
 
     on_progress(ExportProgressPayload {
@@ -401,5 +432,30 @@ pub mod tests {
         assert_eq!(events.len(), 1);
         assert!((events[0].percent - 10.0).abs() < f64::EPSILON);
         assert!(!xml_path.exists());
+    }
+
+    #[test]
+    fn test_export_rejects_traversal_and_system_paths() {
+        let project = make_test_project();
+        let err = execute_premiere_xml_export_with_progress(
+            &project,
+            Path::new("../escape/timeline.xml"),
+            None,
+            |_| {},
+        )
+        .unwrap_err();
+        assert_eq!(err.code(), "ERR_EXPORT_FILE_WRITE_FAILED");
+
+        #[cfg(windows)]
+        {
+            let sys_err = execute_premiere_xml_export_with_progress(
+                &project,
+                Path::new(r"C:\Windows\System32\timeline.xml"),
+                None,
+                |_| {},
+            )
+            .unwrap_err();
+            assert_eq!(sys_err.code(), "ERR_EXPORT_FILE_WRITE_FAILED");
+        }
     }
 }

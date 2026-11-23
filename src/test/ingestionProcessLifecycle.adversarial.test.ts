@@ -37,6 +37,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useIngestionStore } from '../stores/useIngestionStore.ts';
 import { type VodMetadataJson, toVodMetadata } from '../services/ipc/ingestion.ts';
 import { ERROR_CODES } from '../services/ipc/error.ts';
@@ -50,6 +51,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 const mockedInvoke = vi.mocked(invoke);
+const mockedListen = vi.mocked(listen);
 
 describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecycle', () => {
   beforeEach(() => {
@@ -343,6 +345,360 @@ describe('ADVERSARIAL CHALLENGE: TASK-M4-06 Ingestion Pipeline & Process Lifecyc
 
       // Stale response must be discarded; manifest must remain vod_second!
       expect(useIngestionStore.getState().manifest?.vodId).toBe('vod_second');
+    });
+
+    it('must not overwrite cancelled state if startVodIngestion resolves after cancelIngestion and sets ERR_TASK_CANCELLED.recoverable === false', async () => {
+      let resolveStart!: (val: unknown) => void;
+      mockedInvoke.mockImplementation(async (cmd) => {
+        if (cmd === 'start_vod_ingestion') {
+          return new Promise((resolve) => {
+            resolveStart = resolve;
+          });
+        }
+        if (cmd === 'cancel_vod_ingestion') {
+          return true;
+        }
+        return null;
+      });
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=late_resolve_after_cancel');
+      const startPromise = useIngestionStore.getState().startIngestion();
+
+      const cancelled = await useIngestionStore.getState().cancelIngestion();
+      expect(cancelled).toBe(true);
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().manifest).toBeNull();
+      expect(useIngestionStore.getState().error?.code).toBe('ERR_TASK_CANCELLED');
+      expect(useIngestionStore.getState().error?.recoverable).toBe(false);
+
+      // Late resolution of start_vod_ingestion must NOT clobber cancelled state
+      resolveStart({
+        vod_id: 'vod_zombie',
+        source_type: 'youtube_vod',
+        title: 'Zombie',
+        duration_seconds: 120,
+        audio_path: 'C:\\cache\\zombie.m4a',
+        created_at: '2026-11-10T00:00:00Z',
+      });
+      await startPromise;
+
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().manifest).toBeNull();
+      expect(useIngestionStore.getState().error?.code).toBe('ERR_TASK_CANCELLED');
+    });
+
+    it('detaches pending ingest:progress listener and discards late completion if reset() runs mid-subscribe', async () => {
+      const unlistenSpy = vi.fn();
+      let resolveListen!: (fn: () => void) => void;
+      mockedListen.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveListen = resolve;
+          }),
+      );
+
+      let resolveStart!: (val: unknown) => void;
+      mockedInvoke.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveStart = resolve;
+          }),
+      );
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=reset_mid_listen');
+      const pending = useIngestionStore.getState().startIngestion();
+
+      expect(mockedListen).toHaveBeenCalledTimes(1);
+
+      useIngestionStore.getState().reset();
+      resolveListen(unlistenSpy);
+      resolveStart({
+        vod_id: 'vod_after_reset',
+        source_type: 'youtube_vod',
+        title: 'After reset',
+        duration_seconds: 60,
+        audio_path: 'C:\\cache\\a.m4a',
+        created_at: '2026-11-10T00:00:00Z',
+      });
+      await pending;
+
+      expect(unlistenSpy).toHaveBeenCalledTimes(1);
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().manifest).toBeNull();
+    });
+
+    it('isolates probeSeq from ingestSeq so concurrent probe() and startIngestion() do not invalidate each other', async () => {
+      let resolveProbe!: (val: unknown) => void;
+      let resolveIngest!: (val: unknown) => void;
+
+      mockedInvoke.mockImplementation((cmd) => {
+        if (cmd === 'probe_vod') {
+          return new Promise((resolve) => {
+            resolveProbe = resolve;
+          });
+        }
+        if (cmd === 'start_vod_ingestion') {
+          return new Promise((resolve) => {
+            resolveIngest = resolve;
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=concurrent');
+      const ingestPromise = useIngestionStore.getState().startIngestion();
+      const probePromise = useIngestionStore.getState().probe();
+
+      expect(useIngestionStore.getState().isIngesting).toBe(true);
+      expect(useIngestionStore.getState().isProbing).toBe(true);
+
+      resolveIngest({
+        vod_id: 'vod_concurrent',
+        source_type: 'youtube_vod',
+        title: 'Concurrent VOD',
+        duration_seconds: 180,
+        audio_path: 'C:\\cache\\concurrent.m4a',
+        created_at: '2026-11-22T00:00:00Z',
+      });
+      await ingestPromise;
+
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().activeTaskId).toBeNull();
+      expect(useIngestionStore.getState().manifest?.vodId).toBe('vod_concurrent');
+
+      resolveProbe({
+        id: 'probe_concurrent',
+        title: 'Concurrent VOD',
+        is_live: false,
+      });
+      await probePromise;
+
+      expect(useIngestionStore.getState().isProbing).toBe(false);
+      expect(useIngestionStore.getState().metadata?.id).toBe('probe_concurrent');
+    });
+
+    it('does not increment ingestSeq when cancelIngestion fails so still-running startIngestion settles cleanly', async () => {
+      let resolveIngest!: (val: unknown) => void;
+
+      mockedInvoke.mockImplementation((cmd) => {
+        if (cmd === 'start_vod_ingestion') {
+          return new Promise((resolve) => {
+            resolveIngest = resolve;
+          });
+        }
+        if (cmd === 'cancel_vod_ingestion') {
+          return Promise.reject({
+            code: ERROR_CODES.INTERNAL_ERROR,
+            message: 'Cancel IPC failed',
+            recoverable: true,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=cancel_fail');
+      const ingestPromise = useIngestionStore.getState().startIngestion();
+
+      const cancelled = await useIngestionStore.getState().cancelIngestion();
+      expect(cancelled).toBe(false);
+      expect(useIngestionStore.getState().error?.code).toBe(ERROR_CODES.INTERNAL_ERROR);
+      expect(useIngestionStore.getState().isIngesting).toBe(true);
+
+      resolveIngest({
+        vod_id: 'vod_after_failed_cancel',
+        source_type: 'youtube_vod',
+        title: 'Recovered VOD',
+        duration_seconds: 90,
+        audio_path: 'C:\\cache\\recovered.m4a',
+        created_at: '2026-11-22T00:00:00Z',
+      });
+      await ingestPromise;
+
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().activeTaskId).toBeNull();
+      expect(useIngestionStore.getState().manifest?.vodId).toBe('vod_after_failed_cancel');
+    });
+
+    it('ignores late ingest:progress events from superseded taskIds so activeTaskId is never overwritten', async () => {
+      let progressHandler: ((event: { payload: unknown }) => void) | undefined;
+      mockedListen.mockImplementationOnce(async (_name, cb) => {
+        progressHandler = cb as (event: { payload: unknown }) => void;
+        return () => {};
+      });
+
+      let resolveIngest!: (val: unknown) => void;
+      mockedInvoke.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveIngest = resolve;
+          }),
+      );
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=task_guard');
+      const ingestPromise = useIngestionStore.getState().startIngestion();
+      const activeId = useIngestionStore.getState().activeTaskId;
+      expect(activeId).not.toBeNull();
+
+      // Wait for listen() microtask registration
+      await Promise.resolve();
+
+      // Emit stale progress from a superseded task
+      progressHandler?.({
+        payload: {
+          taskId: 'task_stale_old',
+          stage: 'downloading',
+          percent: 99,
+          speedKbps: 100,
+          etaSec: 1,
+        },
+      });
+
+      expect(useIngestionStore.getState().activeTaskId).toBe(activeId);
+      expect(useIngestionStore.getState().progress?.taskId).toBe(activeId);
+      expect(useIngestionStore.getState().progress?.percent).toBe(0);
+
+      // Matching activeTaskId event updates progress normally
+      progressHandler?.({
+        payload: {
+          taskId: activeId,
+          stage: 'downloading',
+          percent: 55,
+          speedKbps: 2048,
+          etaSec: 12,
+        },
+      });
+      expect(useIngestionStore.getState().activeTaskId).toBe(activeId);
+      expect(useIngestionStore.getState().progress?.percent).toBe(55);
+
+      resolveIngest({
+        vod_id: 'vod_guarded',
+        source_type: 'youtube_vod',
+        title: 'Guarded VOD',
+        duration_seconds: 120,
+        audio_path: 'C:\\cache\\guarded.m4a',
+        created_at: '2026-11-22T00:00:00Z',
+      });
+      await ingestPromise;
+    });
+
+    it('preserves settled manifest and null error when startIngestion settles before cancelVodIngestion resolves false', async () => {
+      let resolveIngest!: (val: unknown) => void;
+      let resolveCancel!: (val: boolean) => void;
+
+      mockedInvoke.mockImplementation((cmd) => {
+        if (cmd === 'start_vod_ingestion') {
+          return new Promise((resolve) => {
+            resolveIngest = resolve;
+          });
+        }
+        if (cmd === 'cancel_vod_ingestion') {
+          return new Promise<boolean>((resolve) => {
+            resolveCancel = resolve;
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=settle_before_cancel');
+      const ingestPromise = useIngestionStore.getState().startIngestion();
+      const cancelPromise = useIngestionStore.getState().cancelIngestion();
+
+      // Backend finishes ingestion and unregisters token before cancel IPC resolves
+      resolveIngest({
+        vod_id: 'vod_settled_first',
+        source_type: 'youtube_vod',
+        title: 'Settled First VOD',
+        duration_seconds: 240,
+        audio_path: 'C:\\cache\\settled_first.m4a',
+        created_at: '2026-11-23T00:00:00Z',
+      });
+      const manifest = await ingestPromise;
+      expect(manifest.vodId).toBe('vod_settled_first');
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().error).toBeNull();
+
+      // Backend cancel returns false because task already completed & unregistered
+      resolveCancel(false);
+      const cancelOk = await cancelPromise;
+
+      expect(cancelOk).toBe(false);
+      expect(useIngestionStore.getState().manifest?.vodId).toBe('vod_settled_first');
+      expect(useIngestionStore.getState().error).toBeNull();
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().activeTaskId).toBeNull();
+    });
+
+    it('updates progress for start_vod_ingestion caller-supplied taskId and ignores mismatched vod_id payloads', async () => {
+      let progressHandler: ((event: { payload: unknown }) => void) | undefined;
+      mockedListen.mockImplementationOnce(async (_name, cb) => {
+        progressHandler = cb as (event: { payload: unknown }) => void;
+        return () => {};
+      });
+
+      let invokedTaskId: string | null = null;
+      let resolveIngest!: (val: unknown) => void;
+      mockedInvoke.mockImplementation((cmd, args: unknown) => {
+        if (cmd === 'start_vod_ingestion') {
+          const payload = args as { options?: { taskId?: string | null } | null };
+          invokedTaskId = payload.options?.taskId ?? null;
+          return new Promise((resolve) => {
+            resolveIngest = resolve;
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      useIngestionStore.getState().setUrl('https://youtube.com/watch?v=dQw4w9WgXcQ');
+      const ingestPromise = useIngestionStore.getState().startIngestion();
+      const activeId = useIngestionStore.getState().activeTaskId;
+      expect(activeId).not.toBeNull();
+      expect(invokedTaskId).toBe(activeId);
+
+      // Wait for listen() microtask registration
+      await Promise.resolve();
+
+      // Payloads keyed by vod_id instead of caller-supplied taskId remain safely ignored
+      progressHandler?.({
+        payload: {
+          taskId: 'dQw4w9WgXcQ',
+          stage: 'downloading_audio',
+          percent: 45.2,
+          speedKbps: 1024,
+          etaSec: 20,
+        },
+      });
+      expect(useIngestionStore.getState().progress?.taskId).toBe(activeId);
+      expect(useIngestionStore.getState().progress?.percent).toBe(0);
+
+      // Payloads emitted with caller-supplied taskId (matching activeTaskId) update progress accurately
+      progressHandler?.({
+        payload: {
+          taskId: activeId,
+          stage: 'downloading_audio',
+          percent: 45.2,
+          speedKbps: 1536,
+          etaSec: 18,
+        },
+      });
+      expect(useIngestionStore.getState().progress?.taskId).toBe(activeId);
+      expect(useIngestionStore.getState().progress?.stage).toBe('downloading_audio');
+      expect(useIngestionStore.getState().progress?.percent).toBe(45.2);
+      expect(useIngestionStore.getState().progress?.speedKbps).toBe(1536);
+      expect(useIngestionStore.getState().progress?.etaSec).toBe(18);
+
+      resolveIngest({
+        vod_id: 'dQw4w9WgXcQ',
+        source_type: 'youtube_vod',
+        title: 'Contract Test VOD',
+        duration_seconds: 212,
+        audio_path: 'C:\\cache\\dQw4w9WgXcQ.m4a',
+        created_at: '2026-11-23T00:00:00Z',
+      });
+      const manifest = await ingestPromise;
+
+      expect(manifest.vodId).toBe('dQw4w9WgXcQ');
+      expect(useIngestionStore.getState().isIngesting).toBe(false);
+      expect(useIngestionStore.getState().activeTaskId).toBeNull();
     });
   });
 

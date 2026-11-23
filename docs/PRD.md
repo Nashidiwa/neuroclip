@@ -355,9 +355,9 @@ Xây dựng **NeuroClip** — Một **All-in-one Desktop Application trên Windo
 - **Để:** Đảm bảo phụ đề xuất hiện và biến mất khớp từng khung hình với giọng nói.
 - **Tiêu chí nghiệm thu:**
   - **Scenario 1: Tinh chỉnh thời gian bằng phím tắt**
-    - *Given:* Một dòng phụ đề xuất hiện hơi chậm 200ms so với tiếng nói.
-    - *When:* Người dùng chọn dòng sub và nhấn tổ hợp phím `Shift + A` (Lùi 100ms) hai lần.
-    - *Then:* Mốc thời gian `start_time` và `end_time` giảm 200ms, thanh hiển thị trên timeline di chuyển tức thì, video preview cập nhật ngay vị trí hiển thị mới.
+    - *Given:* Điểm vào (`start_time`) của một dòng phụ đề xuất hiện hơi chậm 200ms so với tiếng nói.
+    - *When:* Người dùng focus vào dòng sub và nhấn phím `A` hoặc `Shift + A` (Lùi mốc bắt đầu `start_time` 100ms; tương ứng `D` / `Shift + D` để tiến 100ms) hai lần.
+    - *Then:* Mốc thời gian `start_time` giảm 200ms (giữ nguyên `end_time` trừ khi chạm ngưỡng thời lượng tối thiểu của câu), thanh hiển thị trên timeline di chuyển tức thì, video preview cập nhật ngay vị trí hiển thị mới.
 
 #### US5.2: Cảnh báo Tốc độ Đọc (CPS) & Độ dài Ký tự trên Dòng (CPL) kèm Công cụ Khắc phục Thông minh
 - **Là một:** Clipper làm video dọc 9:16 cho TikTok,

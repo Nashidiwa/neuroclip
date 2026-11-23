@@ -7,12 +7,12 @@
 //! - `clean_expired_cache(cache_dir, max_age_days)`: Clean expired temporary caches.
 
 use crate::core::storage::{
-    clean_expired_cache as core_clean_expired_cache, init_project_directory,
-    init_storage_directories, query_disk_status, resolve_cache_dir, CacheCleanupStats, DiskStatus,
-    StoragePaths, DEFAULT_CACHE_MAX_AGE_DAYS,
+    clean_expired_cache as core_clean_expired_cache, ensure_path_within_roots,
+    init_project_directory, init_storage_directories, query_disk_status, resolve_cache_dir,
+    CacheCleanupStats, DiskStatus, StoragePaths, DEFAULT_CACHE_MAX_AGE_DAYS,
 };
 use crate::error::AppError;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Perform pre-flight storage check on default or custom cache path.
 ///
@@ -22,8 +22,12 @@ use std::path::{Path, PathBuf};
 /// Returns [`AppError::Storage`] if disk space cannot be queried.
 #[tauri::command]
 pub async fn check_preflight_storage(path: Option<String>) -> Result<DiskStatus, AppError> {
-    let p = path.as_deref().map(Path::new);
-    query_disk_status(p)
+    tokio::task::spawn_blocking(move || {
+        let p = path.as_deref().map(PathBuf::from);
+        query_disk_status(p.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Preflight storage check task panicked: {e}")))?
 }
 
 /// Initialize root cache and projects storage directories.
@@ -34,8 +38,12 @@ pub async fn check_preflight_storage(path: Option<String>) -> Result<DiskStatus,
 pub async fn initialize_storage(
     custom_cache_dir: Option<String>,
 ) -> Result<StoragePaths, AppError> {
-    let p = custom_cache_dir.as_deref().map(Path::new);
-    init_storage_directories(p)
+    tokio::task::spawn_blocking(move || {
+        let p = custom_cache_dir.as_deref().map(PathBuf::from);
+        init_storage_directories(p.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Initialize storage task panicked: {e}")))?
 }
 
 /// Initialize a specific project workspace directory (`%LOCALAPPDATA%/NeuroClip/projects/<project_id>/`).
@@ -44,31 +52,45 @@ pub async fn initialize_storage(
 /// Returns [`AppError::Storage`] if `project_id` is invalid or creating the directory fails.
 #[tauri::command]
 pub async fn initialize_project(project_id: String) -> Result<String, AppError> {
-    let path = init_project_directory(&project_id)?;
-    Ok(path.to_string_lossy().to_string())
+    tokio::task::spawn_blocking(move || {
+        let path = init_project_directory(&project_id)?;
+        Ok(path.to_string_lossy().to_string())
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Initialize project task panicked: {e}")))?
 }
 
 /// Clean expired `.tmp` and `.wav` files older than `max_age_days` (default 7 days).
 ///
+/// Strictly restricts cleanup to `resolve_cache_dir()` (or a subdirectory inside it).
+///
 /// # Errors
-/// Returns [`AppError::Storage`] if reading or pruning the cache directory fails.
+/// Returns [`AppError::Storage`] if `cache_dir` escapes `resolve_cache_dir()` or pruning fails.
 #[tauri::command]
 pub async fn clean_expired_cache(
     cache_dir: Option<String>,
     max_age_days: Option<u64>,
 ) -> Result<CacheCleanupStats, AppError> {
-    let days = max_age_days.unwrap_or(DEFAULT_CACHE_MAX_AGE_DAYS);
-    let dir = match cache_dir {
-        Some(d) if !d.trim().is_empty() => PathBuf::from(d.trim()),
-        _ => resolve_cache_dir(),
-    };
-    core_clean_expired_cache(&dir, days)
+    tokio::task::spawn_blocking(move || {
+        let days = max_age_days.unwrap_or(DEFAULT_CACHE_MAX_AGE_DAYS);
+        let allowed_root = resolve_cache_dir();
+        let dir = match cache_dir {
+            Some(d) if !d.trim().is_empty() => {
+                ensure_path_within_roots(std::path::Path::new(d.trim()), &[allowed_root.as_path()])?
+            }
+            _ => allowed_root,
+        };
+        core_clean_expired_cache(&dir, days)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Cache cleanup task panicked: {e}")))?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::storage::test_env::{ScopedEnvVar, ENV_LOCK};
+    use crate::error::StorageError;
 
     #[tokio::test]
     async fn test_check_preflight_storage_ipc() {
@@ -85,12 +107,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_clean_expired_cache_ipc_empty_dir() {
+        let _env_guard = ENV_LOCK.lock().await;
         let temp_dir =
             std::env::temp_dir().join(format!("neuroclip_test_clean_ipc_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&temp_dir);
+        let _cache_env = ScopedEnvVar::set("NEUROCLIP_CACHE_DIR", &temp_dir.to_string_lossy());
+
+        let sub_cache = temp_dir.join("vod_sub");
+        let _ = std::fs::create_dir_all(&sub_cache);
 
         let result =
-            clean_expired_cache(Some(temp_dir.to_string_lossy().to_string()), Some(7)).await;
+            clean_expired_cache(Some(sub_cache.to_string_lossy().to_string()), Some(7)).await;
         assert!(result.is_ok());
         if let Ok(stats) = result {
             assert_eq!(stats.files_deleted, 0);
@@ -98,5 +125,40 @@ mod tests {
         }
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_clean_expired_cache_rejects_paths_outside_workspace() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let cache_root =
+            std::env::temp_dir().join(format!("neuroclip_test_clean_root_{}", std::process::id()));
+        let outside_dir = std::env::temp_dir().join(format!(
+            "neuroclip_test_clean_outside_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::create_dir_all(&cache_root);
+        let _ = std::fs::create_dir_all(&outside_dir);
+        let _cache_env = ScopedEnvVar::set("NEUROCLIP_CACHE_DIR", &cache_root.to_string_lossy());
+
+        for bad in [
+            outside_dir.to_string_lossy().to_string(),
+            format!("{}\\..\\escape", cache_root.display()),
+            "../relative_escape".to_string(),
+            r"C:\Windows\Temp".to_string(),
+        ] {
+            let res = clean_expired_cache(Some(bad.clone()), Some(0)).await;
+            assert!(
+                matches!(
+                    res,
+                    Err(AppError::Storage(
+                        StorageError::DirectoryCreationFailed { .. }
+                    ))
+                ),
+                "Expected containment rejection for {bad:?}, got {res:?}"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&cache_root);
+        let _ = std::fs::remove_dir_all(&outside_dir);
     }
 }

@@ -246,54 +246,110 @@ fn update_best_ytdlp_error(slot: &mut Option<(YtdlpErrorPriority, AppError)>, li
     }
 }
 
-async fn pump_lines<R: AsyncRead + Unpin>(mut reader: R, tx: mpsc::Sender<String>) {
+/// Drain an async pipe completely using raw byte reads without UTF-8 decoding.
+///
+/// Prevents `BrokenPipe` (`EPIPE`) stalls when child processes emit non-UTF-8 bytes.
+pub async fn drain_pipe_lossy<R: AsyncRead + Unpin>(mut reader: R) {
     let mut read_buf = [0u8; 8192];
-    let mut line_buf: Vec<u8> = Vec::with_capacity(512);
-    let mut skip_next_lf = false;
-
     loop {
         match reader.read(&mut read_buf).await {
-            Ok(0) => {
-                if !line_buf.is_empty() {
-                    let line = String::from_utf8_lossy(&line_buf).into_owned();
-                    let _ = tx.send(line).await;
-                }
-                break;
-            }
-            Ok(n) => {
-                for &byte in &read_buf[..n] {
-                    if skip_next_lf {
-                        skip_next_lf = false;
-                        if byte == b'\n' {
-                            continue;
-                        }
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+    }
+}
+
+/// Lossy, bounded-line async pipe reader that never aborts on invalid UTF-8 sequences.
+///
+/// Splits lines on `\r`, `\n`, and `\r\n`, caps each buffered line at [`MAX_LOG_LINE_BYTES`]
+/// (`64 KiB`), and decodes via [`String::from_utf8_lossy`].
+pub struct LossyLineReader<R> {
+    reader: R,
+    read_buf: [u8; 8192],
+    pos: usize,
+    filled: usize,
+    line_buf: Vec<u8>,
+    skip_next_lf: bool,
+    eof: bool,
+}
+
+impl<R: AsyncRead + Unpin> LossyLineReader<R> {
+    /// Create a new [`LossyLineReader`] wrapping `reader`.
+    #[must_use]
+    pub fn new(reader: R) -> Self {
+        Self {
+            reader,
+            read_buf: [0u8; 8192],
+            pos: 0,
+            filled: 0,
+            line_buf: Vec::with_capacity(512),
+            skip_next_lf: false,
+            eof: false,
+        }
+    }
+
+    /// Read the next line lossily, returning `Ok(None)` at EOF.
+    ///
+    /// # Errors
+    /// Returns an I/O error only if reading from the underlying pipe fails (never on invalid UTF-8).
+    pub async fn next_line(&mut self) -> std::io::Result<Option<String>> {
+        if self.eof {
+            return Ok(None);
+        }
+
+        loop {
+            while self.pos < self.filled {
+                let byte = self.read_buf[self.pos];
+                self.pos += 1;
+
+                if self.skip_next_lf {
+                    self.skip_next_lf = false;
+                    if byte == b'\n' {
+                        continue;
                     }
-                    if byte == b'\r' {
-                        let line = String::from_utf8_lossy(&line_buf).into_owned();
-                        line_buf.clear();
-                        if tx.send(line).await.is_err() {
-                            return;
-                        }
-                        skip_next_lf = true;
-                    } else if byte == b'\n' {
-                        let line = String::from_utf8_lossy(&line_buf).into_owned();
-                        line_buf.clear();
-                        if tx.send(line).await.is_err() {
-                            return;
-                        }
-                    } else {
-                        line_buf.push(byte);
-                        if line_buf.len() >= MAX_LOG_LINE_BYTES {
-                            let line = String::from_utf8_lossy(&line_buf).into_owned();
-                            line_buf.clear();
-                            if tx.send(line).await.is_err() {
-                                return;
-                            }
-                        }
-                    }
+                }
+
+                if byte == b'\r' {
+                    let line = String::from_utf8_lossy(&self.line_buf).into_owned();
+                    self.line_buf.clear();
+                    self.skip_next_lf = true;
+                    return Ok(Some(line));
+                } else if byte == b'\n' {
+                    let line = String::from_utf8_lossy(&self.line_buf).into_owned();
+                    self.line_buf.clear();
+                    return Ok(Some(line));
+                }
+
+                self.line_buf.push(byte);
+                if self.line_buf.len() >= MAX_LOG_LINE_BYTES {
+                    let line = String::from_utf8_lossy(&self.line_buf).into_owned();
+                    self.line_buf.clear();
+                    return Ok(Some(line));
                 }
             }
-            Err(_) => break,
+
+            self.pos = 0;
+            self.filled = 0;
+            let n = self.reader.read(&mut self.read_buf).await?;
+            if n == 0 {
+                self.eof = true;
+                if self.line_buf.is_empty() {
+                    return Ok(None);
+                }
+                let line = String::from_utf8_lossy(&self.line_buf).into_owned();
+                self.line_buf.clear();
+                return Ok(Some(line));
+            }
+            self.filled = n;
+        }
+    }
+}
+
+async fn pump_lines<R: AsyncRead + Unpin>(reader: R, tx: mpsc::Sender<String>) {
+    let mut lines = LossyLineReader::new(reader);
+    while let Ok(Some(line)) = lines.next_line().await {
+        if tx.send(line).await.is_err() {
+            return;
         }
     }
 }
@@ -532,5 +588,34 @@ impl SubprocessSupervisor {
             best_stderr_error,
             best_stdout_error,
         )
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_lossy_line_reader_handles_non_utf8_and_bounds_line_length() {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(b"\xff\xfe\x80\x81 invalid utf8\r\n");
+        payload.extend_from_slice(b"progress 50%\rnext line\n");
+        payload.extend(std::iter::repeat_n(b'A', MAX_LOG_LINE_BYTES + 128));
+        payload.extend_from_slice(b"\ntail without newline");
+
+        let mut reader = LossyLineReader::new(std::io::Cursor::new(payload));
+        let mut lines = Vec::new();
+        while let Some(line) = reader.next_line().await.unwrap() {
+            lines.push(line);
+        }
+
+        assert_eq!(lines.len(), 6);
+        assert!(lines[0].contains("invalid utf8"));
+        assert_eq!(lines[1], "progress 50%");
+        assert_eq!(lines[2], "next line");
+        assert_eq!(lines[3].len(), MAX_LOG_LINE_BYTES);
+        assert_eq!(lines[4].len(), 128);
+        assert_eq!(lines[5], "tail without newline");
     }
 }

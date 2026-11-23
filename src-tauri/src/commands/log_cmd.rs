@@ -118,6 +118,15 @@ pub async fn get_recent_logs(
     limit: Option<usize>,
     level_filter: Option<String>,
 ) -> Result<Vec<LogEntry>, AppError> {
+    tokio::task::spawn_blocking(move || get_recent_logs_blocking(limit, level_filter.as_deref()))
+        .await
+        .map_err(|e| AppError::Internal(format!("Log retrieval task panicked: {e}")))?
+}
+
+fn get_recent_logs_blocking(
+    limit: Option<usize>,
+    level_filter: Option<&str>,
+) -> Result<Vec<LogEntry>, AppError> {
     let effective_limit = limit.unwrap_or(DEFAULT_LOG_LIMIT).clamp(1, MAX_LOG_LIMIT);
     let log_dir = resolve_log_dir();
 
@@ -191,7 +200,7 @@ pub async fn get_recent_logs(
         }
 
         // Apply level filter
-        if let Some(ref filter) = level_filter {
+        if let Some(filter) = level_filter {
             let filter_upper = filter.to_uppercase();
             if filter_upper != "ALL" {
                 file_entries.retain(|e| e.level == filter_upper);
@@ -221,6 +230,12 @@ pub async fn get_recent_logs(
 /// Returns [`AppError::Storage`] if reading the log directory fails.
 #[tauri::command]
 pub async fn clear_logs() -> Result<(), AppError> {
+    tokio::task::spawn_blocking(clear_logs_blocking)
+        .await
+        .map_err(|e| AppError::Internal(format!("Log clear task panicked: {e}")))?
+}
+
+fn clear_logs_blocking() -> Result<(), AppError> {
     let log_dir = resolve_log_dir();
 
     if !log_dir.exists() {

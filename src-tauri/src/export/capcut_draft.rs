@@ -19,22 +19,43 @@ use crate::export::capcut_schema::{
     MIN_CLIP_DURATION_MICROS,
 };
 use crate::export::{export_ass_project_file, export_srt_project_file, SubtitleProject};
+use crate::translation::cps_optimizer::effective_segment_text;
 
 static CAPCUT_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+const fn splitmix64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
 /// Generate a unique 36-character UUID string for CapCut draft entities in RFC 4122 v4 format.
+///
+/// Mixes wall-clock nanoseconds, process ID, and monotonic atomic counter via SplitMix64
+/// so IDs never collide across process restarts or rapid sequential exports.
 #[must_use]
+#[allow(clippy::cast_possible_truncation)]
 pub fn generate_capcut_id() -> String {
-    let count = CAPCUT_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    #[allow(clippy::cast_possible_truncation)]
-    let hi = (count >> 32) as u32;
-    #[allow(clippy::cast_possible_truncation)]
-    let mid = (count >> 16) as u16;
-    #[allow(clippy::cast_possible_truncation)]
-    let low1 = (count & 0x0FFF) as u16;
-    #[allow(clippy::cast_possible_truncation)]
-    let low2 = ((count >> 4) & 0x0FFF) as u16;
-    format!("{hi:08x}-{mid:04x}-4{low1:03x}-8{low2:03x}-{count:012x}")
+    let seq = CAPCUT_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0u64, |d| {
+            let n = d.as_nanos();
+            (n as u64) ^ ((n >> 64) as u64)
+        });
+    let pid = u64::from(std::process::id());
+
+    let a = splitmix64(nanos ^ (pid << 32) ^ seq);
+    let b = splitmix64(seq.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ pid ^ nanos.rotate_left(17));
+
+    let time_low = (a >> 32) as u32;
+    let time_mid = ((a >> 16) & 0xFFFF) as u16;
+    let time_hi_and_version = ((a & 0x0FFF) as u16) | 0x4000;
+    let clock_seq = (((b >> 48) & 0x3FFF) as u16) | 0x8000;
+    let node = b & 0xFFFF_FFFF_FFFF;
+
+    format!("{time_low:08x}-{time_mid:04x}-{time_hi_and_version:04x}-{clock_seq:04x}-{node:012x}")
 }
 
 /// Result returned from successful CapCut Draft generation.
@@ -236,7 +257,7 @@ pub fn build_capcut_draft_content(
     // 2. Subtitle Text Track (Track 2)
     for (idx, seg) in project.segments.iter().enumerate() {
         let text_mat_id = generate_capcut_id();
-        let raw_text = seg.text_vi.as_deref().unwrap_or(&seg.text_en);
+        let raw_text = effective_segment_text(seg).trim();
 
         // Resolve speaker style (PO Option 1)
         let speaker_key = seg.speaker_id.to_ascii_lowercase();
@@ -246,7 +267,7 @@ pub fn build_capcut_draft_content(
             .map_or("#FFFFFF", |s| s.color_hex.as_str());
 
         let norm_rgb = hex_to_normalized_rgb(color_hex);
-        let char_count = raw_text.chars().count();
+        let char_count = raw_text.encode_utf16().count();
 
         // Build double-encoded inner content JSON
         let escaped_text = serde_json::to_string(raw_text).unwrap_or_else(|_| "\"\"".to_string());
@@ -634,5 +655,143 @@ mod tests {
         assert!(result.duration_ms <= 200);
 
         let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_empty_and_whitespace_text_vi_falls_back_to_text_en() {
+        let container = TranscriptSegmentsContainer {
+            clip_id: "clip_capcut_empty_vi".to_string(),
+            segments: vec![
+                TranscriptSegment {
+                    segment_id: "seg_1".to_string(),
+                    start_sec: 0.0,
+                    end_sec: 1.5,
+                    speaker_id: "neuro".to_string(),
+                    text_en: "English CapCut fallback 1".to_string(),
+                    text_vi: Some(String::new()),
+                    confidence: 0.95,
+                    cps_score: 12.0,
+                    is_flagged_for_review: false,
+                    words: vec![],
+                },
+                TranscriptSegment {
+                    segment_id: "seg_2".to_string(),
+                    start_sec: 2.0,
+                    end_sec: 3.5,
+                    speaker_id: "vedal".to_string(),
+                    text_en: "English CapCut fallback 2".to_string(),
+                    text_vi: Some("   ".to_string()),
+                    confidence: 0.95,
+                    cps_score: 12.0,
+                    is_flagged_for_review: false,
+                    words: vec![],
+                },
+            ],
+        };
+        let project = create_subtitle_project(
+            container,
+            "CapCut Fallback",
+            "vod_fallback",
+            Some("original_16_9"),
+        );
+
+        let content = build_capcut_draft_content(&project, None).unwrap();
+        assert_eq!(content.materials.texts.len(), 2);
+        assert!(content.materials.texts[0]
+            .content
+            .contains("English CapCut fallback 1"));
+        assert!(content.materials.texts[1]
+            .content
+            .contains("English CapCut fallback 2"));
+    }
+
+    #[test]
+    fn test_generate_capcut_id_rfc4122_v4_uniqueness_and_root_meta_registration() {
+        use std::collections::HashSet;
+
+        let mut seen = HashSet::with_capacity(1000);
+        for _ in 0..1000 {
+            let id = generate_capcut_id();
+            assert_eq!(id.len(), 36);
+            assert_ne!(id, "00000000-0000-4001-8000-000000000001");
+            let bytes = id.as_bytes();
+            assert_eq!(bytes[8], b'-');
+            assert_eq!(bytes[13], b'-');
+            assert_eq!(bytes[14], b'4');
+            assert_eq!(bytes[18], b'-');
+            assert!(matches!(bytes[19], b'8' | b'9' | b'a' | b'b'));
+            assert_eq!(bytes[23], b'-');
+            assert!(seen.insert(id), "Duplicate CapCut ID generated");
+        }
+
+        // Verify two independent exports register two distinct drafts in root_meta_info.json
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_capcut_multi_{}",
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let root_meta_path = temp_dir.join("root_meta_info.json");
+        std::fs::write(
+            &root_meta_path,
+            serde_json::to_vec_pretty(&RootMetaInfo::default()).unwrap(),
+        )
+        .unwrap();
+
+        let p1 = create_subtitle_project(
+            make_test_container(),
+            "NeuroClip_First",
+            "vod_m1",
+            Some("original_16_9"),
+        );
+        let p2 = create_subtitle_project(
+            make_test_container(),
+            "NeuroClip_Second",
+            "vod_m2",
+            Some("original_16_9"),
+        );
+
+        let _ = export_capcut_draft_folder(&p1, None, Some(&temp_dir)).unwrap();
+        let _ = export_capcut_draft_folder(&p2, None, Some(&temp_dir)).unwrap();
+
+        let root_meta: RootMetaInfo =
+            serde_json::from_str(&std::fs::read_to_string(&root_meta_path).unwrap()).unwrap();
+        assert_eq!(root_meta.all_draft_store.len(), 2);
+        assert_ne!(
+            root_meta.all_draft_store[0].draft_id,
+            root_meta.all_draft_store[1].draft_id
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_capcut_trims_text_and_uses_utf16_range_for_emoji() {
+        let container = TranscriptSegmentsContainer {
+            clip_id: "clip_capcut_utf16".to_string(),
+            segments: vec![TranscriptSegment {
+                segment_id: "seg_emoji".to_string(),
+                start_sec: 0.0,
+                end_sec: 2.0,
+                speaker_id: "neuro".to_string(),
+                text_en: "  Hi 🐢  ".to_string(),
+                text_vi: None,
+                confidence: 0.95,
+                cps_score: 10.0,
+                is_flagged_for_review: false,
+                words: vec![],
+            }],
+        };
+        let project = create_subtitle_project(
+            container,
+            "CapCut UTF16",
+            "vod_utf16",
+            Some("original_16_9"),
+        );
+        let content = build_capcut_draft_content(&project, None).unwrap();
+        let inner: serde_json::Value =
+            serde_json::from_str(&content.materials.texts[0].content).unwrap();
+        assert_eq!(inner["text"], "Hi 🐢");
+        // "Hi " (3 UTF-16 code units) + "🐢" (2 UTF-16 code units) = 5
+        assert_eq!(inner["styles"][0]["range"], serde_json::json!([0, 5]));
     }
 }

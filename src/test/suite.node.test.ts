@@ -1117,7 +1117,7 @@ describe('TASK-M4-27 / TASK-M4-28 (legacy label TASK-M4-03): Shared Types, Hardw
       assert.strictEqual(selectOptimalGpu(dualNvidiaRig)?.model, 'NVIDIA GeForce RTX 4090');
     });
 
-    it('should assert save_app_config holds the write lock during disk I/O', () => {
+    it('should assert save_app_config serializes disk I/O via config_save_lock before atomic_save_json', () => {
       const configCmdPath = path.resolve('src-tauri/src/commands/config_cmd.rs');
       assert.strictEqual(fs.existsSync(configCmdPath), true, 'config_cmd.rs must exist');
 
@@ -1129,14 +1129,19 @@ describe('TASK-M4-27 / TASK-M4-28 (legacy label TASK-M4-03): Shared Types, Hardw
       const nextFn = content.indexOf('pub async fn', fnStart + 20);
       const fnBody = nextFn !== -1 ? content.slice(fnStart, nextFn) : content.slice(fnStart);
 
+      const saveLockIndex = fnBody.indexOf('state.config_save_lock.lock()');
       const writeLockIndex = fnBody.indexOf('state.config.write()');
       const atomicSaveIndex = fnBody.indexOf('atomic_save_json');
 
+      assert.ok(
+        saveLockIndex !== -1,
+        'save_app_config must acquire state.config_save_lock.lock() before disk I/O',
+      );
       assert.ok(writeLockIndex !== -1, 'save_app_config must acquire state.config.write() lock');
       assert.ok(atomicSaveIndex !== -1, 'save_app_config must call atomic_save_json');
       assert.ok(
-        writeLockIndex < atomicSaveIndex,
-        'state.config.write() MUST be acquired BEFORE calling atomic_save_json to eliminate concurrency lock inversion',
+        saveLockIndex < atomicSaveIndex,
+        'state.config_save_lock.lock() MUST be acquired BEFORE calling atomic_save_json to prevent concurrent write races without holding std::sync::RwLock across await',
       );
     });
 
@@ -3315,10 +3320,13 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
     });
 
     it('should assert zero-panic clippy invariant in faster_whisper_worker.rs', () => {
-      const workerContent = fs.readFileSync(
+      const fullContent = fs.readFileSync(
         path.resolve('src-tauri/src/stt/faster_whisper_worker.rs'),
         'utf8',
       );
+      const testSectionIdx = fullContent.indexOf('#[cfg(test)]');
+      const workerContent =
+        testSectionIdx >= 0 ? fullContent.slice(0, testSectionIdx) : fullContent;
       assert.ok(
         !workerContent.includes('.unwrap()'),
         'faster_whisper_worker.rs must not contain .unwrap()',

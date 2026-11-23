@@ -11,6 +11,7 @@ use crate::error::AppError;
 use crate::export::capcut_schema::canvas_config_for_layout;
 use crate::export::{write_file_with_bom, SpeakerStyle, SubtitleProject};
 use crate::stt::transcript_parser::{TranscriptSegment, TranscriptSegmentsContainer};
+use crate::translation::cps_optimizer::effective_segment_text;
 
 /// Convert a 6-character hex RGB color string (e.g. `"#98FB98"`) to Aegisub ASS BGR color
 /// format with full opacity (`"&H0098FB98&"`).
@@ -234,7 +235,7 @@ fn append_events_section(out: &mut String, segments: &[TranscriptSegment]) {
         let start_tc = format_ass_timecode(seg.start_sec);
         let end_tc = format_ass_timecode(seg.end_sec);
         let style = map_speaker_to_ass_style(&seg.speaker_id);
-        let raw_text = seg.text_vi.as_deref().unwrap_or(&seg.text_en);
+        let raw_text = effective_segment_text(seg).trim();
         let escaped_text = escape_ass_text(raw_text);
 
         let _ = writeln!(
@@ -685,5 +686,68 @@ pub mod tests {
         assert!(custom_ass.contains(
             "Style: Default,Consolas,50,&H00EEEEEE,&H000000FF,&H00010101,&H80000000,-1,0,0,0,100,100,0,0,1,3,2,2,20,20,40,1"
         ));
+    }
+
+    #[test]
+    fn test_empty_and_whitespace_text_vi_falls_back_to_text_en() {
+        let container = TranscriptSegmentsContainer {
+            clip_id: "clip_empty_vi".to_string(),
+            segments: vec![
+                TranscriptSegment {
+                    segment_id: "seg_empty".to_string(),
+                    start_sec: 0.0,
+                    end_sec: 1.5,
+                    speaker_id: "neuro".to_string(),
+                    text_en: "English fallback one".to_string(),
+                    text_vi: Some(String::new()),
+                    confidence: 0.95,
+                    cps_score: 12.0,
+                    is_flagged_for_review: false,
+                    words: vec![],
+                },
+                TranscriptSegment {
+                    segment_id: "seg_ws".to_string(),
+                    start_sec: 2.0,
+                    end_sec: 3.5,
+                    speaker_id: "vedal".to_string(),
+                    text_en: "English fallback two".to_string(),
+                    text_vi: Some("   \t\n ".to_string()),
+                    confidence: 0.95,
+                    cps_score: 12.0,
+                    is_flagged_for_review: false,
+                    words: vec![],
+                },
+            ],
+        };
+
+        let ass = generate_ass_script(&container);
+        assert!(ass
+            .contains("Dialogue: 0,0:00:00.00,0:00:01.50,Neuro,Neuro,0,0,0,,English fallback one"));
+        assert!(ass
+            .contains("Dialogue: 0,0:00:02.00,0:00:03.50,Vedal,Vedal,0,0,0,,English fallback two"));
+    }
+
+    #[test]
+    fn test_ass_trims_leading_and_trailing_whitespace() {
+        let container = TranscriptSegmentsContainer {
+            clip_id: "clip_trim_ass".to_string(),
+            segments: vec![TranscriptSegment {
+                segment_id: "seg_trim".to_string(),
+                start_sec: 0.0,
+                end_sec: 1.5,
+                speaker_id: "neuro".to_string(),
+                text_en: "  Trimmed English  ".to_string(),
+                text_vi: None,
+                confidence: 0.95,
+                cps_score: 12.0,
+                is_flagged_for_review: false,
+                words: vec![],
+            }],
+        };
+
+        let ass = generate_ass_script(&container);
+        assert!(
+            ass.contains("Dialogue: 0,0:00:00.00,0:00:01.50,Neuro,Neuro,0,0,0,,Trimmed English")
+        );
     }
 }

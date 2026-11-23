@@ -231,10 +231,8 @@ export function toHardwareProfileJson(profile: HardwareProfile): HardwareProfile
       cuda_supported: profile.gpuInfo.cudaSupported,
     },
     recommended_mode: profile.recommendedMode,
+    recommendation_reason: profile.recommendationReason ?? '',
     timestamp: profile.timestamp,
-    ...(typeof profile.recommendationReason === 'string' && profile.recommendationReason.length > 0
-      ? { recommendation_reason: profile.recommendationReason }
-      : {}),
   };
 
   return json;

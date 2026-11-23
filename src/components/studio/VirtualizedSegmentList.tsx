@@ -223,15 +223,22 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
 
   const effectiveSegments = propSegments !== undefined ? propSegments : storeSegments;
 
-  const virtualizer = useVirtualizer({
-    count: effectiveSegments.length,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => 80,
-    overscan: 5,
-    getItemKey: (index) => {
+  const getScrollElement = useCallback(() => containerRef.current, []);
+  const estimateSize = useCallback(() => 80, []);
+  const getItemKey = useCallback(
+    (index: number) => {
       const seg = effectiveSegments[index];
       return seg?.segmentId ?? seg?.segment_id ?? index;
     },
+    [effectiveSegments],
+  );
+
+  const virtualizer = useVirtualizer({
+    count: effectiveSegments.length,
+    getScrollElement,
+    estimateSize,
+    overscan: 5,
+    getItemKey,
   });
 
   // User scroll interaction detection to avoid fighting manual scrolls
@@ -241,8 +248,18 @@ export const VirtualizedSegmentList: React.FC<VirtualizedSegmentListProps> = ({
       clearTimeout(userInteractionTimerRef.current);
     }
     userInteractionTimerRef.current = setTimeout(() => {
+      userInteractionTimerRef.current = null;
       isUserInteractingRef.current = false;
     }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (userInteractionTimerRef.current !== null) {
+        clearTimeout(userInteractionTimerRef.current);
+        userInteractionTimerRef.current = null;
+      }
+    };
   }, []);
 
   // Auto-scroll to primary active segment

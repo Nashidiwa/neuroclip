@@ -38,6 +38,57 @@ export interface VideoCanvasProps {
   readonly className?: string | undefined;
 }
 
+interface VideoSubtitleOverlayProps {
+  readonly propActiveSegments: readonly TranscriptSegment[] | undefined;
+}
+
+const VideoSubtitleOverlay: React.FC<VideoSubtitleOverlayProps> = ({ propActiveSegments }) => {
+  const storeActiveSegments = useStudioStore((s) =>
+    propActiveSegments !== undefined ? propActiveSegments : s.activeSegments,
+  );
+  const effectiveActiveSegments = propActiveSegments ?? storeActiveSegments;
+
+  if (effectiveActiveSegments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      data-testid="subtitle-overlay"
+      className="pointer-events-none absolute inset-x-3 bottom-6 z-20 flex flex-col items-center gap-1.5"
+    >
+      {effectiveActiveSegments.map((segment) => {
+        const segId = segment.segmentId ?? segment.segment_id;
+        const speaker = segment.speakerId ?? segment.speaker_id;
+        const speakerColor = getSpeakerColor(speaker);
+        const text = segment.textVi ?? segment.text_vi ?? segment.textEn ?? segment.text_en;
+
+        return (
+          <div
+            key={segId}
+            data-testid={`subtitle-line-${segId}`}
+            className="backdrop-blur-xs max-w-[96%] rounded-md bg-black/40 px-2.5 py-1 text-center transition-opacity duration-100"
+          >
+            <span
+              style={{
+                color: speakerColor,
+                textShadow:
+                  '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 4px rgba(0,0,0,0.9)',
+              }}
+              className="font-sans text-sm font-bold leading-snug tracking-wide sm:text-base"
+            >
+              <span className="mr-1.5 text-xs uppercase tracking-wider opacity-80">
+                [{speaker}]
+              </span>
+              {text}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const VideoCanvas: React.FC<VideoCanvasProps> = ({
   videoSrc: propVideoSrc,
   preset916: propPreset916,
@@ -58,11 +109,10 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
   const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
   const secondaryVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Store subscriptions (fallback when props are not provided)
+  // Store subscriptions (fallback when props are not provided; activeSegments lives in VideoSubtitleOverlay)
   const storeVideoSrc = useStudioStore((s) => s.videoSrc);
   const storePreset916 = useStudioStore((s) => s.preset916);
   const storeAspectRatio = useStudioStore((s) => s.aspectRatio);
-  const storeActiveSegments = useStudioStore((s) => s.activeSegments);
   const storeIsPlaying = useStudioStore((s) => s.isPlaying);
   const storeVolume = useStudioStore((s) => s.volume);
   const storeIsMuted = useStudioStore((s) => s.isMuted);
@@ -77,7 +127,6 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
   const rawVideoSrc = propVideoSrc !== undefined ? propVideoSrc : storeVideoSrc;
   const effectivePreset: Preset916 = propPreset916 ?? storePreset916;
   const effectiveAspectRatio: AspectRatioMode = propAspectRatio ?? storeAspectRatio;
-  const effectiveActiveSegments = propActiveSegments ?? storeActiveSegments;
   const effectiveIsPlaying = propIsPlaying !== undefined ? propIsPlaying : storeIsPlaying;
   const effectiveVolume = propVolume !== undefined ? propVolume : storeVolume;
   const effectiveIsMuted = propIsMuted !== undefined ? propIsMuted : storeIsMuted;
@@ -329,41 +378,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
       )}
 
       {/* Stacked Subtitles Overlay */}
-      {effectiveActiveSegments.length > 0 && (
-        <div
-          data-testid="subtitle-overlay"
-          className="pointer-events-none absolute inset-x-3 bottom-6 z-20 flex flex-col items-center gap-1.5"
-        >
-          {effectiveActiveSegments.map((segment) => {
-            const segId = segment.segmentId ?? segment.segment_id;
-            const speaker = segment.speakerId ?? segment.speaker_id;
-            const speakerColor = getSpeakerColor(speaker);
-            const text = segment.textVi ?? segment.text_vi ?? segment.textEn ?? segment.text_en;
-
-            return (
-              <div
-                key={segId}
-                data-testid={`subtitle-line-${segId}`}
-                className="backdrop-blur-xs max-w-[96%] rounded-md bg-black/40 px-2.5 py-1 text-center transition-opacity duration-100"
-              >
-                <span
-                  style={{
-                    color: speakerColor,
-                    textShadow:
-                      '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 2px 4px rgba(0,0,0,0.9)',
-                  }}
-                  className="font-sans text-sm font-bold leading-snug tracking-wide sm:text-base"
-                >
-                  <span className="mr-1.5 text-xs uppercase tracking-wider opacity-80">
-                    [{speaker}]
-                  </span>
-                  {text}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <VideoSubtitleOverlay propActiveSegments={propActiveSegments} />
     </div>
   );
 };

@@ -11,6 +11,7 @@ use tauri::State;
 pub struct AppState {
     pub config: RwLock<AppConfig>,
     pub hardware_profile: RwLock<Option<HardwareProfile>>,
+    config_save_lock: tokio::sync::Mutex<()>,
 }
 
 impl Default for AppState {
@@ -22,6 +23,7 @@ impl Default for AppState {
         Self {
             config: RwLock::new(config),
             hardware_profile: RwLock::new(None),
+            config_save_lock: tokio::sync::Mutex::new(()),
         }
     }
 }
@@ -49,7 +51,19 @@ pub async fn save_app_config(
     // 1. Validate constraints
     config.validate()?;
 
-    // 2. Acquire exclusive write lock to strictly serialize disk persistence and memory update
+    // 2. Serialize concurrent saves without holding std::sync::RwLock across blocking disk I/O
+    let _save_guard = state.config_save_lock.lock().await;
+
+    // 3. Persist to disk atomically on blocking threadpool
+    let config_for_disk = config.clone();
+    tokio::task::spawn_blocking(move || {
+        let path = resolve_config_file_path();
+        atomic_save_json(&path, &config_for_disk)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Config save task panicked: {e}")))??;
+
+    // 4. Update memory state
     let mut guard = match state.config.write() {
         Ok(g) => g,
         Err(e) => {
@@ -58,12 +72,6 @@ pub async fn save_app_config(
             )))
         }
     };
-
-    // 3. Persist to disk atomically under lock
-    let path = resolve_config_file_path();
-    atomic_save_json(&path, &config)?;
-
-    // 4. Update memory state
     *guard = config;
 
     Ok(())
@@ -88,7 +96,9 @@ pub async fn get_hardware_profile(
 /// Probe system hardware capabilities, evaluate recommendation, and cache the profile.
 #[tauri::command]
 pub async fn detect_hardware(state: State<'_, AppState>) -> Result<HardwareProfile, AppError> {
-    let profile = probe_system_hardware()?;
+    let profile = tokio::task::spawn_blocking(probe_system_hardware)
+        .await
+        .map_err(|e| AppError::Internal(format!("Hardware probe task panicked: {e}")))??;
 
     let mut guard = match state.hardware_profile.write() {
         Ok(g) => g,
