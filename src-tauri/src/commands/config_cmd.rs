@@ -1,7 +1,7 @@
 //! IPC Command handlers for Application Configuration and Hardware Profiling.
 
-use crate::config::app_config::{resolve_config_file_path, AppConfig};
-use crate::config::atomic::atomic_save_json;
+use crate::config::app_config::{resolve_config_dir, resolve_config_file_path, AppConfig};
+use crate::config::atomic::{atomic_load_json, atomic_save_json};
 use crate::config::hardware::{probe_system_hardware, HardwareProfile};
 use crate::error::AppError;
 use std::sync::RwLock;
@@ -17,12 +17,14 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         let path = resolve_config_file_path();
-        let config =
-            crate::config::atomic::atomic_load_json::<AppConfig>(&path).unwrap_or_default();
+        let config = atomic_load_json::<AppConfig>(&path).unwrap_or_default();
+
+        let profile_path = resolve_config_dir().join("hardware_profile.json");
+        let hardware_profile = atomic_load_json::<HardwareProfile>(&profile_path).ok();
 
         Self {
             config: RwLock::new(config),
-            hardware_profile: RwLock::new(None),
+            hardware_profile: RwLock::new(hardware_profile),
             config_save_lock: tokio::sync::Mutex::new(()),
         }
     }
@@ -100,6 +102,15 @@ pub async fn detect_hardware(state: State<'_, AppState>) -> Result<HardwareProfi
         .await
         .map_err(|e| AppError::Internal(format!("Hardware probe task panicked: {e}")))??;
 
+    // Atomically persist hardware_profile.json on blocking threadpool
+    let profile_for_disk = profile.clone();
+    tokio::task::spawn_blocking(move || {
+        let profile_path = resolve_config_dir().join("hardware_profile.json");
+        atomic_save_json(&profile_path, &profile_for_disk)
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Hardware profile save task panicked: {e}")))??;
+
     let mut guard = match state.hardware_profile.write() {
         Ok(g) => g,
         Err(e) => {
@@ -134,8 +145,33 @@ mod tests {
         }
         let profile_res = state.hardware_profile.read();
         assert!(profile_res.is_ok());
-        if let Ok(prof) = profile_res {
-            assert!(prof.is_none());
-        }
+    }
+
+    #[test]
+    fn test_hardware_profile_persistence_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_test_hw_persist_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        ));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let test_profile_path = temp_dir.join("hardware_profile.json");
+
+        let probe_result = probe_system_hardware()?;
+        atomic_save_json(&test_profile_path, &probe_result)?;
+
+        let loaded_profile: HardwareProfile = atomic_load_json(&test_profile_path)?;
+        assert_eq!(
+            loaded_profile.recommended_mode,
+            probe_result.recommended_mode
+        );
+        assert_eq!(loaded_profile.cpu_info.model, probe_result.cpu_info.model);
+        assert_eq!(loaded_profile.gpu_info.model, probe_result.gpu_info.model);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        Ok(())
     }
 }
