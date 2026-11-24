@@ -1,9 +1,20 @@
 //! Managed sidecar subprocess supervision and OS kill-switch module (`TASK-M4-03`).
 
 pub mod kill_switch;
+pub mod manifest;
 pub mod supervisor;
+pub mod updater;
 
 use std::path::PathBuf;
+
+pub use manifest::{
+    get_default_sidecar_dir, load_local_manifest, parse_sha256sums, resolve_asset_checksum,
+    save_local_manifest, GitHubAsset, GitHubRelease, SidecarLocalManifest, SidecarTool,
+};
+pub use updater::{
+    AntiBotGuidance, MockHttpHandler, MockHttpResponse, ReleaseCheckInfo, SidecarStatusReport,
+    SidecarUpdateReport, SidecarUpdater, SidecarUpdaterConfig,
+};
 
 #[cfg(windows)]
 pub use kill_switch::get_global_job_guard;
@@ -75,6 +86,25 @@ pub fn resolve_sidecar_binary(tool_name: &str, env_var: &str) -> String {
     }
 
     tool_name.to_string()
+}
+
+/// Resolve a sidecar binary with an optional custom path override (e.g. from `AppConfig.sidecar_paths`).
+#[must_use]
+pub fn resolve_sidecar_binary_with_custom(
+    tool_name: &str,
+    env_var: &str,
+    custom_path: Option<&str>,
+) -> String {
+    if let Some(custom) = custom_path {
+        let trimmed = custom.trim();
+        if !trimmed.is_empty() {
+            let p = PathBuf::from(trimmed);
+            if p.is_file() || !trimmed.contains(std::path::MAIN_SEPARATOR) {
+                return trimmed.to_string();
+            }
+        }
+    }
+    resolve_sidecar_binary(tool_name, env_var)
 }
 
 #[cfg(test)]

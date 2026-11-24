@@ -192,4 +192,94 @@ describe('sidecar IPC client (TASK-M4-03)', () => {
     const noopUnlisten = await listenSidecarProgress(() => {});
     expect(() => noopUnlisten()).not.toThrow();
   });
+
+  describe('Managed Sidecars Auto-Updater (TASK-M4-29)', () => {
+    it('validates sidecar:status event payloads with runtime type guard', async () => {
+      const { isSidecarStatusEventPayload, SIDECAR_STATUS_EVENT } = await import('./updater.ts');
+      expect(SIDECAR_STATUS_EVENT).toBe('sidecar:status');
+
+      expect(
+        isSidecarStatusEventPayload({
+          binary: 'yt-dlp',
+          status: 'ready',
+          message: 'All good',
+        }),
+      ).toBe(true);
+
+      expect(
+        isSidecarStatusEventPayload({
+          binary: 'ffmpeg',
+          status: 'updating',
+        }),
+      ).toBe(true);
+
+      expect(
+        isSidecarStatusEventPayload({
+          binary: 'yt-dlp',
+          status: 'failed',
+          message: 'Checksum mismatch',
+        }),
+      ).toBe(true);
+
+      // Invalid payloads
+      expect(isSidecarStatusEventPayload(null)).toBe(false);
+      expect(isSidecarStatusEventPayload({})).toBe(false);
+      expect(isSidecarStatusEventPayload({ binary: '', status: 'ready' })).toBe(false);
+      expect(isSidecarStatusEventPayload({ binary: 'yt-dlp', status: 'unknown_status' })).toBe(
+        false,
+      );
+      expect(isSidecarStatusEventPayload({ binary: 'yt-dlp', status: 'ready', message: 123 })).toBe(
+        false,
+      );
+    });
+
+    it('subscribes to sidecar:status and gracefully degrades in non-Tauri environments', async () => {
+      const { listenSidecarStatus } = await import('./updater.ts');
+
+      const unlistenSpy = vi.fn();
+      let capturedHandler: ((event: { payload: unknown }) => void) | undefined;
+
+      mockListen.mockImplementationOnce(
+        async (eventName: string, handler: (event: { payload: unknown }) => void) => {
+          expect(eventName).toBe('sidecar:status');
+          capturedHandler = handler;
+          return unlistenSpy;
+        },
+      );
+
+      const received: unknown[] = [];
+      const unlisten = await listenSidecarStatus((payload) => {
+        received.push(payload);
+      });
+
+      expect(mockListen).toHaveBeenCalledWith('sidecar:status', expect.any(Function));
+
+      // Malformed payload ignored
+      capturedHandler?.({ payload: { bad: true } });
+      expect(received).toHaveLength(0);
+
+      // Valid payload accepted
+      capturedHandler?.({
+        payload: {
+          binary: 'yt-dlp',
+          status: 'ready',
+          message: 'Update complete',
+        },
+      });
+      expect(received).toHaveLength(1);
+      expect(received[0]).toEqual({
+        binary: 'yt-dlp',
+        status: 'ready',
+        message: 'Update complete',
+      });
+
+      unlisten();
+      expect(unlistenSpy).toHaveBeenCalledTimes(1);
+
+      // Throws gracefully
+      mockListen.mockRejectedValueOnce(new Error('No IPC'));
+      const fallbackUnlisten = await listenSidecarStatus(() => {});
+      expect(() => fallbackUnlisten()).not.toThrow();
+    });
+  });
 });

@@ -1405,19 +1405,19 @@
   - Prerequisites: TASK-M4-02, TASK-M4-03.
   - Blocks: TASK-M4-06, TASK-M4-08.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-29.1:** Xác thực mã băm SHA256 thành công trước khi ghi đè file thực thi, ngăn ngừa nguy cơ tải file hỏng hoặc bị can thiệp.
-  - [ ] **AC-29.2:** Quá trình cập nhật diễn ra ngầm, không làm treo giao diện người dùng.
-  - [ ] **AC-29.3:** Tự động khôi phục (Rollback) về phiên bản cũ nếu việc thay thế file gặp sự cố.
-  - [ ] **AC-29.4:** Phối hợp cơ chế tự cập nhật binary với cơ chế nạp Cookie và xoay vòng User-Agent: khi cập nhật binary mới vẫn bị HTTP 403, cung cấp cờ và hướng dẫn nạp cookie (`cookies.txt` / browser cookies) để vượt qua anti-bot trong 100% trường hợp.
+  - [x] **AC-29.1:** Xác thực mã băm SHA256 thành công trước khi ghi đè file thực thi, ngăn ngừa nguy cơ tải file hỏng hoặc bị can thiệp.
+  - [x] **AC-29.2:** Quá trình cập nhật diễn ra ngầm, không làm treo giao diện người dùng.
+  - [x] **AC-29.3:** Tự động khôi phục (Rollback) về phiên bản cũ nếu việc thay thế file gặp sự cố.
+  - [x] **AC-29.4:** Phối hợp cơ chế tự cập nhật binary với cơ chế nạp Cookie và xoay vòng User-Agent: khi cập nhật binary mới vẫn bị HTTP 403, cung cấp cờ và hướng dẫn nạp cookie (`cookies.txt` / browser cookies) để vượt qua anti-bot trong 100% trường hợp.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Subprocess Updater & Security Hash Verification Test
   - *Unit Test Cases:*
-    - [ ] **UT-29.1 (SHA256 Hash Verification):** Tải file binary mới về thư mục tạm, tính toán băm SHA256; so sánh khớp 100% với hash trong release manifest mới cho phép thay thế.
-    - [ ] **UT-29.2 (Tampered Binary Rejection):** Nếu mã băm SHA256 không khớp, lập tức hủy bỏ file tạm, giữ nguyên file thực thi cũ.
+    - [x] **UT-29.1 (SHA256 Hash Verification):** Tải file binary mới về thư mục tạm, tính toán băm SHA256; so sánh khớp 100% với hash trong release manifest mới cho phép thay thế.
+    - [x] **UT-29.2 (Tampered Binary Rejection):** Nếu mã băm SHA256 không khớp, lập tức hủy bỏ file tạm, giữ nguyên file thực thi cũ.
   - *Integration & Contract Verification:*
-    - [ ] **IT-29.1:** Triển khai cơ chế tráo đổi an toàn (Atomic Swap): Đổi tên binary cũ thành `yt-dlp.exe.old`, ghi file mới vào `yt-dlp.exe`, và xóa file `.old`.
+    - [x] **IT-29.1:** Triển khai cơ chế tráo đổi an toàn (Atomic Swap): Đổi tên binary cũ thành `yt-dlp.exe.old`, ghi file mới vào `yt-dlp.exe`, và xóa file `.old`.
   - *Boundary & Auto-Recovery Limits (ERR-04 Defense):**
-    - [ ] **ED-29.1 (Bot Block Trigger & Multi-layer Defense):** Khi lệnh `yt-dlp` trả về mã lỗi HTTP 403 Bot Blocked (`ERR_INGEST_BOT_BLOCKED`), hệ thống tự động kích hoạt tiến trình update ngầm không làm gián đoạn UI; nếu bản mới nhất vẫn bị chặn, kích hoạt luân chuyển User-Agent và hướng dẫn nạp cookie xác thực.
+    - [x] **ED-29.1 (Bot Block Trigger & Multi-layer Defense):** Khi lệnh `yt-dlp` trả về mã lỗi HTTP 403 Bot Blocked (`ERR_INGEST_BOT_BLOCKED`), hệ thống tự động kích hoạt tiến trình update ngầm không làm gián đoạn UI; nếu bản mới nhất vẫn bị chặn, kích hoạt luân chuyển User-Agent và hướng dẫn nạp cookie xác thực.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --test sidecar_updater_test -- --nocapture

@@ -10,6 +10,7 @@ pub mod slice_cmd;
 pub mod storage_cmd;
 pub mod stt_cmd;
 pub mod translation_cmd;
+pub mod updater_cmd;
 
 pub use highlight_cmd::{
     __cmd__detect_highlights, __cmd__get_highlight_clusters, __cmd__toggle_cluster_bookmark,
@@ -94,4 +95,14 @@ pub use translation_cmd::{
     __tauri_command_name_translate_vietsub, __tauri_command_name_update_speaker_role,
     __tauri_command_name_wrap_vietnamese_subtitles, optimize_transcript_cps,
     test_gemini_connection, translate_vietsub, update_speaker_role, wrap_vietnamese_subtitles,
+};
+pub use updater_cmd::{
+    __cmd__check_sidecar_updates, __cmd__download_and_apply_sidecar_update,
+    __cmd__get_anti_bot_guidance, __cmd__get_sidecar_status, __cmd__trigger_bot_defense_update,
+    __tauri_command_name_check_sidecar_updates,
+    __tauri_command_name_download_and_apply_sidecar_update,
+    __tauri_command_name_get_anti_bot_guidance, __tauri_command_name_get_sidecar_status,
+    __tauri_command_name_trigger_bot_defense_update, check_sidecar_updates,
+    download_and_apply_sidecar_update, get_anti_bot_guidance, get_sidecar_status,
+    trigger_bot_defense_update, SidecarStatusEventPayload, SIDECAR_STATUS_EVENT,
 };

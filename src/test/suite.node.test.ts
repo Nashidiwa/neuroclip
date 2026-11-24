@@ -4126,4 +4126,113 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       });
     });
   });
+
+  describe('TASK-M4-29: Managed Sidecars Auto-Updater & Anti-Bot Defense', () => {
+    it('should verify TypeScript IPC contracts and event guards in updater.ts', async () => {
+      const updater = await import('../services/ipc/updater.ts');
+      assert.strictEqual(typeof updater.checkSidecarUpdates, 'function');
+      assert.strictEqual(typeof updater.downloadAndApplySidecarUpdate, 'function');
+      assert.strictEqual(typeof updater.getSidecarStatus, 'function');
+      assert.strictEqual(typeof updater.getAntiBotGuidance, 'function');
+      assert.strictEqual(typeof updater.triggerBotDefenseUpdate, 'function');
+      assert.strictEqual(typeof updater.listenSidecarStatus, 'function');
+      assert.strictEqual(updater.SIDECAR_STATUS_EVENT, 'sidecar:status');
+
+      assert.strictEqual(
+        updater.isSidecarStatusEventPayload({
+          binary: 'yt-dlp',
+          status: 'ready',
+          message: 'Up to date',
+        }),
+        true,
+      );
+      assert.strictEqual(
+        updater.isSidecarStatusEventPayload({
+          binary: 'ffmpeg',
+          status: 'updating',
+        }),
+        true,
+      );
+      assert.strictEqual(updater.isSidecarStatusEventPayload(null), false);
+      assert.strictEqual(updater.isSidecarStatusEventPayload({ binary: '' }), false);
+    });
+
+    it('should verify Rust sidecar auto-updater implementation and architecture contracts', () => {
+      const manifestPath = path.resolve('src-tauri/src/sidecar/manifest.rs');
+      const updaterPath = path.resolve('src-tauri/src/sidecar/updater.rs');
+      const cmdPath = path.resolve('src-tauri/src/commands/updater_cmd.rs');
+      const testPath = path.resolve('src-tauri/tests/sidecar_updater_test.rs');
+      const libPath = path.resolve('src-tauri/src/lib.rs');
+
+      assert.ok(fs.existsSync(manifestPath), 'manifest.rs must exist');
+      assert.ok(fs.existsSync(updaterPath), 'updater.rs must exist');
+      assert.ok(fs.existsSync(cmdPath), 'updater_cmd.rs must exist');
+      assert.ok(fs.existsSync(testPath), 'sidecar_updater_test.rs must exist');
+
+      const manifestRs = fs.readFileSync(manifestPath, 'utf8');
+      assert.ok(manifestRs.includes('enum SidecarTool'), 'manifest.rs defines SidecarTool');
+      assert.ok(manifestRs.includes('fn parse_sha256sums'), 'manifest.rs defines parse_sha256sums');
+      assert.ok(
+        manifestRs.includes('fn resolve_asset_checksum'),
+        'manifest.rs defines resolve_asset_checksum',
+      );
+
+      const updaterRs = fs.readFileSync(updaterPath, 'utf8');
+      assert.ok(updaterRs.includes('struct SidecarUpdater'), 'updater.rs defines SidecarUpdater');
+      assert.ok(
+        updaterRs.includes('fn download_and_verify'),
+        'updater.rs implements download_and_verify with SHA256 check (AC-29.1)',
+      );
+      assert.ok(
+        updaterRs.includes('fn atomic_swap_and_rollback'),
+        'updater.rs implements atomic swap & rollback (AC-29.3)',
+      );
+      assert.ok(
+        updaterRs.includes('fn create_anti_bot_guidance'),
+        'updater.rs implements multi-layer anti-bot defense guidance (AC-29.4)',
+      );
+
+      const cmdRs = fs.readFileSync(cmdPath, 'utf8');
+      assert.ok(
+        cmdRs.includes('fn check_sidecar_updates'),
+        'updater_cmd.rs exposes check_sidecar_updates',
+      );
+      assert.ok(
+        cmdRs.includes('fn download_and_apply_sidecar_update'),
+        'updater_cmd.rs exposes download_and_apply_sidecar_update',
+      );
+      assert.ok(
+        cmdRs.includes('fn trigger_bot_defense_update'),
+        'updater_cmd.rs exposes trigger_bot_defense_update',
+      );
+
+      const libRs = fs.readFileSync(libPath, 'utf8');
+      assert.ok(
+        libRs.includes('commands::check_sidecar_updates'),
+        'lib.rs registers check_sidecar_updates',
+      );
+      assert.ok(
+        libRs.includes('commands::download_and_apply_sidecar_update'),
+        'lib.rs registers download_and_apply_sidecar_update',
+      );
+      assert.ok(
+        libRs.includes('commands::trigger_bot_defense_update'),
+        'lib.rs registers trigger_bot_defense_update',
+      );
+
+      const testRs = fs.readFileSync(testPath, 'utf8');
+      assert.ok(testRs.includes('test_ut_29_1'), 'Integration test covers UT-29.1');
+      assert.ok(testRs.includes('test_ut_29_2'), 'Integration test covers UT-29.2');
+      assert.ok(testRs.includes('test_it_29_1'), 'Integration test covers IT-29.1');
+      assert.ok(testRs.includes('test_ed_29_1'), 'Integration test covers ED-29.1');
+    });
+
+    it('should verify canonical error codes for sidecar auto-updater', () => {
+      assert.strictEqual(ERROR_CODES.SIDECAR_UPDATE_FAILED, 'ERR_SIDECAR_UPDATE_FAILED');
+      assert.strictEqual(ERROR_CODES.INGEST_BOT_BLOCKED, 'ERR_INGEST_BOT_BLOCKED');
+      assert.strictEqual(ERROR_CODES.SIDECAR_BINARY_NOT_FOUND, 'ERR_SIDECAR_BINARY_NOT_FOUND');
+      assert.strictEqual(ERROR_CODES.SIDECAR_EXECUTION_FAILED, 'ERR_SIDECAR_EXECUTION_FAILED');
+      assert.strictEqual(ERROR_CODES.SIDECAR_PROCESS_KILLED, 'ERR_SIDECAR_PROCESS_KILLED');
+    });
+  });
 });

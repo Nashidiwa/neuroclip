@@ -9,6 +9,8 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { parseIpcError, type IpcErrorResponse } from './error.ts';
 
+export * from './updater.ts';
+
 /**
  * Raw wire payload emitted on the `sidecar:progress` Tauri event channel.
  * Accepts canonical snake_case fields from Rust as well as camelCase aliases.

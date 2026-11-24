@@ -193,7 +193,12 @@ pub fn run() {
             commands::test_gemini_connection,
             commands::update_speaker_role,
             commands::wrap_vietnamese_subtitles,
-            commands::optimize_transcript_cps
+            commands::optimize_transcript_cps,
+            commands::check_sidecar_updates,
+            commands::download_and_apply_sidecar_update,
+            commands::get_sidecar_status,
+            commands::get_anti_bot_guidance,
+            commands::trigger_bot_defense_update
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {
