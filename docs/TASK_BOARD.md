@@ -3,7 +3,7 @@
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
 **Phiên bản Sản phẩm (Target Product Version):** `v1.0.0 (MVP)`  
-**Phiên bản Tài liệu (Doc Revision):** `rev.2.6 (2026-11-24)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; `M4.9`: `TASK-M4-30` Completed; Remaining: `TASK-M4-31..M4-33`)  
+**Phiên bản Tài liệu (Doc Revision):** `rev.2.7 (2026-11-24)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; `M4.9`: `TASK-M4-30..M4-31` Completed; Remaining: `TASK-M4-32..M4-33`)  
 **Ngày cập nhật:** 2026-11-24  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`. *(Lưu ý: `Doc Revision` là số lần sửa đổi tài liệu, hoàn toàn tách biệt với `Product Version` của app đang chuẩn bị cho `v1.0.0 MVP`.)*
@@ -17,7 +17,7 @@
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
 | **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 *(+1 task tích hợp `TASK-M4-29B` bổ sung ngày 2026-11-20 & +1 task đại cập nhật tài liệu `TASK-M4-33` bổ sung ngày 2026-11-24)* kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass, đóng gói bộ cài Windows MSI/NSIS và chuẩn hóa lại toàn bộ tài liệu v1.0.0. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm & tài liệu. | **IN PROGRESS (31 / 34 Tasks Completed [91.2%]: TASK-M4-01..M4-30; M4.1–M4.8 Completed, M4.9: TASK-M4-30 Done; Remaining: TASK-M4-31..M4-33)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass, đóng gói bộ cài Windows MSI/NSIS và chuẩn hóa lại toàn bộ tài liệu v1.0.0. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm & tài liệu. | **IN PROGRESS (32 / 34 Tasks Completed [94.1%]: TASK-M4-01..M4-31; M4.1–M4.8 Completed, M4.9: TASK-M4-30..M4-31 Done; Remaining: TASK-M4-32..M4-33)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -1518,16 +1518,21 @@
 
 ---
 
-#### TASK-M4-31: Bộ Đánh Giá Hiệu Năng & Kiểm Thử Tải Trên Máy Cấu Hình Yếu (Low-End PC Stress Benchmark)
+#### TASK-M4-31: Bộ Đánh Giá Hiệu Năng & Kiểm Thử Tải Trên Máy Cấu Hình Yếu (Low-End PC Stress Benchmark) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `@qa-reviewer` & Senior Backend Dev (Rust)
+- **Ghi chú Trạng thái Hiện tại (Completed & Verified):** Đã triển khai đầy đủ 2 suite kiểm thử đo tải & rò rỉ bộ nhớ (`src-tauri/tests/low_end_pc_stress_benchmark.rs` — 4/4 PASS và `src-tauri/tests/memory_leak_check.rs` — 2/2 PASS) tích hợp lock-free `TrackingAllocator` (`#[global_allocator]`) kết hợp `Win32 K32GetProcessMemoryInfo` (Kernel WorkingSet / Private Commit). Kết quả đo thực tế (`--release`):
+  - **500,000 chat + 8h Audio PCM stream (460.8M samples / 57,600 blocks):** Hoàn tất trong **0.92s** (`17.25s` debug); **Peak Tracked Heap = 82.21 MB**, **OS Peak WorkingSet = 98.18 MB**, **OS Peak Commit = 97.66 MB** ($\le 500\text{ MB}$); giải phóng về **Post-Drop Heap = 0.01 MB**, **OS WorkingSet = 6.94 MB** ($\le 100\text{ MB}$).
+  - **5 clip highlight E2E liên tiếp + 10s settle:** **+0 bytes** rò rỉ trên cả 3 chu kỳ 500k+8h và cả 5 clip nối tiếp (post-clip live heap giữ nguyên `88,678 bytes` từ Clip 1 đến Clip 5 và sau 10s settle; final post-runtime drop **OS WorkingSet = 15.34 MB** $\le 100\text{ MB}$).
+  - **Độ mượt Event Loop (UI Responsiveness):** `heartbeat` 10ms chạy song song `spawn_blocking` ghi nhận `max_tick_interval = 17.38ms` (`17.48ms` debug) $\le 100\text{ms}$ (0 stall).
+  - **2GB VRAM CUDA OOM Guardrail (`2048 MB < 2500 MB`):** `StrictReject` trả `ERR_STT_VRAM_INSUFFICIENT`; `AutoDowngrade` hạ cấp an toàn về `medium int8` (`1650 MB <= 1800 MB cap`).
 - **Target Files:**
   - `src-tauri/tests/low_end_pc_stress_benchmark.rs`
-  - `src-tauri/tests/memory_leak_check.rs` *(hoặc module con dưới `src-tauri/tests/`)*
+  - `src-tauri/tests/memory_leak_check.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng bài kiểm tra tải mô phỏng môi trường máy tính cấu hình tối thiểu (8GB RAM, iGPU, CPU 4 nhân):
-    - Bơm 500,000 dòng chat để kiểm tra thuật toán Z-score và Emote filter.
+    - Bơm 500,000 dòng chat để kiểm tra thuật toán Z-score và Emote filter kết hợp audio stream 8 tiếng (57,600 blocks @ 16kHz PCM).
     - Xử lý liên tục 5 clip highlight liên tiếp để kiểm tra hiện tượng rò rỉ bộ nhớ (Memory Leak).
-    - Giới hạn VRAM giả lập ở mức 2GB để kiểm tra cơ chế phòng vệ CUDA OOM.
+    - Giới hạn VRAM giả lập ở mức 2GB (`2048 MB`) để kiểm tra cơ chế phòng vệ CUDA OOM.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: Dữ liệu tải lớn (500k messages, audio stream 8 tiếng).
   - Đầu ra: Báo cáo Memory Profile & CPU Benchmark.
@@ -1535,9 +1540,9 @@
   - Prerequisites: TASK-M4-08, TASK-M4-09, TASK-M4-11, TASK-M4-16.
   - Blocks: TASK-M4-32.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-31.1:** Mức chiếm dụng RAM đỉnh (Peak RAM) trong suốt quá trình xử lý tải nặng không vượt quá $500\text{MB}$.
-  - [ ] **AC-31.2:** Sau khi tác vụ hoàn thành, RAM tự động giải phóng về mức tĩnh $\le 100\text{MB}$ (0 byte memory leak).
-  - [ ] **AC-31.3:** Không có tình trạng đơ chuột (UI unresponsiveness) kéo dài quá $100\text{ms}$.
+  - [x] **AC-31.1:** Mức chiếm dụng RAM đỉnh (Peak RAM) trong suốt quá trình xử lý tải nặng không vượt quá $500\text{MB}$ (`Peak Heap = 82.21 MB`, `OS Peak WS = 98.18 MB`).
+  - [x] **AC-31.2:** Sau khi tác vụ hoàn thành, RAM tự động giải phóng về mức tĩnh $\le 100\text{MB}$ (0 byte memory leak: `delta = +0 bytes` across Cycles 1..=3 & Clips 1..=5, `OS WS = 6.94–15.34 MB`).
+  - [x] **AC-31.3:** Không có tình trạng đơ chuột (UI unresponsiveness) kéo dài quá $100\text{ms}$ (`max_tick_interval = 17.38ms <= 100ms`).
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Stress & Memory Profiling Benchmark
   - *Kịch bản kiểm thử tải nặng (Stress Scenario):*
@@ -1545,13 +1550,15 @@
     - Xử lý liên tục 5 clip highlight nối tiếp nhau trong một phiên làm việc kéo dài.
     - Giới hạn VRAM khả dụng giả lập ở mức $2\text{GB}$.
   - *Tiêu chí nghiệm thu định lượng (AC):*
-    - [ ] **AC-31.1 (Peak RAM Cap):** Mức chiếm dụng RAM đỉnh (Peak RAM) trong suốt quá trình xử lý 500k messages không vượt quá $500\text{MB}$.
-    - [ ] **AC-31.2 (Zero Memory Leak):** Sau khi các tác vụ kết thúc 10 giây, bộ nhớ RAM tự động được dọn dẹp giải phóng về mức tĩnh $\le 100\text{MB}$ (0 byte memory leak).
-    - [ ] **AC-31.3 (UI Thread Unresponsiveness):** Không có thời điểm nào giao diện chính bị đơ quá $100\text{ms}$.
+    - [x] **AC-31.1 (Peak RAM Cap):** Mức chiếm dụng RAM đỉnh (Peak RAM) trong suốt quá trình xử lý 500k messages không vượt quá $500\text{MB}$.
+    - [x] **AC-31.2 (Zero Memory Leak):** Sau khi các tác vụ kết thúc 10 giây, bộ nhớ RAM tự động được dọn dẹp giải phóng về mức tĩnh $\le 100\text{MB}$ (0 byte memory leak).
+    - [x] **AC-31.3 (UI Thread Unresponsiveness):** Không có thời điểm nào giao diện chính bị đơ quá $100\text{ms}$.
   - *Lệnh thực thi & Tiêu chí xác minh:*
-    ```bash
-    cargo test --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture --release
+    ```powershell
+    cargo test --release --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture
+    cargo test --release --manifest-path src-tauri/Cargo.toml --test memory_leak_check -- --nocapture
     ```
+    *(Lưu ý Cargo CLI: cờ `--release` phải đặt trước `--`.)*  
     *Khẳng định: Peak RAM $\le 500\text{MB}$, RAM sau xử lý $\le 100\text{MB}$, 0 memory leak.*
 
 ---
@@ -1752,10 +1759,10 @@ npm run lint
 npm run typecheck
 npm run build
 
-# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (29 active test binaries [1 lib: 268 + 28 integration: 241], 509 tests)
+# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (33 active test targets [1 lib: 269 + bin + 31 integration], 520 tests)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
-# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend (tổng cộng 1,403 bài kiểm thử toàn repo: 509 Rust + 754 Vitest + 140 Node)
+# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend (tổng cộng 1,414 bài kiểm thử toàn repo: 520 Rust + 754 Vitest + 140 Node)
 npm run test:vitest   # (hoặc npm run test:run — 41 files Vitest, 754 tests)
 npm test              # Node Native Test Runner (54 suites, 140 tests: src/test/suite.node.test.ts)
 
@@ -1763,7 +1770,8 @@ npm test              # Node Native Test Runner (54 suites, 140 tests: src/test/
 cargo test --manifest-path src-tauri/Cargo.toml --test synthetic_vod_pipeline_e2e -- --nocapture
 
 # 7. (Target M4-31) Chạy bài kiểm thử tải nặng & Memory Leak
-cargo test --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture --release
+cargo test --release --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture
+cargo test --release --manifest-path src-tauri/Cargo.toml --test memory_leak_check -- --nocapture
 ```
 
 **Bảng Cam Kết SLAs Nghiệm Thu Tự Động:**
