@@ -428,14 +428,13 @@ fn collect_raw_clips(
 ) -> Vec<PremiereClipInput> {
     let mut raw_clips: Vec<PremiereClipInput> = options
         .and_then(|opt| opt.clips.as_ref())
-        .map(|clips| {
+        .map_or_default(|clips| {
             clips
                 .iter()
                 .filter(|clip| !clip.file_path.trim().is_empty())
                 .cloned()
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
     if raw_clips.is_empty() {
         let single_video = options
