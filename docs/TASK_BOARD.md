@@ -3,8 +3,8 @@
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
 **Phiên bản Sản phẩm (Target Product Version):** `v1.0.0 (MVP)`  
-**Phiên bản Tài liệu (Doc Revision):** `rev.2.7 (2026-11-24)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; `M4.9`: `TASK-M4-30..M4-31` Completed; Remaining: `TASK-M4-32..M4-33`)  
-**Ngày cập nhật:** 2026-11-24  
+**Phiên bản Tài liệu (Doc Revision):** `rev.2.8 (2026-11-25)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; `M4.9`: `TASK-M4-30..M4-31` Completed; Remaining: `TASK-M4-32..M4-33`; PO Pre-Locked Decisions synced for `M4-32/33`)  
+**Ngày cập nhật:** 2026-11-25  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`. *(Lưu ý: `Doc Revision` là số lần sửa đổi tài liệu, hoàn toàn tách biệt với `Product Version` của app đang chuẩn bị cho `v1.0.0 MVP`.)*
 
@@ -1566,13 +1566,18 @@
 #### TASK-M4-32: Thiết Lập Pipeline Đóng Gói Bộ Cài Đặt Windows NSIS & MSI Chính Thức
 - **Lead Persona:** `@tech-lead` & Systems Dev
 - **Target Files:**
+  - `src-tauri/Cargo.toml` *(lược bỏ `staticlib`/`cdylib`, giữ `crate-type = ["rlib"]` để dứt xung đột `Cargo #6313`)*
   - `src-tauri/tauri.conf.json`
+  - `.github/workflows/ci.yml` *(CI Gate tự động trên `windows-latest` cho `push`/`pull_request` — dựng cùng mạch `M4-32` theo chốt PO `2026-11-25`)*
   - `.github/workflows/release-windows.yml`
   - `installer/nsis/hooks.nsi`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Cấu hình đóng gói bộ cài đặt chính thức cho Windows 10/11 64-bit sử dụng định dạng NSIS (`.exe`) và WiX (`.msi`).
+  - *(Quyết định PO `2026-11-25` — Pre-flight `Cargo #6313`)*: Ngay đầu task, sửa `src-tauri/Cargo.toml` từ `crate-type = ["staticlib", "cdylib", "rlib"]` sang `crate-type = ["rlib"]` để chấm dứt cảnh báo filename collision & lỗi link khi chạy `cargo test --release`, đồng thời rút ngắn thời gian LTO release build.
+  - *(Quyết định PO `2026-11-25` — Tách CI Gate)*: Thiết lập `.github/workflows/ci.yml` kiểm định tự động toàn repo (`cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all-targets`, `npm test`, `vitest`, `typecheck`, `lint`, `build`) trên `windows-latest`.
   - *(Bổ sung theo Quyết định PO `2026-11-23`)*: Thay `"csp": null` trong `src-tauri/tauri.conf.json` bằng chính sách **Content Security Policy (CSP)** tường minh cho WebView2 release (cho phép `'self'`, `asset:`, `http://asset.localhost`, `blob:`, `data:` cần cho Tailwind và `<video>`) và kiểm thử phát video `<video>` thực tế trên Windows WebView2 trước khi phát hành v1.
-  - Đóng gói sẵn các file thực thi phụ trợ portable: `ffmpeg.exe` và `yt-dlp.exe` vào thư mục tài nguyên của app (`resources/sidecars/`).
+  - *(Quyết định PO `2026-11-25` — Sidecars trong CI)*: Đóng gói sẵn các file thực thi phụ trợ portable `ffmpeg.exe` và `yt-dlp.exe` vào `resources/sidecars/` bằng cách **tải tự động từ release chính thức kèm pin version + verify SHA-256** ngay trong bước build của `.github/workflows/release-windows.yml` (tuyệt đối không commit binary vào git; dùng bản `ffmpeg` essentials gọn để giữ bộ cài NSIS $\le 120\text{MB}$ theo `AC-32.1`).
+  - *(Quyết định PO `2026-11-25` — Code Signing `v1.0.0 MVP`)*: Release bản `v1.0.0 MVP` ở trạng thái **unsigned**, workflow tự động xuất và đính kèm `SHA256SUMS.txt` trên GitHub Releases; chuẩn bị nền tảng workflow công khai cho kế hoạch đăng ký **SignPath Foundation** (`AGPL-3.0`) sau bản release hoạt động đầu tiên.
   - Thiết lập icon ứng dụng (Neuro-sama icon đầy đủ các kích thước 32x32, 128x128, 256x256, 512x512).
   - Viết kịch bản NSIS hook:
     - Tạo shortcut ngoài Desktop và Start Menu.
@@ -1627,6 +1632,7 @@
     - Xử lý triệt để sự nhập nhằng giữa số revision của file markdown (`1.3.0`, `2.4.0`) với SemVer của phần mềm (`v1.0.0 MVP`). Toàn bộ tài liệu sống chuẩn hóa hai trường tách biệt (`Product Version: v1.0.0` vs `Doc Revision`).
   - **Review & Cập nhật toàn diện `README.md`:**
     - Đồng bộ badge, tính năng thực tế v1.0.0 MVP, kiến trúc thư mục mới, số liệu test pass và hướng dẫn cài đặt/sử dụng bản phát hành.
+    - *(Quyết định PO `2026-11-25`)*: Bổ sung hướng dẫn xử lý cảnh báo **Windows SmartScreen** (*More info → Run anyway*) + đối chiếu `SHA256SUMS.txt` cho bản unsigned `v1.0.0 MVP`; đồng thời chuẩn bị sẵn 2 mục **Code Signing Policy** và **Privacy Policy** phục vụ hồ sơ **SignPath Foundation** (`AGPL-3.0`) sau release đầu tiên (0 telemetry, chỉ gọi BYOK Groq/Gemini & kiểm tra update sidecar, không ký binary bên thứ ba `ffmpeg.exe`/`yt-dlp.exe`, và giải trình rõ không phá DRM).
   - **Viết lại `AGENTS.md` (Đã lỗi thời):**
     - Cập nhật lại quy chuẩn vận hành cho chu kỳ bảo trì/phát triển hậu v1.0.0, cập nhật đường dẫn cấu trúc `docs/` mới, và **xem xét chuyển đổi phương thức điều phối từ `/teamwork` sang mô hình `orchestrator`** theo quyết định chốt với PO lúc triển khai.
 - **Giao kèo dữ liệu (Data Contracts):**
