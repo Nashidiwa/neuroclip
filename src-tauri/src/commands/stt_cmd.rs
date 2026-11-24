@@ -140,9 +140,16 @@ pub async fn transcribe_highlight_clip(
         .map_err(AppError::Storage)?
         .to_string();
 
-    // Resolve Groq API key (passed parameter or env fallback)
+    // Resolve Groq API key (passed parameter -> keyring -> env fallback)
     let resolved_key = api_key
         .filter(|k| !k.trim().is_empty())
+        .or_else(|| {
+            crate::core::keyring::KeyringManager::new(crate::core::keyring::SERVICE_NAME)
+                .get_api_key("groq")
+                .ok()
+                .flatten()
+                .filter(|k| !k.trim().is_empty())
+        })
         .or_else(|| std::env::var("GROQ_API_KEY").ok())
         .or_else(|| std::env::var("NEUROCLIP_GROQ_API_KEY").ok())
         .ok_or(AppError::Stt(SttError::InvalidApiKey))?;

@@ -10,6 +10,7 @@ import {
   DEFAULT_APP_CONFIG,
   fetchAppConfig,
   saveAppConfig,
+  completeOnboarding,
 } from '../services/config/settings.ts';
 import {
   type HardwareProfile,
@@ -37,6 +38,7 @@ export interface SettingsState {
   saveConfig: () => Promise<boolean>;
   loadHardwareProfile: () => Promise<void>;
   detectHardware: () => Promise<HardwareProfile | null>;
+  completeOnboarding: () => Promise<boolean>;
   resetDefaults: () => void;
   clearError: () => void;
 }
@@ -131,6 +133,22 @@ export const useSettingsStore = createStore<SettingsState>((set, get) => ({
         isLoading: false,
       });
       return null;
+    }
+  },
+
+  completeOnboarding: async (): Promise<boolean> => {
+    try {
+      await completeOnboarding();
+      const current = get().config;
+      set({
+        config: { ...current, isFirstRun: false },
+        lastSavedAt: new Date().toISOString(),
+      });
+      return true;
+    } catch (err: unknown) {
+      const parsed = parseIpcError(err, 'Không thể hoàn tất cấu hình khởi tạo');
+      set({ error: getFriendlyErrorMessage(parsed) });
+      return false;
     }
   },
 

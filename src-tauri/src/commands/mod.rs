@@ -26,11 +26,18 @@ pub use chat_cmd::{
     start_chat_extraction,
 };
 pub use config_cmd::{
-    __cmd__detect_hardware, __cmd__get_app_config, __cmd__get_hardware_profile, __cmd__ping,
-    __cmd__save_app_config, __tauri_command_name_detect_hardware,
-    __tauri_command_name_get_app_config, __tauri_command_name_get_hardware_profile,
-    __tauri_command_name_ping, __tauri_command_name_save_app_config, detect_hardware,
-    get_app_config, get_hardware_profile, ping, save_app_config, AppState,
+    __cmd__complete_onboarding, __cmd__delete_api_key, __cmd__detect_hardware, __cmd__get_api_key,
+    __cmd__get_app_config, __cmd__get_hardware_profile, __cmd__is_first_run, __cmd__ping,
+    __cmd__save_app_config, __cmd__set_api_key, __cmd__test_api_key_connection,
+    __cmd__test_groq_connection, __tauri_command_name_complete_onboarding,
+    __tauri_command_name_delete_api_key, __tauri_command_name_detect_hardware,
+    __tauri_command_name_get_api_key, __tauri_command_name_get_app_config,
+    __tauri_command_name_get_hardware_profile, __tauri_command_name_is_first_run,
+    __tauri_command_name_ping, __tauri_command_name_save_app_config,
+    __tauri_command_name_set_api_key, __tauri_command_name_test_api_key_connection,
+    __tauri_command_name_test_groq_connection, complete_onboarding, delete_api_key,
+    detect_hardware, get_api_key, get_app_config, get_hardware_profile, is_first_run, ping,
+    save_app_config, set_api_key, test_api_key_connection, test_groq_connection, AppState,
 };
 pub use export_cmd::{
     __cmd__export_capcut_draft, __cmd__export_premiere_xml, __cmd__export_subtitle_project,

@@ -30,6 +30,13 @@ pub async fn translate_vietsub(
 ) -> Result<TranscriptSegmentsContainer, AppError> {
     let resolved_key = api_key
         .filter(|k| !k.trim().is_empty())
+        .or_else(|| {
+            crate::core::keyring::KeyringManager::new(crate::core::keyring::SERVICE_NAME)
+                .get_api_key("gemini")
+                .ok()
+                .flatten()
+                .filter(|k| !k.trim().is_empty())
+        })
         .or_else(|| std::env::var("GEMINI_API_KEY").ok())
         .or_else(|| std::env::var("NEUROCLIP_GEMINI_API_KEY").ok())
         .ok_or(AppError::Translation(TranslationError::InvalidApiKey))?;

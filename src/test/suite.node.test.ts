@@ -873,6 +873,7 @@ describe('TASK-M4-27 / TASK-M4-28 (legacy label TASK-M4-03): Shared Types, Hardw
         groq_api_key: 'gsk_test123',
         gemini_api_key: 'AIza_test456',
         max_history_days: 14,
+        is_first_run: true,
       };
 
       const domain = toAppConfig(configJson);

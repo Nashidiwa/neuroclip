@@ -18,7 +18,7 @@ pub struct SidecarPaths {
 
 /// Global Application Configuration for NeuroClip.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(default, rename_all = "snake_case")]
 pub struct AppConfig {
     /// UI Theme mode (e.g. "dark", "light", "acrylic").
     pub theme: String,
@@ -42,12 +42,21 @@ pub struct AppConfig {
     pub active_translation_model: String,
     /// Optional custom sidecar paths.
     pub sidecar_paths: SidecarPaths,
-    /// User BYOK Groq API Key.
+    /// Whether this is the first run of the application (triggers onboarding wizard).
+    #[serde(default = "default_first_run")]
+    pub is_first_run: bool,
+    /// User BYOK Groq API Key (not serialized to disk per AC-28.2 / ED-28.1).
+    #[serde(default, skip_serializing)]
     pub groq_api_key: String,
-    /// User BYOK Google Gemini API Key.
+    /// User BYOK Google Gemini API Key (not serialized to disk per AC-28.2 / ED-28.1).
+    #[serde(default, skip_serializing)]
     pub gemini_api_key: String,
     /// Days to retain rotated log files and temporary cache items.
     pub max_history_days: u32,
+}
+
+fn default_first_run() -> bool {
+    true
 }
 
 impl Default for AppConfig {
@@ -64,6 +73,7 @@ impl Default for AppConfig {
             active_stt_model: "whisper-large-v3".to_string(),
             active_translation_model: "gemini-1.5-flash".to_string(),
             sidecar_paths: SidecarPaths::default(),
+            is_first_run: true,
             groq_api_key: String::new(),
             gemini_api_key: String::new(),
             max_history_days: 14,
@@ -182,5 +192,50 @@ mod tests {
     fn test_resolve_config_file_path_does_not_panic() {
         let path = resolve_config_file_path();
         assert!(path.to_string_lossy().contains("app_config.json"));
+    }
+
+    #[test]
+    fn test_is_first_run_default_and_serialization() {
+        let config = AppConfig::default();
+        assert!(config.is_first_run);
+
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("\"is_first_run\":true"));
+
+        // When deserializing JSON without is_first_run, defaults to true
+        let without_flag: AppConfig = serde_json::from_str("{}").unwrap_or_default();
+        assert!(without_flag.is_first_run);
+    }
+
+    #[test]
+    fn test_zero_plaintext_keys_serialized_ed_28_1() {
+        let config = AppConfig {
+            groq_api_key: "gsk_super_secret_groq_key_999".to_string(),
+            gemini_api_key: "AIzaSySuperSecretGeminiKey_888".to_string(),
+            ..Default::default()
+        };
+
+        let json_str = serde_json::to_string_pretty(&config).unwrap();
+
+        // ED-28.1: 0 plaintext API keys serialized
+        assert!(!json_str.contains("groq_api_key"));
+        assert!(!json_str.contains("gemini_api_key"));
+        assert!(!json_str.contains("gsk_super_secret_groq_key_999"));
+        assert!(!json_str.contains("AIzaSySuperSecretGeminiKey_888"));
+    }
+
+    #[test]
+    fn test_legacy_config_deserialization_for_migration() {
+        let legacy_json = r#"{
+            "theme": "dark",
+            "language": "vi",
+            "groq_api_key": "gsk_legacy_groq_123",
+            "gemini_api_key": "AIzaSyLegacyGemini_456"
+        }"#;
+
+        let parsed: AppConfig = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(parsed.groq_api_key, "gsk_legacy_groq_123");
+        assert_eq!(parsed.gemini_api_key, "AIzaSyLegacyGemini_456");
+        assert!(parsed.is_first_run);
     }
 }

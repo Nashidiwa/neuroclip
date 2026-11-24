@@ -10,6 +10,7 @@ import { useProjectStore } from './stores/useProjectStore';
 import { useIngestionStore } from './stores/useIngestionStore';
 import { useChatStore } from './stores/useChatStore';
 import { useHighlightStore } from './stores/useHighlightStore';
+import { useSettingsStore } from './stores/settingsStore';
 import { normalizeHighlightCluster } from './types/highlight';
 import { ERROR_CODES } from './services/ipc/error';
 
@@ -37,10 +38,15 @@ import {
 
 describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
   beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
     useProjectStore.getState().reset();
     useIngestionStore.getState().reset();
     useChatStore.getState().reset();
     useHighlightStore.getState().reset();
+    useSettingsStore.setState({
+      config: { ...useSettingsStore.getState().config, isFirstRun: false },
+    });
   });
   describe('UT-01.1: Theme Palette Loading (Happy Path)', () => {
     it('should return exactly the specified Neuro-sama VTuber theme palette hex colors', () => {
@@ -324,10 +330,15 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
 
     it('renders amber ERR-05 fallback notice without duplicate red ErrorBanner on ERR_INGEST_CHAT_UNAVAILABLE', async () => {
       const mockedInvoke = vi.mocked(invoke);
-      mockedInvoke.mockRejectedValueOnce({
-        code: ERROR_CODES.INGEST_CHAT_UNAVAILABLE,
-        message: 'Chat replay không khả dụng.',
-        recoverable: true,
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'start_chat_extraction') {
+          throw {
+            code: ERROR_CODES.INGEST_CHAT_UNAVAILABLE,
+            message: 'Chat replay không khả dụng.',
+            recoverable: true,
+          };
+        }
+        return undefined;
       });
 
       useIngestionStore.setState({
@@ -367,6 +378,53 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
         expect(screen.getByRole('status')).toHaveTextContent('Chat replay không khả dụng.');
       });
       expect(screen.queryByText('Lỗi trích xuất Chat Replay')).not.toBeInTheDocument();
+    });
+
+    it('automatically displays OnboardingWizardModal when isFirstRun is true (UT-28.1)', async () => {
+      useSettingsStore.setState({
+        config: { ...useSettingsStore.getState().config, isFirstRun: true },
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('heading', { name: /Chào Mừng Đến Với NeuroClip Studio/i }),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('does not display OnboardingWizardModal when isFirstRun is false (UT-28.1)', () => {
+      useSettingsStore.setState({
+        config: { ...useSettingsStore.getState().config, isFirstRun: false },
+      });
+
+      render(<App />);
+
+      expect(
+        screen.queryByRole('heading', { name: /Chào Mừng Đến Với NeuroClip Studio/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('allows opening OnboardingWizardModal on-demand via Setup Wizard header button (AC-28.3)', async () => {
+      useSettingsStore.setState({
+        config: { ...useSettingsStore.getState().config, isFirstRun: false },
+      });
+
+      render(<App />);
+
+      expect(
+        screen.queryByRole('heading', { name: /Chào Mừng Đến Với NeuroClip Studio/i }),
+      ).not.toBeInTheDocument();
+
+      const wizardBtn = screen.getByRole('button', { name: /Setup Wizard/i });
+      fireEvent.click(wizardBtn);
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('heading', { name: /Chào Mừng Đến Với NeuroClip Studio/i }),
+        ).toBeInTheDocument();
+      });
     });
   });
 });

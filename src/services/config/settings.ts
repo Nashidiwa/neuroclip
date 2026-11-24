@@ -40,6 +40,7 @@ export interface AppConfigJson {
   readonly groq_api_key: string;
   readonly gemini_api_key: string;
   readonly max_history_days: number;
+  readonly is_first_run?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,7 @@ export interface AppConfig {
   readonly groqApiKey: string;
   readonly geminiApiKey: string;
   readonly maxHistoryDays: number;
+  readonly isFirstRun: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +90,7 @@ export const DEFAULT_APP_CONFIG: Readonly<AppConfig> = Object.freeze({
   groqApiKey: '',
   geminiApiKey: '',
   maxHistoryDays: 14,
+  isFirstRun: true,
 });
 
 // ---------------------------------------------------------------------------
@@ -125,7 +128,8 @@ export function isAppConfig(val: unknown): val is AppConfig {
     obj['sidecarPaths'] !== null &&
     typeof obj['groqApiKey'] === 'string' &&
     typeof obj['geminiApiKey'] === 'string' &&
-    typeof obj['maxHistoryDays'] === 'number'
+    typeof obj['maxHistoryDays'] === 'number' &&
+    (obj['isFirstRun'] === undefined || typeof obj['isFirstRun'] === 'boolean')
   );
 }
 
@@ -163,6 +167,15 @@ export function toAppConfig(raw: AppConfigJson | AppConfig): AppConfig {
     ? raw.active_stt_provider
     : 'groq';
 
+  const isFirstRun =
+    typeof raw === 'object' && raw !== null
+      ? 'isFirstRun' in raw
+        ? Boolean((raw as unknown as AppConfig).isFirstRun)
+        : 'is_first_run' in raw
+          ? (raw as AppConfigJson).is_first_run !== false
+          : true
+      : true;
+
   return {
     theme,
     language,
@@ -178,6 +191,7 @@ export function toAppConfig(raw: AppConfigJson | AppConfig): AppConfig {
     groqApiKey: raw.groq_api_key,
     geminiApiKey: raw.gemini_api_key,
     maxHistoryDays: raw.max_history_days,
+    isFirstRun,
   };
 }
 
@@ -214,6 +228,7 @@ export function toAppConfigJson(config: AppConfig): AppConfigJson {
     groq_api_key: config.groqApiKey,
     gemini_api_key: config.geminiApiKey,
     max_history_days: config.maxHistoryDays,
+    ...(config.isFirstRun !== undefined ? { is_first_run: config.isFirstRun } : {}),
   };
 }
 
@@ -243,6 +258,85 @@ export async function saveAppConfig(config: AppConfig): Promise<void> {
     await invoke<void>('save_app_config', { config: payload });
   } catch (err: unknown) {
     const parsed = parseIpcError(err, 'Không thể lưu tệp cấu hình ứng dụng');
+    throw parsed;
+  }
+}
+
+/**
+ * Retrieve an API key for a provider from Keyring.
+ */
+export async function getApiKey(service: string): Promise<string | null> {
+  try {
+    return await invoke<string | null>('get_api_key', { service });
+  } catch (err: unknown) {
+    const parsed = parseIpcError(err, 'Không thể đọc khóa API từ Keyring');
+    throw parsed;
+  }
+}
+
+/**
+ * Store an API key for a provider in Keyring.
+ */
+export async function setApiKey(service: string, apiKey: string): Promise<void> {
+  try {
+    await invoke<void>('set_api_key', { service, apiKey });
+  } catch (err: unknown) {
+    const parsed = parseIpcError(err, 'Không thể lưu khóa API vào Keyring');
+    throw parsed;
+  }
+}
+
+/**
+ * Delete an API key for a provider from Keyring.
+ */
+export async function deleteApiKey(service: string): Promise<void> {
+  try {
+    await invoke<void>('delete_api_key', { service });
+  } catch (err: unknown) {
+    const parsed = parseIpcError(err, 'Không thể xóa khóa API khỏi Keyring');
+    throw parsed;
+  }
+}
+
+/**
+ * Test an API key connection within <= 2.0s SLA (AC-28.1).
+ */
+export async function testApiKeyConnection(service: string, apiKey: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>('test_api_key_connection', { service, apiKey });
+  } catch (err: unknown) {
+    const parsed = parseIpcError(err, 'Kiểm tra kết nối khóa API thất bại');
+    throw parsed;
+  }
+}
+
+/**
+ * Convenience method to test Groq connection directly.
+ */
+export async function testGroqConnection(apiKey: string): Promise<boolean> {
+  return testApiKeyConnection('groq', apiKey);
+}
+
+/**
+ * Mark onboarding wizard as completed (AC-28.3, UT-28.1).
+ */
+export async function completeOnboarding(): Promise<void> {
+  try {
+    await invoke<void>('complete_onboarding');
+  } catch (err: unknown) {
+    const parsed = parseIpcError(err, 'Không thể hoàn tất quy trình khởi tạo Onboarding');
+    throw parsed;
+  }
+}
+
+/**
+ * Query whether the application is on its first run.
+ */
+export async function isFirstRun(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('is_first_run');
+  } catch (err: unknown) {
+    const parsed = parseIpcError(err, 'Không thể kiểm tra cờ khởi chạy lần đầu');
     throw parsed;
   }
 }

@@ -24,6 +24,8 @@ import { IngestionDashboard } from './components/dashboard/IngestionDashboard.ts
 import { DropZone } from './components/dashboard/DropZone.tsx';
 import { HighlightViewer } from './components/highlight/HighlightViewer.tsx';
 import { SubtitleStudio } from './components/studio/SubtitleStudio.tsx';
+import { OnboardingWizardModal } from './components/onboarding/OnboardingWizardModal.tsx';
+import { useSettingsStore } from './stores/settingsStore.ts';
 import { useProjectStore } from './stores/useProjectStore.ts';
 import { useIngestionStore } from './stores/useIngestionStore.ts';
 import { useChatStore } from './stores/useChatStore.ts';
@@ -40,6 +42,20 @@ export const App: React.FC = () => {
     resolveBackdropConfig(true),
   );
   const [activeTab, setActiveTab] = useState<AppTab>('overview');
+
+  const isFirstRunConfig = useSettingsStore((s) => s.config.isFirstRun);
+  const loadConfig = useSettingsStore((s) => s.loadConfig);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    void loadConfig();
+  }, [loadConfig]);
+
+  useEffect(() => {
+    if (isFirstRunConfig) {
+      setIsOnboardingOpen(true);
+    }
+  }, [isFirstRunConfig]);
 
   const customCacheDir = useProjectStore((s) => s.customCacheDir);
   const isCheckingStorage = useProjectStore((s) => s.isCheckingStorage);
@@ -182,6 +198,18 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Setup Wizard Button (AC-28.3) */}
+          <button
+            type="button"
+            data-tauri-no-drag
+            onClick={() => setIsOnboardingOpen(true)}
+            title="Mở trình hướng dẫn khởi động Onboarding"
+            className="flex items-center space-x-1 rounded bg-bg-tertiary px-2 py-0.5 text-[11px] text-accent-neuro transition-colors hover:bg-slate-700"
+          >
+            <Sparkles className="h-3 w-3 text-accent-neuro" />
+            <span>Setup Wizard</span>
+          </button>
+
           {/* Acrylic / Solid Toggle Button */}
           <button
             type="button"
@@ -616,6 +644,9 @@ export const App: React.FC = () => {
           />
         </div>
       </footer>
+
+      {/* Onboarding Wizard Modal (UT-28.1 / AC-28.3) */}
+      <OnboardingWizardModal isOpen={isOnboardingOpen} onClose={() => setIsOnboardingOpen(false)} />
     </div>
   );
 };
