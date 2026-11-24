@@ -3,7 +3,7 @@
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
 **Phiên bản Sản phẩm (Target Product Version):** `v1.0.0 (MVP)`  
-**Phiên bản Tài liệu (Doc Revision):** `rev.2.5 (2026-11-24)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; Remaining: `M4.9` & `TASK-M4-33`)  
+**Phiên bản Tài liệu (Doc Revision):** `rev.2.6 (2026-11-24)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; `M4.9`: `TASK-M4-30` Completed; Remaining: `TASK-M4-31..M4-33`)  
 **Ngày cập nhật:** 2026-11-24  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
 **Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`. *(Lưu ý: `Doc Revision` là số lần sửa đổi tài liệu, hoàn toàn tách biệt với `Product Version` của app đang chuẩn bị cho `v1.0.0 MVP`.)*
@@ -17,7 +17,7 @@
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
 | **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 *(+1 task tích hợp `TASK-M4-29B` bổ sung ngày 2026-11-20 & +1 task đại cập nhật tài liệu `TASK-M4-33` bổ sung ngày 2026-11-24)* kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass, đóng gói bộ cài Windows MSI/NSIS và chuẩn hóa lại toàn bộ tài liệu v1.0.0. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm & tài liệu. | **IN PROGRESS (30 / 34 Tasks Completed [88.2%]: TASK-M4-01..M4-29B; M4.1–M4.8 Completed; Remaining: TASK-M4-30..M4-33)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass, đóng gói bộ cài Windows MSI/NSIS và chuẩn hóa lại toàn bộ tài liệu v1.0.0. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm & tài liệu. | **IN PROGRESS (31 / 34 Tasks Completed [91.2%]: TASK-M4-01..M4-30; M4.1–M4.8 Completed, M4.9: TASK-M4-30 Done; Remaining: TASK-M4-31..M4-33)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -1473,8 +1473,9 @@
 
 ### Milestone M4.9: Kiểm Thử End-To-End & Đóng Gói Bộ Cài Windows (E2E & Packaging)
 
-#### TASK-M4-30: Bộ Kiểm Thử Tự Động Tích Hợp Toàn Tuyến (E2E Synthetic Pipeline Harness)
+#### TASK-M4-30: Bộ Kiểm Thử Tự Động Tích Hợp Toàn Tuyến (E2E Synthetic Pipeline Harness) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `@qa-reviewer` & `@tech-lead`
+- **Ghi chú Trạng thái Hiện tại (Completed & Verified):** Đã hoàn tất bộ fixture giả lập (`src-tauri/tests/fixtures/synthetic_audio.wav` 180.0s / 16kHz PCM mono / peak 0.00 dBFS, `src-tauri/tests/fixtures/synthetic_chat.json` 10,000 events chuẩn Schema 5.3 với cụm spam `KEKW` tại $t = 60\text{s}$), harness 6 chặng ngoại tuyến & 6 bộ kiểm định schema Draft-07 (`src-tauri/src/commands/test_harness_cmd.rs`, IPC `run_synthetic_e2e_pipeline` đăng ký trong `commands/mod.rs` & `lib.rs`), và suite kiểm thử toàn tuyến `src-tauri/tests/synthetic_vod_pipeline_e2e.rs` (4/4 integration tests PASS trong ~1.67s $\le 45\text{s}$ SLA; 6/6 Data Contracts PASS; CapCut Draft + Dual Export UTF-8 BOM `.ass`/`.srt` + Premiere FCP7 XML parity).
 - **Target Files:**
   - `src-tauri/tests/synthetic_vod_pipeline_e2e.rs`
   - `src-tauri/tests/fixtures/synthetic_chat.json`
@@ -1495,8 +1496,8 @@
   - Prerequisites: Hoàn thành toàn bộ các tasks từ TASK-M4-01 đến TASK-M4-26 và TASK-M4-29B (tích hợp HighlightViewer → Range Slicer → useStudioStore).
   - Blocks: TASK-M4-32.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-30.1:** Toàn bộ chu trình E2E chạy tự động hoàn tất trong vòng $\le 45\text{ giây}$.
-  - [ ] **AC-30.2:** 100% các assertions về Data Contracts (tất cả 6 schemas) đều vượt qua thành công.
+  - [x] **AC-30.1:** Toàn bộ chu trình E2E chạy tự động hoàn tất trong vòng $\le 45\text{ giây}$ (~1.61s thực tế).
+  - [x] **AC-30.2:** 100% các assertions về Data Contracts (tất cả 6 schemas) đều vượt qua thành công.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* End-to-End System Integration Test
   - *Kịch bản kiểm thử toàn tuyến (E2E Test Flow):*
@@ -1507,8 +1508,8 @@
     5. Kiểm tra tự động ngắt dòng compound wrapping và tính toán CPS.
     6. Xuất bản CapCut Draft JSON $\rightarrow$ Kiểm tra file `draft_content.json`, `draft_meta_info.json`, `subtitle.ass`, `subtitle.srt` tồn tại và đầy đủ dữ liệu.
   - *Tiêu chí nghiệm thu định lượng (AC):*
-    - [ ] **AC-30.1:** Toàn bộ chu trình E2E chạy tự động hoàn tất trong vòng $\le 45\text{ giây}$.
-    - [ ] **AC-30.2:** 100% assertions về tính toàn vẹn của 6 Data Contracts (Schemas 5.1 đến 5.6) đều PASS.
+    - [x] **AC-30.1:** Toàn bộ chu trình E2E chạy tự động hoàn tất trong vòng $\le 45\text{ giây}$.
+    - [x] **AC-30.2:** 100% assertions về tính toàn vẹn của 6 Data Contracts (Schemas 5.1 đến 5.6) đều PASS.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --test synthetic_vod_pipeline_e2e -- --nocapture

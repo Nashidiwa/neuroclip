@@ -25,8 +25,12 @@ pub mod translation;
 pub use commands::{
     cancel_chat_extraction, cancel_chat_task_token, cancel_slice_task_token,
     cancel_slice_video_segment, register_chat_task_token, register_slice_task_token,
-    resolve_vod_project_dir, slice_video_segment, slice_video_segment_internal,
-    unregister_chat_task_token, unregister_slice_task_token, AppState,
+    resolve_vod_project_dir, run_synthetic_e2e_pipeline_internal, slice_video_segment,
+    slice_video_segment_internal, unregister_chat_task_token, unregister_slice_task_token,
+    validate_schema_5_1_hardware_profile, validate_schema_5_2_vod_manifest,
+    validate_schema_5_3_chat_events, validate_schema_5_4_highlight_clusters,
+    validate_schema_5_5_transcript_segments, validate_schema_5_6_subtitle_project, AppState,
+    SchemaValidationSummary, StageResult, SyntheticE2EOptions, SyntheticE2EReport,
 };
 pub use config::{
     AppConfig, CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode, SidecarPaths,
@@ -200,7 +204,8 @@ pub fn run() {
             commands::download_and_apply_sidecar_update,
             commands::get_sidecar_status,
             commands::get_anti_bot_guidance,
-            commands::trigger_bot_defense_update
+            commands::trigger_bot_defense_update,
+            commands::run_synthetic_e2e_pipeline
         ]);
 
     if let Err(err) = builder.run(tauri::generate_context!()) {

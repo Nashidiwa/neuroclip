@@ -9,6 +9,7 @@ pub mod log_cmd;
 pub mod slice_cmd;
 pub mod storage_cmd;
 pub mod stt_cmd;
+pub mod test_harness_cmd;
 pub mod translation_cmd;
 pub mod updater_cmd;
 
@@ -89,6 +90,14 @@ pub use stt_cmd::{
     __tauri_command_name_transcribe_highlight_clip, __tauri_command_name_verify_stt_model,
     start_faster_whisper_transcription, start_whisper_transcription, transcribe_highlight_clip,
     verify_stt_model,
+};
+pub use test_harness_cmd::{
+    __cmd__run_synthetic_e2e_pipeline, __tauri_command_name_run_synthetic_e2e_pipeline,
+    run_synthetic_e2e_pipeline, run_synthetic_e2e_pipeline_internal,
+    validate_schema_5_1_hardware_profile, validate_schema_5_2_vod_manifest,
+    validate_schema_5_3_chat_events, validate_schema_5_4_highlight_clusters,
+    validate_schema_5_5_transcript_segments, validate_schema_5_6_subtitle_project,
+    SchemaValidationSummary, StageResult, SyntheticE2EOptions, SyntheticE2EReport,
 };
 pub use translation_cmd::{
     __cmd__optimize_transcript_cps, __cmd__test_gemini_connection, __cmd__translate_vietsub,

@@ -465,8 +465,37 @@ pub async fn get_chat_velocity_heatmap(
 mod tests {
     use super::*;
 
+    static CHAT_TOKEN_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct ChatTokenTestGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl Drop for ChatTokenTestGuard {
+        fn drop(&mut self) {
+            if let Ok(mut map_lock) = ACTIVE_CHAT_TASKS.lock() {
+                if let Some(map) = map_lock.as_mut() {
+                    map.clear();
+                }
+            }
+        }
+    }
+
+    fn lock_and_clear_chat_tasks() -> ChatTokenTestGuard {
+        let guard = CHAT_TOKEN_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Ok(mut map_lock) = ACTIVE_CHAT_TASKS.lock() {
+            if let Some(map) = map_lock.as_mut() {
+                map.clear();
+            }
+        }
+        ChatTokenTestGuard { _lock: guard }
+    }
+
     #[test]
     fn test_chat_task_token_lifecycle() {
+        let _guard = lock_and_clear_chat_tasks();
         let token = CancellationToken::new();
         let task_id = "vod_test_12345";
 
@@ -484,6 +513,7 @@ mod tests {
 
     #[test]
     fn test_chat_task_token_empty_id_fallback_single_task() {
+        let _guard = lock_and_clear_chat_tasks();
         let token = CancellationToken::new();
         let task_id = "vod_single";
 
@@ -498,6 +528,7 @@ mod tests {
 
     #[test]
     fn test_chat_task_token_unregister() {
+        let _guard = lock_and_clear_chat_tasks();
         let token = CancellationToken::new();
         let task_id = "vod_unreg";
 
