@@ -1,4 +1,7 @@
 fn main() {
+    // Ensure the gitignored sidecar directory exists so `tauri_build::build()` does not fail
+    // during dev/CI checks (`cargo test`, `cargo clippy`) when sidecar binaries are absent.
+    let _ = std::fs::create_dir_all("resources/sidecars");
     tauri_build::build();
 
     if std::env::var_os("CARGO_CFG_WINDOWS").is_some() {

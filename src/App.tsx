@@ -773,7 +773,7 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-3">
-          <span className="font-semibold text-accent-neuro">NeuroClip Studio v0.1.0</span>
+          <span className="font-semibold text-accent-neuro">NeuroClip Studio v1.0.0</span>
           <RefreshCw
             className="h-3 w-3 animate-spin text-slate-500"
             style={{ animationDuration: '8s' }}

@@ -1,13 +1,13 @@
 [package]
 name = "neuroclip"
-version = "0.1.0"
-description = "NeuroClip — AI Subtitle Studio for VTuber Neuro-sama"
+version = "1.0.0"
+description = "NeuroClip — AI Clip & Subtitle Studio"
 authors = ["NeuroClip Team"]
 edition = "2021"
 
 [lib]
 name = "neuroclip_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [[bin]]
 name = "neuroclip"

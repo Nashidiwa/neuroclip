@@ -1,0 +1,292 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ffmpeg_variant:
+        description: "FFmpeg package variant (use full_build-shared if static essentials pushes NSIS > 120 MB)"
+        required: false
+        default: "essentials"
+        type: choice
+        options:
+          - essentials
+          - full_build-shared
+
+permissions:
+  contents: write
+
+env:
+  YTDLP_VERSION: "2025.03.31"
+  FFMPEG_VERSION: "7.1.1"
+  NSIS_MAX_BYTES: "125829120"
+
+jobs:
+  ci-gate:
+    name: Pre-Release CI Verification Gate
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Rust stable (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend format check
+        run: npm run format:check
+
+      - name: Frontend ESLint
+        run: npm run lint
+
+      - name: Frontend TypeScript strict check
+        run: npm run typecheck
+
+      - name: Frontend production build
+        run: npm run build
+
+      - name: Frontend Vitest unit/UI suite
+        run: npm run test:vitest
+
+      - name: Frontend Node contract test suite
+        run: npm test
+
+      - name: Rust format check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Rust Clippy (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+      - name: Rust test suite (debug, skipping release-profile timing SLA test)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets -- --skip test_ed_15_2_processing_speed_sla
+
+      - name: Rust ED-15.2 processing speed SLA test (release profile)
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --test groq_client_test test_ed_15_2_processing_speed_sla -- --nocapture
+
+      - name: Rust low-end PC stress benchmark (release profile)
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture
+
+      - name: Rust memory leak verification suite (release profile)
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --test memory_leak_check -- --nocapture
+
+  package-windows:
+    name: Package Unsigned Windows NSIS & MSI Installers
+    needs: ci-gate
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Rust stable (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Download and SHA-256 verify pinned sidecars (yt-dlp + FFmpeg/FFprobe)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FFMPEG_VARIANT: ${{ inputs.ffmpeg_variant || 'essentials' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+
+          $sidecarDir = Join-Path $PWD "src-tauri/resources/sidecars"
+          $tmpDir = Join-Path $env:RUNNER_TEMP "neuroclip-sidecars"
+          New-Item -ItemType Directory -Force -Path $sidecarDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+
+          # 1. yt-dlp.exe (pinned official yt-dlp/yt-dlp release + SHA2-256SUMS)
+          $ytBase = "https://github.com/yt-dlp/yt-dlp/releases/download/$($env:YTDLP_VERSION)"
+          $ytExe = Join-Path $sidecarDir "yt-dlp.exe"
+          $ytSums = Join-Path $tmpDir "SHA2-256SUMS"
+          Write-Host "Downloading yt-dlp $($env:YTDLP_VERSION)..."
+          Invoke-WebRequest -Uri "$ytBase/yt-dlp.exe" -OutFile $ytExe
+          Invoke-WebRequest -Uri "$ytBase/SHA2-256SUMS" -OutFile $ytSums
+
+          $ytExpectedLine = Get-Content $ytSums | Where-Object { $_ -match '(^|\s|\*)yt-dlp\.exe$' } | Select-Object -First 1
+          if (-not $ytExpectedLine) {
+            throw "Failed to locate yt-dlp.exe entry in official SHA2-256SUMS for $($env:YTDLP_VERSION)"
+          }
+          $ytExpectedHash = ($ytExpectedLine.Trim() -split '\s+')[0].ToLowerInvariant()
+          if ($ytExpectedHash -notmatch '^[0-9a-f]{64}$') {
+            throw "Invalid SHA-256 hash format in SHA2-256SUMS: $ytExpectedHash"
+          }
+          $ytActualHash = (Get-FileHash -Path $ytExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($ytActualHash -ne $ytExpectedHash) {
+            throw "yt-dlp.exe SHA-256 mismatch! Expected: $ytExpectedHash, Actual: $ytActualHash"
+          }
+          Write-Host "Verified yt-dlp.exe SHA-256: $ytActualHash"
+
+          # 2. FFmpeg + FFprobe (pinned GyanD/codexffmpeg release + official checksum verification)
+          # Note: Default 'essentials' includes ffmpeg.exe + ffprobe.exe (omits ffplay.exe to save ~70-80 MB).
+          # If NSIS installer exceeds 120 MB (AC-32.1), re-run with ffmpeg_variant=full_build-shared (gpl-shared DLLs).
+          $ffArchiveName = if ($env:FFMPEG_VARIANT -eq 'full_build-shared') {
+            "ffmpeg-$($env:FFMPEG_VERSION)-full_build-shared.zip"
+          } else {
+            "ffmpeg-$($env:FFMPEG_VERSION)-essentials_build.zip"
+          }
+          $ffZip = Join-Path $tmpDir $ffArchiveName
+          $ffUrl = "https://github.com/GyanD/codexffmpeg/releases/download/$($env:FFMPEG_VERSION)/$ffArchiveName"
+          Write-Host "Downloading $ffArchiveName from GyanD/codexffmpeg..."
+          Invoke-WebRequest -Uri $ffUrl -OutFile $ffZip
+
+          $headers = @{
+            "Accept" = "application/vnd.github+json"
+            "User-Agent" = "NeuroClip-Release-Pipeline"
+          }
+          if ($env:GH_TOKEN) {
+            $headers["Authorization"] = "Bearer $($env:GH_TOKEN)"
+          }
+          $ffRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/GyanD/codexffmpeg/releases/tags/$($env:FFMPEG_VERSION)" -Headers $headers
+          $ffAsset = $ffRelease.assets | Where-Object { $_.name -eq $ffArchiveName } | Select-Object -First 1
+          if (-not $ffAsset) {
+            throw "Asset $ffArchiveName not found in GyanD/codexffmpeg release $($env:FFMPEG_VERSION)"
+          }
+
+          $ffExpectedHash = $null
+          $shaAsset = $ffRelease.assets | Where-Object { $_.name -eq "$ffArchiveName.sha256" } | Select-Object -First 1
+          if ($shaAsset) {
+            $shaTmp = Join-Path $tmpDir "$ffArchiveName.sha256"
+            Invoke-WebRequest -Uri $shaAsset.browser_download_url -OutFile $shaTmp
+            $rawSha = (Get-Content $shaTmp -Raw).Trim()
+            if ($rawSha -match '([0-9a-fA-F]{64})') {
+              $ffExpectedHash = $Matches[1].ToLowerInvariant()
+            }
+          }
+          if (-not $ffExpectedHash -and $ffAsset.digest -and ($ffAsset.digest -match '^sha256:([0-9a-fA-F]{64})$')) {
+            $ffExpectedHash = $Matches[1].ToLowerInvariant()
+          }
+          if (-not $ffExpectedHash) {
+            $gyanShaUrl = "https://www.gyan.dev/ffmpeg/builds/packages/$ffArchiveName.sha256"
+            try {
+              $gyanSha = (Invoke-RestMethod -Uri $gyanShaUrl).ToString().Trim()
+              if ($gyanSha -match '([0-9a-fA-F]{64})') {
+                $ffExpectedHash = $Matches[1].ToLowerInvariant()
+              }
+            } catch {
+              Write-Host "gyan.dev .sha256 fallback unavailable: $_"
+            }
+          }
+          if (-not $ffExpectedHash) {
+            throw "Could not retrieve official SHA-256 checksum for $ffArchiveName from GyanD/codexffmpeg $($env:FFMPEG_VERSION)"
+          }
+
+          $ffActualHash = (Get-FileHash -Path $ffZip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($ffActualHash -ne $ffExpectedHash) {
+            throw "$ffArchiveName SHA-256 mismatch! Expected: $ffExpectedHash, Actual: $ffActualHash"
+          }
+          Write-Host "Verified $ffArchiveName SHA-256: $ffActualHash"
+
+          $ffExtractDir = Join-Path $tmpDir "ffmpeg-extract"
+          Expand-Archive -Path $ffZip -DestinationPath $ffExtractDir -Force
+
+          $ffmpegBin = Get-ChildItem -Path $ffExtractDir -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
+          $ffprobeBin = Get-ChildItem -Path $ffExtractDir -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
+          if (-not $ffmpegBin -or -not $ffprobeBin) {
+            throw "Extracted archive missing ffmpeg.exe or ffprobe.exe"
+          }
+          Copy-Item -Path $ffmpegBin.FullName -Destination (Join-Path $sidecarDir "ffmpeg.exe") -Force
+          Copy-Item -Path $ffprobeBin.FullName -Destination (Join-Path $sidecarDir "ffprobe.exe") -Force
+
+          if ($env:FFMPEG_VARIANT -eq 'full_build-shared') {
+            Get-ChildItem -Path $ffmpegBin.DirectoryName -Filter "*.dll" | ForEach-Object {
+              Copy-Item -Path $_.FullName -Destination (Join-Path $sidecarDir $_.Name) -Force
+            }
+          }
+
+          Get-ChildItem -Path $sidecarDir | ForEach-Object {
+            Write-Host "Staged sidecar: $($_.Name) ($($_.Length) bytes)"
+          }
+
+      - name: Build unsigned Windows NSIS and MSI installers
+        run: npm run tauri build -- --bundles nsis,msi
+
+      - name: Verify installers, 120 MB NSIS size cap (AC-32.1), and generate SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artifactsDir = Join-Path $PWD "release-artifacts"
+          New-Item -ItemType Directory -Force -Path $artifactsDir | Out-Null
+
+          $nsisFiles = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe"
+          $msiFiles = Get-ChildItem -Path "src-tauri/target/release/bundle/msi" -Filter "*.msi"
+          if (-not $nsisFiles -or -not $msiFiles) {
+            throw "Expected both NSIS (*-setup.exe) and MSI (*.msi) installers to be generated"
+          }
+
+          $maxBytes = [int64]$env:NSIS_MAX_BYTES
+          foreach ($exe in $nsisFiles) {
+            $mb = [math]::Round($exe.Length / 1MB, 2)
+            Write-Host "NSIS installer: $($exe.Name) = $($exe.Length) bytes ($mb MB)"
+            if ($exe.Length -gt $maxBytes) {
+              throw "NSIS installer $($exe.Name) ($($exe.Length) bytes) exceeds AC-32.1 limit of $maxBytes bytes (120 MB). Re-run with ffmpeg_variant=full_build-shared (gpl-shared DLL fallback)."
+            }
+            Copy-Item -Path $exe.FullName -Destination $artifactsDir -Force
+          }
+
+          foreach ($msi in $msiFiles) {
+            $mb = [math]::Round($msi.Length / 1MB, 2)
+            Write-Host "MSI installer: $($msi.Name) = $($msi.Length) bytes ($mb MB)"
+            Copy-Item -Path $msi.FullName -Destination $artifactsDir -Force
+          }
+
+          $sumLines = Get-ChildItem -Path $artifactsDir -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $sumsPath = Join-Path $artifactsDir "SHA256SUMS.txt"
+          $sumLines | Set-Content -Path $sumsPath -Encoding UTF8
+          Write-Host "Generated SHA256SUMS.txt:"
+          Get-Content $sumsPath
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: neuroclip-windows-unsigned-installers
+          path: release-artifacts/*
+          if-no-files-found: error
+
+      - name: Publish unsigned GitHub Release (SignPath Foundation AGPL-3.0 precursor)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

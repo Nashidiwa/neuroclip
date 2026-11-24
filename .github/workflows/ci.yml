@@ -1,0 +1,76 @@
+name: CI Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci-gate:
+    name: Windows CI Gate (Frontend + Rust + Release SLA/Stress)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Rust stable (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Frontend format check
+        run: npm run format:check
+
+      - name: Frontend ESLint
+        run: npm run lint
+
+      - name: Frontend TypeScript strict check
+        run: npm run typecheck
+
+      - name: Frontend production build
+        run: npm run build
+
+      - name: Frontend Vitest unit/UI suite
+        run: npm run test:vitest
+
+      - name: Frontend Node contract test suite
+        run: npm test
+
+      - name: Rust format check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Rust Clippy (deny warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+      - name: Rust test suite (debug, skipping release-profile timing SLA test)
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-targets -- --skip test_ed_15_2_processing_speed_sla
+
+      - name: Rust ED-15.2 processing speed SLA test (release profile)
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --test groq_client_test test_ed_15_2_processing_speed_sla -- --nocapture
+
+      - name: Rust low-end PC stress benchmark (release profile)
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture
+
+      - name: Rust memory leak verification suite (release profile)
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --test memory_leak_check -- --nocapture

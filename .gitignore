@@ -56,3 +56,6 @@ cache/
 
 # Ignore Tauri auto-generated schemas
 src-tauri/gen/schemas/
+
+# Downloaded runtime sidecars (fetched during CI release build, never committed)
+src-tauri/resources/sidecars/

@@ -261,7 +261,7 @@ describe('TASK-M4-01 Test Suite (Node.js Native Test Runner)', () => {
       const conf = JSON.parse(content);
 
       assert.strictEqual(conf.productName, 'NeuroClip');
-      assert.strictEqual(conf.version, '0.1.0');
+      assert.strictEqual(conf.version, '1.0.0');
       assert.strictEqual(conf.identifier, 'com.neuroclip.app');
 
       const windowConfig = conf.app.windows[0];
@@ -4243,6 +4243,160 @@ describe('TASK-M4-12 Test Suite (Node.js Native Test Runner)', () => {
       assert.strictEqual(ERROR_CODES.SIDECAR_BINARY_NOT_FOUND, 'ERR_SIDECAR_BINARY_NOT_FOUND');
       assert.strictEqual(ERROR_CODES.SIDECAR_EXECUTION_FAILED, 'ERR_SIDECAR_EXECUTION_FAILED');
       assert.strictEqual(ERROR_CODES.SIDECAR_PROCESS_KILLED, 'ERR_SIDECAR_PROCESS_KILLED');
+    });
+  });
+
+  describe('TASK-M4-32: Windows NSIS/MSI Packaging, Offline CSP & CI/Release Pipeline Contracts', () => {
+    it('should enforce Cargo #6313 rlib-only crate-type and synchronized 1.0.0 versions across manifests', () => {
+      const cargoToml = fs.readFileSync(path.resolve('src-tauri/Cargo.toml'), 'utf8');
+      assert.ok(
+        /version\s*=\s*"1\.0\.0"/.test(cargoToml),
+        'src-tauri/Cargo.toml must declare version = "1.0.0"',
+      );
+      assert.ok(
+        /crate-type\s*=\s*\[\s*"rlib"\s*\]/.test(cargoToml),
+        'src-tauri/Cargo.toml [lib] must set crate-type = ["rlib"] for Cargo #6313',
+      );
+      assert.ok(
+        !cargoToml.includes('"staticlib"') && !cargoToml.includes('"cdylib"'),
+        'src-tauri/Cargo.toml must drop staticlib and cdylib',
+      );
+
+      const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+      assert.strictEqual(pkg.version, '1.0.0');
+
+      const appTsx = fs.readFileSync(path.resolve('src/App.tsx'), 'utf8');
+      assert.ok(appTsx.includes('NeuroClip Studio v1.0.0'), 'App.tsx footer must render v1.0.0');
+      assert.ok(!appTsx.includes('v0.1.0'), 'App.tsx must not retain stale v0.1.0 string');
+    });
+
+    it('should enforce strict offline WebView2 release CSP and remove external Google Fonts from index.html', () => {
+      const indexHtml = fs.readFileSync(path.resolve('index.html'), 'utf8');
+      assert.ok(
+        !indexHtml.includes('fonts.googleapis.com'),
+        'index.html must not request fonts.googleapis.com',
+      );
+      assert.ok(
+        !indexHtml.includes('fonts.gstatic.com'),
+        'index.html must not request fonts.gstatic.com',
+      );
+      assert.ok(!indexHtml.includes('/vite.svg'), 'index.html must not link missing /vite.svg');
+
+      const conf = JSON.parse(fs.readFileSync(path.resolve('src-tauri/tauri.conf.json'), 'utf8'));
+      const csp = conf?.app?.security?.csp;
+      assert.strictEqual(typeof csp, 'string', 'app.security.csp must be an explicit CSP string');
+      assert.ok(csp.includes("default-src 'self'"));
+      assert.ok(csp.includes("style-src 'self' 'unsafe-inline'"));
+      assert.ok(csp.includes('asset:'));
+      assert.ok(csp.includes('http://asset.localhost'));
+      assert.ok(csp.includes('https://asset.localhost'));
+      assert.ok(csp.includes('ipc:'));
+      assert.ok(csp.includes('http://ipc.localhost'));
+      assert.ok(csp.includes('https://ipc.localhost'));
+      assert.ok(csp.includes('blob:'));
+      assert.ok(csp.includes('data:'));
+      assert.ok(csp.includes("object-src 'none'"));
+      assert.ok(csp.includes("base-uri 'self'"));
+      assert.ok(!csp.includes('fonts.googleapis.com'));
+      assert.ok(!csp.includes('fonts.gstatic.com'));
+      assert.ok(!csp.includes('unsafe-eval'));
+    });
+
+    it('should configure bundle.resources, NSIS currentUser hooks, and sidecar gitignore safely', () => {
+      const conf = JSON.parse(fs.readFileSync(path.resolve('src-tauri/tauri.conf.json'), 'utf8'));
+      assert.deepStrictEqual(conf.bundle.targets, ['nsis', 'msi']);
+      assert.strictEqual(conf.bundle.license, 'AGPL-3.0');
+      assert.deepStrictEqual(conf.bundle.resources, ['resources/sidecars']);
+      assert.strictEqual(conf.bundle.windows.nsis.installMode, 'currentUser');
+      assert.strictEqual(conf.bundle.windows.nsis.compression, 'lzma');
+      assert.strictEqual(conf.bundle.windows.nsis.installerHooks, '../installer/nsis/hooks.nsi');
+
+      const buildRs = fs.readFileSync(path.resolve('src-tauri/build.rs'), 'utf8');
+      assert.ok(
+        buildRs.includes('create_dir_all("resources/sidecars")'),
+        'build.rs must ensure resources/sidecars exists before tauri_build::build()',
+      );
+
+      const gitignore = fs.readFileSync(path.resolve('.gitignore'), 'utf8');
+      assert.ok(
+        gitignore.includes('src-tauri/resources/sidecars/'),
+        '.gitignore must exclude downloaded sidecar binaries',
+      );
+
+      const hooksNsiPath = path.resolve('installer/nsis/hooks.nsi');
+      assert.strictEqual(fs.existsSync(hooksNsiPath), true, 'installer/nsis/hooks.nsi must exist');
+      const hooksNsi = fs.readFileSync(hooksNsiPath, 'utf8');
+      assert.ok(hooksNsi.includes('!macro NSIS_HOOK_POSTINSTALL'));
+      assert.ok(hooksNsi.includes('CreateOrUpdateDesktopShortcut'));
+      assert.ok(hooksNsi.includes('!macro NSIS_HOOK_POSTUNINSTALL'));
+      assert.ok(hooksNsi.includes('$LOCALAPPDATA\\NeuroClip\\cache'));
+    });
+
+    it('should provide valid NeuroClip icon assets at 32, 128, 256, 512, multi-res ICO, and ICNS', () => {
+      const iconsDir = path.resolve('src-tauri/icons');
+      const expectedPngs: Array<[string, number]> = [
+        ['32x32.png', 32],
+        ['128x128.png', 128],
+        ['128x128@2x.png', 256],
+        ['512x512.png', 512],
+      ];
+
+      for (const [filename, size] of expectedPngs) {
+        const buf = fs.readFileSync(path.join(iconsDir, filename));
+        assert.strictEqual(buf.readUInt32BE(0), 0x89504e47, `${filename} must have PNG header`);
+        assert.strictEqual(buf.readUInt32BE(16), size, `${filename} width must be ${size}`);
+        assert.strictEqual(buf.readUInt32BE(20), size, `${filename} height must be ${size}`);
+      }
+
+      const ico = fs.readFileSync(path.join(iconsDir, 'icon.ico'));
+      assert.strictEqual(ico.readUInt16LE(0), 0);
+      assert.strictEqual(ico.readUInt16LE(2), 1);
+      assert.ok(ico.readUInt16LE(4) >= 4, 'icon.ico must embed multiple resolutions');
+
+      const icns = fs.readFileSync(path.join(iconsDir, 'icon.icns'));
+      assert.strictEqual(icns.subarray(0, 4).toString('ascii'), 'icns');
+    });
+
+    it('should define CI Gate and Windows Release GitHub workflows with proper Cargo --release ordering and AC-32.1 checks', () => {
+      const ciPath = path.resolve('.github/workflows/ci.yml');
+      const releasePath = path.resolve('.github/workflows/release-windows.yml');
+      assert.strictEqual(fs.existsSync(ciPath), true, '.github/workflows/ci.yml must exist');
+      assert.strictEqual(
+        fs.existsSync(releasePath),
+        true,
+        '.github/workflows/release-windows.yml must exist',
+      );
+
+      const ciYml = fs.readFileSync(ciPath, 'utf8');
+      assert.ok(ciYml.includes('runs-on: windows-latest'));
+      assert.ok(ciYml.includes('npm run test:vitest'));
+      assert.ok(ciYml.includes('--skip test_ed_15_2_processing_speed_sla'));
+      assert.ok(
+        ciYml.includes(
+          'cargo test --release --manifest-path src-tauri/Cargo.toml --test groq_client_test test_ed_15_2_processing_speed_sla -- --nocapture',
+        ),
+      );
+      assert.ok(
+        ciYml.includes(
+          'cargo test --release --manifest-path src-tauri/Cargo.toml --test low_end_pc_stress_benchmark -- --nocapture',
+        ),
+      );
+      assert.ok(
+        ciYml.includes(
+          'cargo test --release --manifest-path src-tauri/Cargo.toml --test memory_leak_check -- --nocapture',
+        ),
+      );
+
+      const relYml = fs.readFileSync(releasePath, 'utf8');
+      assert.ok(relYml.includes('YTDLP_VERSION:'));
+      assert.ok(relYml.includes('FFMPEG_VERSION:'));
+      assert.ok(relYml.includes('SHA2-256SUMS'));
+      assert.ok(relYml.includes('ffmpeg.exe'));
+      assert.ok(relYml.includes('ffprobe.exe'));
+      assert.ok(relYml.includes('full_build-shared'));
+      assert.ok(relYml.includes('npm run tauri build -- --bundles nsis,msi'));
+      assert.ok(relYml.includes('125829120'));
+      assert.ok(relYml.includes('SHA256SUMS.txt'));
     });
   });
 });
