@@ -2,10 +2,11 @@
 # Dự án: NeuroClip — Windows Desktop App Hỗ trợ Clipper & Subber Neuro-sama Vietnam
 
 **Mã tài liệu:** `docs/TASK_BOARD.md`  
-**Phiên bản:** 2.4.0 (Phase 4: Implementation & Verification — M4.1–M4.7 Completed: TASK-M4-01..M4-26; Stabilization P0–P2 Done)  
-**Ngày cập nhật:** 2026-11-23  
+**Phiên bản Sản phẩm (Target Product Version):** `v1.0.0 (MVP)`  
+**Phiên bản Tài liệu (Doc Revision):** `rev.2.5 (2026-11-24)` — Phase 4: Implementation & Verification (`M4.1–M4.8` Completed: `TASK-M4-01..M4-29B`; Remaining: `M4.9` & `TASK-M4-33`)  
+**Ngày cập nhật:** 2026-11-24  
 **Chủ trì:** `@product-owner-proxy`, `@tech-lead` & `@qa-reviewer`  
-**Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`.
+**Quy tắc:** Cập nhật trạng thái liên tục theo từng Phase; tuân thủ nghiêm ngặt nguyên tắc Gate Checks tại `AGENTS.md`. *(Lưu ý: `Doc Revision` là số lần sửa đổi tài liệu, hoàn toàn tách biệt với `Product Version` của app đang chuẩn bị cho `v1.0.0 MVP`.)*
 
 ---
 
@@ -15,8 +16,8 @@
 |:---:|:---|:---:|:---|:---|:---:|
 | **Phase 1** | **Inception & Discovery** | `@product-owner-proxy` & `@lead-architect` | Khảo sát kỹ thuật, xác định phạm vi, lập `docs/PRD.md` và `docs/adr/RFC-001-phase1-decisions.md`. Tuyệt đối không viết code. | PO xác nhận Scope và trả lời 7 câu hỏi RFC (`RFC-001`). | **COMPLETED (PASSED)** |
 | **Phase 2** | **Architecture Design & Data Contracts** | `@lead-architect` | Thiết lập kiến trúc hệ thống `docs/ARCHITECTURE.md`, dữ liệu luồng pipeline, data contracts, và 7 ADRs chính thức (`ADR-001` đến `ADR-007`). | PO ký duyệt kiến trúc trong `ARCHITECTURE.md` và 7 ADRs. | **COMPLETED (GATE 2 APPROVED)** |
-| **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 *(+1 task tích hợp `TASK-M4-29B` bổ sung tại Phase 4 theo Quyết định 4 của PO)* kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
-| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass và đóng gói bộ cài Windows MSI/NSIS. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm. | **IN PROGRESS (26 / 33 Tasks Completed [78.8%]: TASK-M4-01..M4-26; M4.1–M4.7 Completed; +1 integration task TASK-M4-29B)** |
+| **Phase 3** | **Conventions & Task Breakdown** | `@tech-lead` & `@qa-reviewer` | Thiết lập quy chuẩn lập trình `docs/CONVENTIONS.md`, phân rã chi tiết 32 tasks Phase 4 *(+1 task tích hợp `TASK-M4-29B` bổ sung ngày 2026-11-20 & +1 task đại cập nhật tài liệu `TASK-M4-33` bổ sung ngày 2026-11-24)* kèm tiêu chí nghiệm thu và QA Test Checklists vào `docs/TASK_BOARD.md`. Duy trì Code Freeze. | PO ký duyệt Task Board và cho phép mở khóa tạo mã nguồn. | **COMPLETED (GATE 3 APPROVED)** |
+| **Phase 4** | **Implementation & Verification** | `@tech-lead`, Senior Devs & `@qa-reviewer` | Xây dựng mã nguồn hoàn chỉnh (Tauri shell, Sidecars, AI STT, Vietsub, NLE Export), kiểm thử tự động đạt 100% pass, đóng gói bộ cài Windows MSI/NSIS và chuẩn hóa lại toàn bộ tài liệu v1.0.0. | Toàn bộ kiểm thử tự động pass; PO nghiệm thu sản phẩm & tài liệu. | **IN PROGRESS (30 / 34 Tasks Completed [88.2%]: TASK-M4-01..M4-29B; M4.1–M4.8 Completed; Remaining: TASK-M4-30..M4-33)** |
 
 > **Quy định Duy trì Code Freeze trong Phase 3:**  
 > Toàn bộ Phase 3 duy trì trạng thái Code Freeze nghiêm ngặt: **0 file code (.py, .ts, .rs, .js) được tạo trong workspace**. Chỉ sau khi PO chính thức phê duyệt tài liệu bàn giao Phase 3 (Gate 3), Phase 4 mới được kích hoạt để bắt đầu tạo mã nguồn.
@@ -43,11 +44,11 @@
 - [x] **TASK-M3-01:** Ban hành bộ quy chuẩn lập trình `docs/CONVENTIONS.md` (Rust backend Edition 2021, clippy lint profile, TypeScript frontend strict mode, Tauri IPC commands/events, Error Codes, Logging standard, Secret Redaction).
 - [x] **TASK-M3-02:** Thiết kế cấu trúc thư mục mã nguồn chi tiết (Source Tree Architecture: `src-tauri/`, `src/`, `installer/`, `tests/`).
 - [x] **TASK-M3-03:** Xây dựng ma trận kiểm thử tự động toàn diện do `@qa-reviewer` chủ trì (Unit Test, Integration Test, E2E Synthetic Test, Low-end PC Stress Test, Quality Gates & Veto Criteria).
-- [x] **TASK-M3-04:** Phân rã 32 task kỹ thuật chi tiết kèm tiêu chí nghiệm thu định lượng (AC) và tích hợp QA Test Checklists cho từng task trong Phase 4 vào `docs/TASK_BOARD.md` *(Phase 4 bổ sung thêm `TASK-M4-29B` nâng tổng số lên 33 tasks)*.
+- [x] **TASK-M3-04:** Phân rã 32 task kỹ thuật chi tiết kèm tiêu chí nghiệm thu định lượng (AC) và tích hợp QA Test Checklists cho từng task trong Phase 4 vào `docs/TASK_BOARD.md` *(Phase 4 bổ sung thêm `TASK-M4-29B` và `TASK-M4-33` nâng tổng số lên 34 tasks)*.
 
 ---
 
-## 3. BẢNG PHÂN RÃ CHI TIẾT 33 TASKS KỸ THUẬT PHASE 4 (TASK-M4-01 ĐẾN TASK-M4-32 + TASK-M4-29B)
+## 3. BẢNG PHÂN RÃ CHI TIẾT 34 TASKS KỸ THUẬT PHASE 4 (TASK-M4-01 ĐẾN TASK-M4-33 + TASK-M4-29B)
 
 ---
 
@@ -1282,15 +1283,15 @@
 
 ### Milestone M4.8: Khởi Động Lần Đầu, Bảo Mật Keyring & Quản Lý Sidecars (System Integration)
 
-#### TASK-M4-27: Động Cơ Thăm Dò Năng Lực Phần Cứng & Đề Xuất Cấu Hình Thông Minh
+#### TASK-M4-27: Động Cơ Thăm Dò Năng Lực Phần Cứng & Đề Xuất Cấu Hình Thông Minh — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust) & Systems Dev
-- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần backend tại `src-tauri/src/config/hardware.rs` (`probe_system_hardware`, `evaluate_recommended_mode`, `HardwareProfile` Schema 5.1 dùng Win32 `GlobalMemoryStatusEx` + Windows Registry `qwMemorySize`, không phụ thuộc `sysinfo`), `src-tauri/src/commands/config_cmd.rs` (`get_hardware_profile`, `detect_hardware`) và `src/services/config/hardware.ts`. **Phần còn lại `[ ]` Pending cho `TASK-M4-27`:** tinh chỉnh DXGI/WMI nếu cần (hoặc refactor tùy chọn `hardware/{probe.rs, wmi.rs}` / `hardware_cmd.rs`) và toàn bộ Frontend UI (`src/components/onboarding/HardwareRecommendation.tsx`, `src/stores/useHardwareStore.ts`).
+- **Ghi chú Trạng thái Hiện tại (Completed & Verified):** Đã hoàn tất cả Backend & Frontend: tinh chỉnh `src-tauri/src/config/hardware.rs` (đọc Win32 Registry `ProcessorNameString`, `GlobalMemoryStatusEx`, 64-bit `qwMemorySize`, dung sai RAM 16GB `>= 15000 MB`), bọc `probe_system_hardware` + `atomic_save_json` vào `tokio::task::spawn_blocking` trong `src-tauri/src/commands/config_cmd.rs` (kế thừa từ patch `6f1a876` & `0abf3fc`), tái sử dụng `src/services/config/hardware.ts` Schema 5.1, và xây dựng mới `src/stores/useHardwareStore.ts` (race guard, override preservation) + `src/components/onboarding/HardwareRecommendation.tsx`. Đạt chứng chỉ Victory Audit **`VICTORY CONFIRMED`**.
 - **Target Files:**
-  - `src-tauri/src/config/hardware.rs` *(backend hiện hành; tùy chọn tách `hardware/{probe.rs, wmi.rs}`)*
-  - `src-tauri/src/commands/config_cmd.rs` *(tùy chọn `hardware_cmd.rs`)*
+  - `src-tauri/src/config/hardware.rs`
+  - `src-tauri/src/commands/config_cmd.rs`
   - `src/services/config/hardware.ts`
-  - `src/components/onboarding/HardwareRecommendation.tsx`
-  - `src/stores/useHardwareStore.ts`
+  - `src/components/onboarding/HardwareRecommendation.tsx` & `HardwareRecommendation.test.tsx`
+  - `src/stores/useHardwareStore.ts` & `useHardwareStore.test.ts`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Xây dựng/hoàn thiện module `HardwareProbeEngine` sử dụng Windows Win32 Registry (`qwMemorySize`) / `GlobalMemoryStatusEx` (và tùy chọn DirectX DXGI / WMI) để đọc thông số máy tính:
     - Số nhân/luồng CPU, Model CPU.
@@ -1308,20 +1309,20 @@
   - Prerequisites: TASK-M4-01, TASK-M4-02.
   - Blocks: TASK-M4-16, TASK-M4-28.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-27.1:** Quá trình quét phần cứng hoàn tất trong vòng $\le 200\text{ms}$ ngay khi app vừa bật.
-  - [ ] **AC-27.2:** Nhận diện chính xác 100% dung lượng VRAM thực tế của card đồ họa rời NVIDIA (không bị nhầm với Shared System Memory).
-  - [ ] **AC-27.3:** File `hardware_profile.json` hợp lệ 100% với JSON Schema 5.1.
+  - [x] **AC-27.1:** Quá trình quét phần cứng hoàn tất trong vòng $\le 200\text{ms}$ ngay khi app vừa bật *(P99 < 2ms)*.
+  - [x] **AC-27.2:** Nhận diện chính xác 100% dung lượng VRAM thực tế của card đồ họa rời NVIDIA (không bị nhầm với Shared System Memory).
+  - [x] **AC-27.3:** File `hardware_profile.json` hợp lệ 100% với JSON Schema 5.1.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Hardware Detection & Contract Test (Schema 5.1)
   - *Unit Test Cases (Thuật toán khuyến nghị cấu hình):*
-    - [ ] **UT-27.1 (iGPU / Low RAM):** CPU i5-1135G7, 8GB RAM, Intel Iris Xe $\rightarrow$ Đề xuất `recommended_mode = "cloud_byok"` kèm lý do "Máy tính văn phòng/iGPU nên dùng Cloud để xử lý siêu tốc và không nóng máy".
-    - [ ] **UT-27.2 (Mid-range GPU):** CPU Ryzen 5 5600H, 16GB RAM, NVIDIA GTX 1650 (4GB VRAM) $\rightarrow$ Đề xuất `recommended_mode = "hybrid"`.
-    - [ ] **UT-27.3 (High-end GPU):** CPU i7-13700K, 32GB RAM, NVIDIA RTX 3080 (10GB VRAM) $\rightarrow$ Đề xuất `recommended_mode = "offline_local"` hoặc `"hybrid"`.
+    - [x] **UT-27.1 (iGPU / Low RAM):** CPU i5-1135G7, 8GB RAM, Intel Iris Xe $\rightarrow$ Đề xuất `recommended_mode = "cloud_byok"` kèm lý do "Máy tính văn phòng/iGPU nên dùng Cloud để xử lý siêu tốc và không nóng máy".
+    - [x] **UT-27.2 (Mid-range GPU):** CPU Ryzen 5 5600H, 16GB RAM, NVIDIA GTX 1650 (4GB VRAM) $\rightarrow$ Đề xuất `recommended_mode = "hybrid"`.
+    - [x] **UT-27.3 (High-end GPU):** CPU i7-13700K, 32GB RAM, NVIDIA RTX 3080 (10GB VRAM) $\rightarrow$ Đề xuất `recommended_mode = "offline_local"` hoặc `"hybrid"`.
   - *Integration & Contract Verification (Schema 5.1):**
-    - [ ] **IT-27.1:** Đọc thông số qua Win32 WMI / DXGI; xuất file `hardware_profile.json` tuân thủ 100% JSON Schema 5.1 trong `ARCHITECTURE.md`.
-    - [ ] **IT-27.2:** Quá trình quét phần cứng hoàn tất trong $\le 200\text{ms}$ khi khởi động ứng dụng.
+    - [x] **IT-27.1:** Đọc thông số qua Win32 Registry / `GlobalMemoryStatusEx`; xuất file `hardware_profile.json` tuân thủ 100% JSON Schema 5.1 trong `ARCHITECTURE.md`.
+    - [x] **IT-27.2:** Quá trình quét phần cứng hoàn tất trong $\le 200\text{ms}$ khi khởi động ứng dụng.
   - *Boundary & Hardware Precision:*
-    - [ ] **ED-27.1:** Nhận diện chính xác 100% Dedicated VRAM của card NVIDIA rời (không bị nhầm lẫn với Shared Memory của Windows).
+    - [x] **ED-27.1:** Nhận diện chính xác 100% Dedicated VRAM của card NVIDIA rời (không bị nhầm lẫn với Shared Memory của Windows).
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --lib config::hardware::tests
@@ -1330,9 +1331,9 @@
 
 ---
 
-#### TASK-M4-28: Giao Diện Wizard Khởi Chạy Lần Đầu & Lưu Trữ API Key Vào Két Sắt Windows Credential
+#### TASK-M4-28: Giao Diện Wizard Khởi Chạy Lần Đầu & Lưu Trữ API Key Vào Két Sắt Windows Credential — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Frontend Dev & Senior Backend Dev (Rust)
-- **Ghi chú Trạng thái Hiện tại (Early Backend):** Commit cũ `0abf3fc` (gắn nhầm nhãn `M4-03`) đã triển khai sớm phần config persistence tại `src-tauri/src/config/app_config.rs`, `src-tauri/src/config/atomic.rs`, `src/services/config/settings.ts` và `src/stores/settingsStore.ts` (hiện vẫn lưu `groq_api_key` / `gemini_api_key` trong JSON). **Phần còn lại `[ ]` Pending cho `TASK-M4-28`:** `src-tauri/src/core/keyring.rs` (Windows Credential Locker + Headless CI In-memory fallback), loại bỏ plaintext API keys khỏi `app_config.json`, `src/components/onboarding/OnboardingWizardModal.tsx` và `src/components/onboarding/ApiKeyTester.tsx`.
+- **Ghi chú Trạng thái Hiện tại (Completed & Verified):** Đã hoàn tất `src-tauri/src/core/keyring.rs` (2-tier Windows Credential Locker + In-memory/DPAPI fallback có cô lập namespace theo PID/UUID khi test song song), loại bỏ hoàn toàn plaintext API key khỏi `app_config.json` (`#[serde(default, skip_serializing)]`), nối `KeyringManager` vào `stt_cmd.rs` & `translation_cmd.rs`, bổ sung `OnboardingWizardModal.tsx` (4 bước nhúng `HardwareRecommendation`), `ApiKeyTester.tsx` (timeout SLA $\le 2.0\text{s}$), tích hợp `App.tsx`, và bộ test `src-tauri/tests/keyring_test.rs` (10/10 loop pass). Đạt chứng chỉ Victory Audit **`VICTORY CONFIRMED`**.
 - **Target Files:**
   - `src-tauri/src/config/app_config.rs`
   - `src-tauri/src/config/atomic.rs`
@@ -1340,8 +1341,8 @@
   - `src-tauri/src/commands/config_cmd.rs`
   - `src/services/config/settings.ts`
   - `src/stores/settingsStore.ts`
-  - `src/components/onboarding/OnboardingWizardModal.tsx`
-  - `src/components/onboarding/ApiKeyTester.tsx`
+  - `src/components/onboarding/OnboardingWizardModal.tsx` & `OnboardingWizardModal.test.tsx`
+  - `src/components/onboarding/ApiKeyTester.tsx` & `ApiKeyTester.test.tsx`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Hiển thị `OnboardingWizardModal` ở lần khởi động đầu tiên (kiểm tra cờ `is_first_run` trong config).
   - Hiển thị bảng tóm tắt cấu hình máy tính và gợi ý chế độ làm việc tối ưu từ TASK-M4-27.
@@ -1360,20 +1361,20 @@
   - Prerequisites: TASK-M4-01, TASK-M4-04, TASK-M4-27.
   - Blocks: TASK-M4-15, TASK-M4-17.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-28.1:** Kiểm tra kết nối API Key trả về kết quả thành công/thất bại trong $\le 2.0\text{ giây}$.
-  - [ ] **AC-28.2:** 100% các API Key được mã hóa an toàn trong Windows Credential Manager, không thể tìm thấy plain text trong thư mục app.
-  - [ ] **AC-28.3:** Wizard chỉ hiển thị duy nhất ở lần khởi động đầu tiên (hoặc khi người dùng chủ động mở lại từ Settings).
-  - [ ] **AC-28.4:** Hỗ trợ cơ chế Fallback an toàn trên môi trường Headless CI / Sandbox: Khi `keyring-rs` không thể kết nối tới Windows Credential Manager, hệ thống tự động kích hoạt In-memory Session Credential Provider, đảm bảo 100% test suite CI/CD chạy qua mà không crash.
+  - [x] **AC-28.1:** Kiểm tra kết nối API Key trả về kết quả thành công/thất bại trong $\le 2.0\text{ giây}$.
+  - [x] **AC-28.2:** 100% các API Key được mã hóa an toàn trong Windows Credential Manager, không thể tìm thấy plain text trong thư mục app.
+  - [x] **AC-28.3:** Wizard chỉ hiển thị duy nhất ở lần khởi động đầu tiên (hoặc khi người dùng chủ động mở lại từ Settings).
+  - [x] **AC-28.4:** Hỗ trợ cơ chế Fallback an toàn trên môi trường Headless CI / Sandbox: Khi `keyring-rs` không thể kết nối tới Windows Credential Manager, hệ thống tự động kích hoạt In-memory Session Credential Provider, đảm bảo 100% test suite CI/CD chạy qua mà không crash.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Security & Frontend Wizard Test
   - *Unit Test Cases:*
-    - [ ] **UT-28.1 (First Run Flag):** Khi `is_first_run = true`, modal Onboarding tự động hiển thị; khi `is_first_run = false`, modal ẩn và vào thẳng Dashboard.
-    - [ ] **UT-28.2 (Keyring Failure Fallback & Headless CI Mock Provider):** Giả lập `keyring-rs` trả về `Err(PlatformFailure)` hoặc chạy test trong môi trường CI headless (không có GUI logon session); assert hệ thống tự động chuyển sang In-memory Mock Provider, lưu và đọc lại API key an toàn trong suốt vòng đời phiên làm việc.
+    - [x] **UT-28.1 (First Run Flag):** Khi `is_first_run = true`, modal Onboarding tự động hiển thị; khi `is_first_run = false`, modal ẩn và vào thẳng Dashboard.
+    - [x] **UT-28.2 (Keyring Failure Fallback & Headless CI Mock Provider):** Giả lập `keyring-rs` trả về `Err(PlatformFailure)` hoặc chạy test trong môi trường CI headless (không có GUI logon session); assert hệ thống tự động chuyển sang In-memory Mock Provider, lưu và đọc lại API key an toàn trong suốt vòng đời phiên làm việc.
   - *Integration & Contract Verification (Windows Credential Locker):**
-    - [ ] **IT-28.1:** Lưu Groq Key và Gemini Key qua `keyring-rs` vào Windows Credential Locker; đọc lại thành công khi backend cần gọi API.
-    - [ ] **IT-28.2 (Test Connection Button):** Click "Kiểm tra kết nối" gửi request siêu nhẹ tới Groq/Gemini, hiển thị tích xanh `[Sẵn sàng]` trong $\le 2.0\text{ giây}$.
+    - [x] **IT-28.1:** Lưu Groq Key và Gemini Key qua `keyring-rs` vào Windows Credential Locker; đọc lại thành công khi backend cần gọi API.
+    - [x] **IT-28.2 (Test Connection Button):** Click "Kiểm tra kết nối" gửi request siêu nhẹ tới Groq/Gemini, hiển thị tích xanh `[Sẵn sàng]` trong $\le 2.0\text{ giây}$.
   - *Boundary & Security Limits (Zero Plaintext Secrets Invariant):**
-    - [ ] **ED-28.1 (Plaintext Audit):** Quét toàn bộ file cấu hình `%APPDATA%/NeuroClip/app_config.json` và file tạm: khẳng định TUYỆT ĐỐI KHÔNG chứa plain text của bất kỳ API Key nào.
+    - [x] **ED-28.1 (Plaintext Audit):** Quét toàn bộ file cấu hình `%APPDATA%/NeuroClip/app_config.json` và file tạm: khẳng định TUYỆT ĐỐI KHÔNG chứa plain text của bất kỳ API Key nào.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     cargo test --manifest-path src-tauri/Cargo.toml --lib core::keyring::tests
@@ -1383,12 +1384,15 @@
 
 ---
 
-#### TASK-M4-29: Bộ Quản Lý & Tự Động Cập Nhật Công Cụ Phụ Trợ (Managed Sidecars Auto-Updater)
+#### TASK-M4-29: Bộ Quản Lý & Tự Động Cập Nhật Công Cụ Phụ Trợ (Managed Sidecars Auto-Updater) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** Senior Backend Dev (Rust)
+- **Ghi chú Trạng thái Hiện tại (Completed & Verified):** Đã hoàn tất `src-tauri/src/sidecar/manifest.rs`, `src-tauri/src/sidecar/updater.rs` (streaming SHA-256 verification, atomic swap `.old` & auto-rollback `ERR-04`, anti-bot User-Agent rotation & cookie guidance), `src-tauri/src/commands/updater_cmd.rs` (5 IPC commands + non-blocking `sidecar:status` event), `src/services/ipc/updater.ts`, và `src-tauri/tests/sidecar_updater_test.rs`. Đạt chứng chỉ Victory Audit **`VICTORY CONFIRMED`**.
 - **Target Files:**
   - `src-tauri/src/sidecar/updater.rs`
   - `src-tauri/src/sidecar/manifest.rs`
   - `src-tauri/src/commands/updater_cmd.rs`
+  - `src/services/ipc/updater.ts`
+  - `src-tauri/tests/sidecar_updater_test.rs`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Quản lý các file thực thi phụ trợ (`yt-dlp.exe`, `ffmpeg.exe`) tại thư mục chuẩn `%APPDATA%/NeuroClip/bin/` và `%LOCALAPPDATA%/NeuroClip/bin/` (cùng `%LOCALAPPDATA%/NeuroClip/sidecars/<tool>/` cho local STT workers), đồng bộ thứ tự fallback với `resources/sidecars/`, `AppConfig.sidecar_paths` / biến môi trường (`NEUROCLIP_*_PATH`) và `PATH` hệ thống *(lưu ý: `src-tauri/tauri.conf.json` không dùng `externalBin` / `src-tauri/bin/`)*.
   - Triển khai cơ chế kiểm tra cập nhật `yt-dlp` (`ADR-007`):
@@ -1426,9 +1430,9 @@
 
 ---
 
-#### TASK-M4-29B: Tích Hợp Luồng End-to-End HighlightViewer → Range Slicer → Subtitle Studio (App Pipeline Wiring)
+#### TASK-M4-29B: Tích Hợp Luồng End-to-End HighlightViewer → Range Slicer → Subtitle Studio (App Pipeline Wiring) — ✅ ĐÃ HOÀN THÀNH
 - **Lead Persona:** `Senior Frontend Dev` & `@tech-lead`
-- **Ghi chú Nguồn gốc:** Bổ sung tại Phase 4 theo **Quyết định 4 của PO (`2026-11-20`)** nhằm nối hoàn chỉnh luồng chọn clip trên UI sang `SubtitleStudio` trước khi chạy E2E (`TASK-M4-30`).
+- **Ghi chú Nguồn gốc & Trạng thái (Completed & Verified):** Bổ sung tại Phase 4 theo **Quyết định 4 của PO (`2026-11-20`)** nhằm nối hoàn chỉnh luồng chọn clip trên UI sang `SubtitleStudio` trước khi chạy E2E (`TASK-M4-30`). Đã hoàn tất wiring `HighlightViewer.tsx` $\rightarrow$ `sliceVideoSegment` (`slice.ts` + `listenSliceProgress`) $\rightarrow$ `useStudioStore` dual-path (`videoSrc` = `asset://...`, `videoPath` = raw OS path) $\rightarrow$ `SubtitleStudio` $\rightarrow$ `ExportModal` (default dir cạnh video nguồn), `chat_cmd.rs::cancel_chat_extraction` (`ACTIVE_CHAT_TASKS`), `premiere_xml.rs` relative path normalization, và `RFC-003-twitch-gql-http-client.md` (PO phê duyệt Option 1 cho `v1.0.0 MVP`, Option 2 ghi nhận vào `docs/ROADMAP.md`). Đạt chứng chỉ Victory Audit **`VICTORY CONFIRMED`**.
 - **Target Files:**
   - `src/App.tsx`
   - `src/components/highlight/HighlightViewer.tsx`
@@ -1436,11 +1440,15 @@
   - `src/services/ipc/ingestion.ts` *(`toLocalAssetUrl`)*
   - `src/stores/useStudioStore.ts`
   - `src/stores/useTranscriptStore.ts`
+  - `src/components/export/ExportModal.tsx`
+  - `src-tauri/src/commands/chat_cmd.rs` & `src/services/ipc/chat.ts`
+  - `src-tauri/src/export/premiere_xml.rs`
+  - `src-tauri/src/ingestion/twitch_gql.rs` & `docs/adr/RFC-003-twitch-gql-http-client.md`
   - `src/App.test.tsx`
 - **Mô tả & Phạm vi Kỹ thuật:**
   - Nối hành động chọn/cắt clip trên `HighlightViewer.tsx` trong `App.tsx` với lệnh IPC `sliceVideoSegment` (`src/services/ipc/slice.ts`), hiển thị tiến độ qua `slice:progress` và hỗ trợ hủy (`cancelSliceVideoSegment`).
   - Khi cắt hoàn tất (`SliceResult.clipPath`), gọi `useStudioStore.getState().setVideoSrc(toLocalAssetUrl(clipPath), clipPath)` để nạp đồng thời `asset://` stream URL (`videoSrc`) và raw OS `videoPath` (`video_file_path`), đồng bộ segments từ `useTranscriptStore` vào `useStudioStore`, và chuyển sang tab `studio` (`<SubtitleStudio />`).
-  - *(Bổ sung theo Quyết định PO `2026-11-23`)*: Triển khai lệnh hủy trích xuất chat (`cancel_chat_extraction` trong `src-tauri/src/commands/chat_cmd.rs` dùng active token registry) và đánh giá chuyển `src-tauri/src/ingestion/twitch_gql.rs` từ subprocess `curl.exe` sang `reqwest` async HTTP client (kiểm chứng tương thích TLS/anti-bot với Twitch GQL); đồng thời nâng cấp đường dẫn xuất mặc định trên `ExportModal.tsx` (dùng `AppConfig` / thư mục cạnh video nguồn hoặc `tauri-plugin-dialog`) và chuẩn hóa xử lý relative path trong `premiere_xml.rs::path_to_file_url`.
+  - *(Bổ sung theo Quyết định PO `2026-11-23`)*: Triển khai lệnh hủy trích xuất chat (`cancel_chat_extraction` trong `src-tauri/src/commands/chat_cmd.rs` dùng active token registry) và đánh giá chuyển `src-tauri/src/ingestion/twitch_gql.rs` từ subprocess `curl.exe` sang `reqwest` async HTTP client (đã lập `docs/adr/RFC-003-twitch-gql-http-client.md`; PO chốt **Option 1** giữ `curl.exe` + hash mới cho `v1.0.0 MVP`, hoãn **Option 2** sang `docs/ROADMAP.md`); đồng thời nâng cấp đường dẫn xuất mặc định trên `ExportModal.tsx` (dùng thư mục cạnh video nguồn) và chuẩn hóa xử lý relative path trong `premiere_xml.rs::path_to_file_url`.
 - **Giao kèo dữ liệu (Data Contracts):**
   - Đầu vào: `HighlightCluster` + `VodManifest`.
   - Đầu ra: `SliceResult` (`clipPath`) $\rightarrow$ `useStudioStore` (`videoSrc`, `videoPath`, `segments`).
@@ -1448,13 +1456,13 @@
   - Prerequisites: TASK-M4-12, TASK-M4-13, TASK-M4-20.
   - Blocks: TASK-M4-30.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
-  - [ ] **AC-29B.1:** Click "Cắt Clip" trên `HighlightViewer` gọi đúng `sliceVideoSegment`, nhận `SliceResult.clipPath`, cập nhật `useStudioStore` (`videoSrc = asset://...`, `videoPath = OS path`) và mở tab `SubtitleStudio` mà không cần thao tác thủ công.
-  - [ ] **AC-29B.2:** Mở `ExportModal` từ `SubtitleStudio` sau khi cắt từ `HighlightViewer` truyền đúng raw OS `video_file_path` (tuyệt đối không truyền `asset://` URL).
-  - [ ] **AC-29B.3 (Chat Cancel & Export Dialog Prep):** Lệnh `cancel_chat_extraction` hủy được tiến trình trích xuất chat đang chạy qua `chat:progress`; đánh giá xong phương án `reqwest` cho `twitch_gql.rs` và nâng cấp đường dẫn xuất mặc định không hardcode `C:\NeuroClip\export\`.
+  - [x] **AC-29B.1:** Click "Cắt Clip" trên `HighlightViewer` gọi đúng `sliceVideoSegment`, nhận `SliceResult.clipPath`, cập nhật `useStudioStore` (`videoSrc = asset://...`, `videoPath = OS path`) và mở tab `SubtitleStudio` mà không cần thao tác thủ công.
+  - [x] **AC-29B.2:** Mở `ExportModal` từ `SubtitleStudio` sau khi cắt từ `HighlightViewer` truyền đúng raw OS `video_file_path` (tuyệt đối không truyền `asset://` URL).
+  - [x] **AC-29B.3 (Chat Cancel & Export Dialog Prep):** Lệnh `cancel_chat_extraction` hủy được tiến trình trích xuất chat đang chạy qua `chat:progress`; đánh giá xong phương án `reqwest` cho `twitch_gql.rs` (`RFC-003` Option 1 chốt cho v1.0.0) và nâng cấp đường dẫn xuất mặc định không hardcode `C:\NeuroClip\export\`.
 - **Checklist Kiểm thử Chất lượng (@qa-reviewer QA Test Checklist):**
   - *Phân loại kiểm thử:* Frontend Pipeline Integration Test
   - *Unit & Integration Test Cases:*
-    - [ ] **UT-29B.1 / IT-29B.1:** Kiểm thử tích hợp trong `src/App.test.tsx` (mock `sliceVideoSegment` & `useTranscriptStore`) xác nhận luồng `HighlightViewer` → `sliceVideoSegment` → `useStudioStore` → `SubtitleStudio` → `ExportModal`.
+    - [x] **UT-29B.1 / IT-29B.1:** Kiểm thử tích hợp trong `src/App.test.tsx` (mock `sliceVideoSegment` & `useTranscriptStore`) xác nhận luồng `HighlightViewer` → `sliceVideoSegment` → `useStudioStore` → `SubtitleStudio` → `ExportModal`.
   - *Lệnh thực thi & Tiêu chí xác minh:*
     ```bash
     npm run test:vitest -- src/App.test.tsx src/components/studio/SubtitleStudio.test.tsx
@@ -1566,7 +1574,7 @@
   - Đầu ra: File cài đặt hoàn chỉnh `NeuroClip_v1.0.0_x64-setup.exe` và `.msi`.
 - **Quan hệ phụ thuộc (Dependencies):**
   - Prerequisites: Hoàn thành toàn bộ các tasks từ TASK-M4-01 đến TASK-M4-31.
-  - Blocks: Nghiệm thu bàn giao sản phẩm cuối cùng cho PO.
+  - Blocks: TASK-M4-33, Nghiệm thu bàn giao sản phẩm cuối cùng cho PO.
 - **Tiêu chí Nghiệm thu Định lượng (AC):**
   - [ ] **AC-32.1:** Kích thước bộ cài đặt NSIS đóng gói hoàn chỉnh $\le 120\text{MB}$ (đã bao gồm ffmpeg và yt-dlp).
   - [ ] **AC-32.2:** Cài đặt và gỡ cài đặt mượt mà trên máy Windows 10/11 sạch không gặp lỗi quyền Administrator.
@@ -1591,9 +1599,44 @@
 
 ---
 
+#### TASK-M4-33: Đại Cập Nhật Cấu Trúc Tài Liệu, Đồng Bộ Phiên Bản, `README.md` & `AGENTS.md` (Special Post-Packaging Wrap-up)
+- **Lead Persona:** `@product-owner-proxy`, `@lead-architect` & `@tech-lead`
+- **Ghi chú Nguồn gốc:** Bổ sung ngày `2026-11-24` theo chỉ đạo của PO để làm sạch toàn bộ hệ thống tài liệu khi hoàn tất đóng gói `v1.0.0 MVP`.
+> **⚠️ LƯU Ý BẮT BUỘC (DỰ KIẾN SƠ BỘ — CẦN REVIEW LẠI VỚI PO):**  
+> Nội dung dưới đây là **dự kiến sơ bộ** ở thời điểm trước `M4.9`. Khi hoàn thành `TASK-M4-32` và chuẩn bị triển khai `TASK-M4-33` (đặc biệt nếu chuyển sang session làm việc mới), team **BẮT BUỘC phải review và chốt lại phạm vi chi tiết với PO** trước khi sửa đổi cấu trúc tài liệu hoặc `AGENTS.md`.
+- **Target Files (Dự kiến sơ bộ):**
+  - `AGENTS.md` *(nằm trong diện viết lại toàn diện do đã lỗi thời)*
+  - `README.md` *(nằm trong diện review & cập nhật đồng bộ hoàn toàn với v1.0.0 MVP)*
+  - `docs/ARCHITECTURE.md`, `docs/PRD.md`, `docs/CONVENTIONS.md`, `docs/ROADMAP.md`
+  - `docs/archive/v1/` *(lưu trữ `TASK_BOARD` v1, các `RFC-001..003` đã chốt)*
+  - `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` *(đối chiếu version phát hành `1.0.0`)*
+- **Mô tả & Phạm vi Kỹ thuật (Dự kiến sơ bộ):**
+  - **Tái cấu trúc thư mục `docs/` theo mô hình 3 tầng:**
+    1. *Living SSOT (`docs/` + `docs/adr/ADR-*.md`)*: Rà soát đồng bộ 100% `ARCHITECTURE.md`, `PRD.md`, `CONVENTIONS.md` khớp với mã nguồn `v1.0.0` thực tế.
+    2. *Forward Planning (`docs/ROADMAP.md`)*: Cập nhật hoàn chỉnh các hạng mục tối ưu/tính năng cho bản patch `v1.0.x`, `v1.1.0`, `v2.0.0+` (bao gồm `RFC-003` Option 2 và các phát hiện từ `M4-31`/`M4-32`).
+    3. *Historical Archive (`docs/archive/v1/`)*: Chuyển `TASK_BOARD` v1.0 và các `RFC-*` đã đóng vào thư mục lưu trữ kèm nhãn `ARCHIVED` ở đầu file để tránh làm nhiễu context cho các session phát triển sau.
+  - **Chuẩn hóa & Tách biệt Phiên bản Sản phẩm vs Phiên bản Tài liệu:**
+    - Xử lý triệt để sự nhập nhằng giữa số revision của file markdown (`1.3.0`, `2.4.0`) với SemVer của phần mềm (`v1.0.0 MVP`). Toàn bộ tài liệu sống chuẩn hóa hai trường tách biệt (`Product Version: v1.0.0` vs `Doc Revision`).
+  - **Review & Cập nhật toàn diện `README.md`:**
+    - Đồng bộ badge, tính năng thực tế v1.0.0 MVP, kiến trúc thư mục mới, số liệu test pass và hướng dẫn cài đặt/sử dụng bản phát hành.
+  - **Viết lại `AGENTS.md` (Đã lỗi thời):**
+    - Cập nhật lại quy chuẩn vận hành cho chu kỳ bảo trì/phát triển hậu v1.0.0, cập nhật đường dẫn cấu trúc `docs/` mới, và **xem xét chuyển đổi phương thức điều phối từ `/teamwork` sang mô hình `orchestrator`** theo quyết định chốt với PO lúc triển khai.
+- **Giao kèo dữ liệu (Data Contracts):**
+  - Đầu vào: Mã nguồn & bộ cài `v1.0.0 MVP` sau `TASK-M4-32` + ý kiến chốt lại của PO.
+  - Đầu ra: Bộ tài liệu SSOT sạch sẽ, `README.md` chuẩn xác, `AGENTS.md` mới, và `docs/archive/v1/`.
+- **Quan hệ phụ thuộc (Dependencies):**
+  - Prerequisites: TASK-M4-32 *(và xác nhận review lại phạm vi từ PO)*.
+  - Blocks: Đóng băng bàn giao phát hành `v1.0.0 MVP` & mở chu kỳ hậu v1.
+- **Tiêu chí Nghiệm thu Định lượng (AC — Dự kiến sơ bộ):**
+  - [ ] **AC-33.1:** Đã review và nhận xác nhận chốt phạm vi từ PO trước khi sửa `AGENTS.md` và tái cấu trúc `docs/`.
+  - [ ] **AC-33.2:** 100% tài liệu sống (`docs/`, `README.md`, `AGENTS.md`) tách biệt rõ `Product Version` (`v1.0.0`) khỏi `Doc Revision` và không còn tham chiếu file bị gãy sau khi archive.
+  - [ ] **AC-33.3:** `AGENTS.md` phản ánh đúng quy trình vận hành đã chốt với PO (bao gồm phương án `orchestrator` nếu PO duyệt).
+
+---
+
 ## 4. BIỂU ĐỒ PHỤ THUỘC & ĐƯỜNG GĂNG TIẾN ĐỘ (DEPENDENCY GRAPH & CRITICAL PATH)
 
-### 4.1 Bảng Ma Trận Phụ Thuộc Của Toàn Bộ 33 Tasks
+### 4.1 Bảng Ma Trận Phụ Thuộc Của Toàn Bộ 34 Tasks
 
 ```
 [M4.1] TASK-M4-01 (Tauri Shell)
@@ -1650,6 +1693,9 @@
        │    │    │                                                 │
        │    │    │                                                 ▼
        │    │    │                                     TASK-M4-32 (Windows Packaging)
+       │    │    │                                                 │
+       │    │    │                                                 ▼
+       │    │    │                                     TASK-M4-33 (Doc Restructure, Versioning Sync, README & AGENTS.md)
        │    │    │
        │    │    ├──► TASK-M4-07 (Local Video Importer) ──► TASK-M4-11 (Audio RMS Detector) ──► (Hòa vào M4-12)
        │    │    └──► TASK-M4-29 (Sidecar Auto-Updater) ──► (Bảo vệ M4-06 & M4-08)
@@ -1660,8 +1706,8 @@
 ```
 
 ### 4.2 Đường Găng Kỹ Thuật (Critical Path Analysis)
-Đường găng xuyên suốt của dự án kéo dài qua chuỗi 20 tasks tuần tự (`M4-25` và nhánh tích hợp `M4-29B` hội tụ vào `M4-30`):
-$$\text{TASK-M4-01} \rightarrow \text{M4-02} \rightarrow \text{M4-03} \rightarrow \text{M4-05} \rightarrow \text{M4-06} \rightarrow \text{M4-08} \rightarrow \text{M4-09} \rightarrow \text{M4-12} \rightarrow \text{M4-13} \rightarrow \text{M4-14} \rightarrow \text{M4-15} \rightarrow \text{M4-17} \rightarrow \text{M4-18} \rightarrow \text{M4-19} \rightarrow \text{M4-20} \rightarrow \text{M4-24} \rightarrow \text{M4-25} \rightarrow \text{M4-29B} \rightarrow \text{M4-30} \rightarrow \text{M4-32}$$
+Đường găng xuyên suốt của dự án kéo dài qua chuỗi 21 tasks tuần tự (`M4-25` và nhánh tích hợp `M4-29B` hội tụ vào `M4-30`, kết thúc bằng `M4-32` và `M4-33`):
+$$\text{TASK-M4-01} \rightarrow \text{M4-02} \rightarrow \text{M4-03} \rightarrow \text{M4-05} \rightarrow \text{M4-06} \rightarrow \text{M4-08} \rightarrow \text{M4-09} \rightarrow \text{M4-12} \rightarrow \text{M4-13} \rightarrow \text{M4-14} \rightarrow \text{M4-15} \rightarrow \text{M4-17} \rightarrow \text{M4-18} \rightarrow \text{M4-19} \rightarrow \text{M4-20} \rightarrow \text{M4-24} \rightarrow \text{M4-25} \rightarrow \text{M4-29B} \rightarrow \text{M4-30} \rightarrow \text{M4-32} \rightarrow \text{M4-33}$$
 
 Các nhánh công việc có thể triển khai song song (Parallel Tracks):
 - **Nhánh Track A (Phần cứng & Wizard):** TASK-M4-27 $\rightarrow$ TASK-M4-28 (song song với Nhóm Ingestion M4.2).
@@ -1701,16 +1747,16 @@ npm run format:check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 npm run lint
 
-# 3. Kiểm tra kiểu tĩnh TypeScript (Zero-any; 92 files verified) & Build Production Vite (Vite 5.4)
+# 3. Kiểm tra kiểu tĩnh TypeScript (Zero-any; 101 files verified) & Build Production Vite (Vite 5.4)
 npm run typecheck
 npm run build
 
-# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (27 active test binaries [1 lib: 239 + 26 integration: 231; [[bin]] test = false], 470 tests, song song)
+# 4. Chạy toàn bộ Unit & Integration Tests phía Backend Rust (29 active test binaries [1 lib: 268 + 28 integration: 241], 509 tests)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 
-# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend (tổng cộng 1,312 bài kiểm thử toàn repo: 470 Rust + 705 Vitest + 137 Node)
-npm run test:vitest   # (hoặc npm run test:run — 37 files Vitest, 705 tests)
-npm test              # Node Native Test Runner (53 suites, 137 tests: src/test/suite.node.test.ts)
+# 5. Chạy toàn bộ Unit, Component & Contract Tests phía Frontend (tổng cộng 1,403 bài kiểm thử toàn repo: 509 Rust + 754 Vitest + 140 Node)
+npm run test:vitest   # (hoặc npm run test:run — 41 files Vitest, 754 tests)
+npm test              # Node Native Test Runner (54 suites, 140 tests: src/test/suite.node.test.ts)
 
 # 6. (Target M4-30) Chạy bài kiểm thử tích hợp & E2E Pipeline giả lập
 cargo test --manifest-path src-tauri/Cargo.toml --test synthetic_vod_pipeline_e2e -- --nocapture

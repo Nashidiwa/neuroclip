@@ -2043,6 +2043,10 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
         'Must register start_chat_extraction command',
       );
       assert.ok(
+        content.includes('commands::cancel_chat_extraction'),
+        'Must register cancel_chat_extraction command',
+      );
+      assert.ok(
         content.includes('commands::get_chat_events'),
         'Must register get_chat_events command',
       );
@@ -2060,6 +2064,12 @@ describe('TASK-M4-06 Test Suite: Audio-First Ingestion & FFmpeg PCM Extraction P
       assert.ok(fs.existsSync(typesPath), 'src/types/chat.ts must exist');
       assert.ok(fs.existsSync(ipcPath), 'src/services/ipc/chat.ts must exist');
       assert.ok(fs.existsSync(storePath), 'src/stores/useChatStore.ts must exist');
+
+      const ipcContent = fs.readFileSync(ipcPath, 'utf8');
+      assert.ok(
+        ipcContent.includes('export async function cancelChatExtraction'),
+        'Must export cancelChatExtraction IPC client',
+      );
 
       const typesContent = fs.readFileSync(typesPath, 'utf8');
       assert.ok(typesContent.includes('isChatEventJson'), 'Must export isChatEventJson guard');

@@ -4,14 +4,18 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import App from './App';
 import { GlobalErrorBoundary } from './components/common/ErrorBoundary';
 import { useProjectStore } from './stores/useProjectStore';
 import { useIngestionStore } from './stores/useIngestionStore';
 import { useChatStore } from './stores/useChatStore';
 import { useHighlightStore } from './stores/useHighlightStore';
+import { useStudioStore } from './stores/useStudioStore';
+import { useTranscriptStore } from './stores/useTranscriptStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { normalizeHighlightCluster } from './types/highlight';
+import { normalizeTranscriptSegmentsContainer } from './types/transcript';
 import { ERROR_CODES } from './services/ipc/error';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -40,10 +44,14 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
     vi.mocked(invoke).mockResolvedValue(undefined);
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
     useProjectStore.getState().reset();
     useIngestionStore.getState().reset();
     useChatStore.getState().reset();
     useHighlightStore.getState().reset();
+    useStudioStore.getState().reset();
+    useTranscriptStore.getState().reset();
     useSettingsStore.setState({
       config: { ...useSettingsStore.getState().config, isFirstRun: false },
     });
@@ -425,6 +433,261 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
           screen.getByRole('heading', { name: /Chào Mừng Đến Với NeuroClip Studio/i }),
         ).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('TASK-M4-29B: End-to-End Pipeline Wiring (HighlightViewer → Range Slicer → SubtitleStudio → Export)', () => {
+    it('UT-29B.1 / IT-29B.1: slices highlight cluster, populates studioStore dual videoSrc/videoPath, syncs transcript, navigates to studio, and passes raw OS path to exporter', async () => {
+      const sampleCluster = normalizeHighlightCluster({
+        cluster_id: 'cluster_1',
+        start_sec: 10.0,
+        end_sec: 25.0,
+        peak_sec: 18.0,
+        score: 85.5,
+        primary_reason: 'chat_velocity',
+        top_emotes: ['KEKW', 'LUL'],
+        is_bookmarked: false,
+      });
+
+      useHighlightStore.setState({
+        vodId: 'vod_test_123',
+        clusters: [sampleCluster],
+      });
+
+      useTranscriptStore.setState({
+        container: normalizeTranscriptSegmentsContainer({
+          clip_id: 'clip_vod_test_123',
+          segments: [
+            {
+              segment_id: 'seg_1',
+              start_sec: 10.5,
+              end_sec: 15.0,
+              speaker_id: 'neuro',
+              text_en: 'Hello world!',
+              text_vi: 'Xin chào thế giới!',
+              confidence: 0.99,
+              cps_score: 12.0,
+              is_flagged_for_review: false,
+              words: [],
+            },
+          ],
+        }),
+      });
+
+      let capturedExportArgs: unknown = null;
+      vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+        if (cmd === 'slice_video_segment') {
+          return {
+            vod_id: 'vod_test_123',
+            clip_path: 'C:\\Videos\\output_clip_01.mp4',
+            start_sec: 10.0,
+            end_sec: 25.0,
+            duration_seconds: 15.0,
+            file_size_bytes: 1048576,
+            stream_drift_ms: 0.0,
+            format: 'mp4',
+            keyframe_aligned: true,
+            initial_pts_delay_sec: 0.0,
+            cluster_id: 'cluster_1',
+          };
+        }
+        if (cmd === 'export_capcut_draft') {
+          capturedExportArgs = args;
+          return {
+            project_dir: 'C:\\CapCut\\Projects\\draft_01',
+            project_path: 'C:\\CapCut\\Projects\\draft_01',
+            draft_name: 'draft_01',
+            draft_content_path: 'C:\\CapCut\\Projects\\draft_01\\draft_content.json',
+          };
+        }
+        return undefined;
+      });
+
+      render(<App />);
+
+      // 1. Navigate to Highlights tab
+      const highlightsTabBtn = screen.getByTestId('tab-highlights');
+      fireEvent.click(highlightsTabBtn);
+
+      // 2. Locate and click "Cắt Clip" button
+      const sliceBtn = await screen.findByTestId('slice-cluster-cluster_1');
+      expect(sliceBtn).toBeInTheDocument();
+      fireEvent.click(sliceBtn);
+
+      // 3. Verify slice_video_segment IPC was invoked with correct range parameters
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith('slice_video_segment', {
+          vodId: 'vod_test_123',
+          startSec: 10.0,
+          endSec: 25.0,
+          clusterId: 'cluster_1',
+          outputFilename: null,
+          customInputSource: null,
+        });
+      });
+
+      // 4. Verify useStudioStore contains asset:// URL in videoSrc and raw OS path in videoPath
+      await waitFor(() => {
+        const studioState = useStudioStore.getState();
+        expect(studioState.videoSrc).toContain('asset://');
+        expect(studioState.videoPath).toBe('C:\\Videos\\output_clip_01.mp4');
+      });
+
+      // 5. Verify transcript segments were synchronized to studioStore
+      const studioState = useStudioStore.getState();
+      expect(studioState.segments.length).toBe(1);
+      expect(studioState.segments[0]?.textVi).toBe('Xin chào thế giới!');
+
+      // 6. Verify automatically navigated to Subtitle Studio tab
+      await waitFor(() => {
+        expect(screen.getByTestId('studio-export-button')).toBeInTheDocument();
+      });
+
+      // 7. Click "Xuất bản" to open ExportModal
+      fireEvent.click(screen.getByTestId('studio-export-button'));
+      await waitFor(() => {
+        expect(screen.getByTestId('export-modal-title')).toBeInTheDocument();
+      });
+
+      // 8. Submit export (CapCut format default)
+      fireEvent.click(screen.getByTestId('export-submit-button'));
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith('export_capcut_draft', expect.anything());
+      });
+
+      // 9. Assert raw OS path was provided to exporter, with zero "asset://" prefix
+      expect(capturedExportArgs).toBeDefined();
+      const exportOptions = (capturedExportArgs as Record<string, unknown>)['options'] as Record<
+        string,
+        unknown
+      >;
+      expect(exportOptions['video_file_path']).toBe('C:\\Videos\\output_clip_01.mp4');
+      expect(String(exportOptions['video_file_path'])).not.toContain('asset://');
+    });
+
+    it('UT-29B.2: renders progress banner and handles slice cancellation via cancelSliceVideoSegment', async () => {
+      let progressCallback: ((event: { payload: unknown }) => void) | undefined;
+      vi.mocked(listen).mockImplementation(async (event: string, cb: unknown) => {
+        if (event === 'slice:progress') {
+          progressCallback = cb as (event: { payload: unknown }) => void;
+        }
+        return () => {};
+      });
+
+      const sampleCluster = normalizeHighlightCluster({
+        cluster_id: 'cluster_2',
+        start_sec: 50.0,
+        end_sec: 70.0,
+        peak_sec: 60.0,
+        score: 90.0,
+        primary_reason: 'audio_energy',
+        top_emotes: [],
+        is_bookmarked: false,
+      });
+
+      useHighlightStore.setState({
+        vodId: 'vod_test_cancel',
+        clusters: [sampleCluster],
+      });
+
+      let resolveSlice: (val: unknown) => void;
+      const slicePromise = new Promise((resolve) => {
+        resolveSlice = resolve;
+      });
+
+      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'slice_video_segment') {
+          return await slicePromise;
+        }
+        if (cmd === 'cancel_slice_video_segment') {
+          return true;
+        }
+        return undefined;
+      });
+
+      render(<App />);
+      fireEvent.click(screen.getByTestId('tab-highlights'));
+
+      const sliceBtn = await screen.findByTestId('slice-cluster-cluster_2');
+      fireEvent.click(sliceBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('slice-progress-banner')).toBeInTheDocument();
+      });
+
+      act(() => {
+        progressCallback?.({
+          payload: {
+            taskId: 'task_1',
+            stage: 'encoding',
+            percent: 45.0,
+          },
+        });
+      });
+
+      expect(screen.getByText(/45%/)).toBeInTheDocument();
+
+      const cancelBtn = screen.getByTestId('cancel-slice-button');
+      fireEvent.click(cancelBtn);
+
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith('cancel_slice_video_segment', expect.anything());
+      });
+
+      await act(async () => {
+        resolveSlice!({
+          vod_id: 'vod_test_cancel',
+          clip_path: '',
+          start_sec: 50.0,
+          end_sec: 70.0,
+          duration_sec: 20.0,
+          format: 'mp4',
+          keyframe_aligned: true,
+          initial_pts_delay_sec: 0.0,
+          cluster_id: 'cluster_2',
+        });
+        await Promise.resolve();
+      });
+    });
+
+    it('UT-29B.3: displays sliceError banner when sliceVideoSegment rejects', async () => {
+      const sampleCluster = normalizeHighlightCluster({
+        cluster_id: 'cluster_err',
+        start_sec: 5.0,
+        end_sec: 15.0,
+        peak_sec: 10.0,
+        score: 75.0,
+        primary_reason: 'chat_velocity',
+        top_emotes: [],
+        is_bookmarked: false,
+      });
+
+      useHighlightStore.setState({
+        vodId: 'vod_test_err',
+        clusters: [sampleCluster],
+      });
+
+      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'slice_video_segment') {
+          throw {
+            code: 'ERR_INGEST_SLICE_FAILED',
+            message: 'FFmpeg stream copy error: keyframe misalignment',
+          };
+        }
+        return undefined;
+      });
+
+      render(<App />);
+      fireEvent.click(screen.getByTestId('tab-highlights'));
+
+      const sliceBtn = await screen.findByTestId('slice-cluster-cluster_err');
+      fireEvent.click(sliceBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText('Lỗi cắt phân đoạn video')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('studio-export-button')).not.toBeInTheDocument();
     });
   });
 });

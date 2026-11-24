@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { ExportModal } from './ExportModal.tsx';
+import { ExportModal, extractParentDirectory, resolveDefaultOutputPath } from './ExportModal.tsx';
 import * as exportIpc from '../../services/ipc/export.ts';
 import { ERROR_CODES } from '../../services/ipc/error.ts';
 import { type SubtitleProject, normalizeSubtitleProject } from '../../types/transcript.ts';
@@ -493,7 +493,9 @@ describe('ExportModal Component', () => {
 
     fireEvent.click(screen.getByTestId('export-format-premiere'));
     const pathInput = screen.getByTestId('custom-output-path-input') as HTMLInputElement;
-    const fileSegment = pathInput.value.replace('C:\\NeuroClip\\export\\', '');
+    const effectiveDir =
+      extractParentDirectory(dirtyProject.videoFilePath ?? undefined) ?? 'C:\\NeuroClip\\export';
+    const fileSegment = pathInput.value.replace(`${effectiveDir}\\`, '');
     expect(fileSegment).not.toMatch(/[<>:"/\\|?*]/);
     expect(fileSegment).not.toContain('..');
     expect(fileSegment.endsWith('_timeline.xml')).toBe(true);
@@ -505,7 +507,7 @@ describe('ExportModal Component', () => {
       expect(mockExportPremiere).toHaveBeenCalledTimes(1);
     });
     const calledPremierePath = mockExportPremiere.mock.calls[0]?.[1] ?? '';
-    expect(calledPremierePath.replace('C:\\NeuroClip\\export\\', '')).not.toMatch(/[<>:"/\\|?*]/);
+    expect(calledPremierePath.replace(`${effectiveDir}\\`, '')).not.toMatch(/[<>:"/\\|?*]/);
     expect(calledPremierePath).not.toContain('..');
 
     // Reopen with blank/dots-only projectName & fallback to projectId for ASS & SRT
@@ -519,14 +521,14 @@ describe('ExportModal Component', () => {
 
     fireEvent.click(screen.getByTestId('export-format-ass'));
     const assInput = screen.getByTestId('custom-output-path-input') as HTMLInputElement;
-    expect(assInput.value).toBe('C:\\NeuroClip\\export\\safe_id_01.ass');
+    expect(assInput.value).toBe(`${effectiveDir}\\safe_id_01.ass`);
 
     fireEvent.change(assInput, { target: { value: '' } });
     fireEvent.click(screen.getByTestId('export-submit-button'));
     await waitFor(() => {
       expect(mockExportAss).toHaveBeenCalledWith(
         fallbackProject,
-        'C:\\NeuroClip\\export\\safe_id_01.ass',
+        `${effectiveDir}\\safe_id_01.ass`,
       );
     });
 
@@ -539,7 +541,7 @@ describe('ExportModal Component', () => {
     await waitFor(() => {
       expect(mockExportSrt).toHaveBeenCalledWith(
         fallbackProject,
-        'C:\\NeuroClip\\export\\safe_id_01.srt',
+        `${effectiveDir}\\safe_id_01.srt`,
       );
     });
   });
@@ -759,5 +761,68 @@ describe('ExportModal Component', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe('Directory Resolution & extractParentDirectory (AC-29B.3)', () => {
+    it('extractParentDirectory should correctly resolve parent directories or null', () => {
+      expect(extractParentDirectory('C:\\Videos\\my_clip.mp4')).toBe('C:\\Videos');
+      expect(extractParentDirectory('C:/Videos/sub/clip.mp4')).toBe('C:/Videos/sub');
+      expect(extractParentDirectory('C:\\my_clip.mp4')).toBe('C:\\');
+      expect(extractParentDirectory('/home/user/my_clip.mp4')).toBe('/home/user');
+      expect(extractParentDirectory('/my_clip.mp4')).toBe('/');
+      expect(extractParentDirectory('my_clip.mp4')).toBeNull();
+      expect(extractParentDirectory('')).toBeNull();
+      expect(extractParentDirectory(undefined)).toBeNull();
+    });
+
+    it('resolveDefaultOutputPath should use provided baseDir and format correctly', () => {
+      expect(resolveDefaultOutputPath('clip', 'premiere_xml', 'D:\\CustomExport')).toBe(
+        'D:\\CustomExport\\clip_timeline.xml',
+      );
+      expect(resolveDefaultOutputPath('clip', 'ass', 'D:\\CustomExport')).toBe(
+        'D:\\CustomExport\\clip.ass',
+      );
+      expect(resolveDefaultOutputPath('clip', 'srt', 'D:\\CustomExport')).toBe(
+        'D:\\CustomExport\\clip.srt',
+      );
+      // Fallback when baseDir is undefined
+      expect(resolveDefaultOutputPath('clip', 'premiere_xml')).toBe(
+        'C:\\NeuroClip\\export\\clip_timeline.xml',
+      );
+    });
+
+    it('ExportModal respects defaultExportDir prop over video file parent directory', () => {
+      render(
+        <ExportModal
+          isOpen={true}
+          onClose={mockOnClose}
+          project={mockProject}
+          defaultExportDir={'E:\\Overrides'}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('export-format-premiere'));
+      const pathInput = screen.getByTestId('custom-output-path-input') as HTMLInputElement;
+      expect(pathInput.value).toBe('E:\\Overrides\\Vedal & Neuro Clip_timeline.xml');
+    });
+
+    it('ExportModal falls back to C:\\NeuroClip\\export when no videoFilePath and no defaultExportDir', () => {
+      const noVideoProject: SubtitleProject = {
+        ...mockProject,
+        videoFilePath: null,
+      };
+      render(
+        <ExportModal
+          isOpen={true}
+          onClose={mockOnClose}
+          project={noVideoProject}
+          videoFilePath={undefined}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId('export-format-ass'));
+      const pathInput = screen.getByTestId('custom-output-path-input') as HTMLInputElement;
+      expect(pathInput.value).toBe('C:\\NeuroClip\\export\\Vedal & Neuro Clip.ass');
+    });
   });
 });

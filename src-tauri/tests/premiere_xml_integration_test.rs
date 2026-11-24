@@ -424,3 +424,16 @@ fn test_regression_unc_dedup_bounds_and_early_layout_validation() {
 
     let _ = std::fs::remove_dir_all(temp_dir);
 }
+
+#[test]
+fn test_it_26_3_relative_path_normalization_in_xml() {
+    let url_dot = path_to_file_url("./clips/clip_1.mp4");
+    assert!(url_dot.starts_with("file://localhost/"));
+    assert!(!url_dot.contains("/./") && !url_dot.contains("/."));
+    assert!(url_dot.ends_with("/clips/clip_1.mp4"));
+
+    let url_parent = path_to_file_url(r"..\test\clip.mp4");
+    assert!(url_parent.starts_with("file://localhost/"));
+    assert!(!url_parent.contains("/../") && !url_parent.contains(".."));
+    assert!(url_parent.ends_with("/test/clip.mp4"));
+}

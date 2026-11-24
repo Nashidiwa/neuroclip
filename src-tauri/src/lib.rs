@@ -23,9 +23,10 @@ pub mod stt;
 pub mod translation;
 
 pub use commands::{
-    cancel_slice_task_token, cancel_slice_video_segment, register_slice_task_token,
+    cancel_chat_extraction, cancel_chat_task_token, cancel_slice_task_token,
+    cancel_slice_video_segment, register_chat_task_token, register_slice_task_token,
     resolve_vod_project_dir, slice_video_segment, slice_video_segment_internal,
-    unregister_slice_task_token, AppState,
+    unregister_chat_task_token, unregister_slice_task_token, AppState,
 };
 pub use config::{
     AppConfig, CpuInfo, GpuInfo, GpuVendor, HardwareProfile, RamInfo, RecommendedMode, SidecarPaths,
@@ -170,6 +171,7 @@ pub fn run() {
             commands::get_vod_manifest,
             commands::extract_pcm_stream,
             commands::start_chat_extraction,
+            commands::cancel_chat_extraction,
             commands::get_chat_events,
             commands::get_chat_velocity_heatmap,
             commands::start_whisper_transcription,

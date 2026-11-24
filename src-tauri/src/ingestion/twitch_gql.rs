@@ -17,7 +17,7 @@ use crate::ingestion::streamer::assign_child_to_job_guard;
 pub const TWITCH_GQL_ENDPOINT: &str = "https://gql.twitch.tv/gql";
 pub const TWITCH_CLIENT_ID: &str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 pub const TWITCH_COMMENTS_SHA256: &str =
-    "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb28822d56ad53c4451407af";
+    "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044aa76adf6a";
 pub const TWITCH_USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 

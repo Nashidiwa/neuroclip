@@ -37,7 +37,30 @@ export interface ExportModalProps {
   readonly project: SubtitleProject;
   readonly videoFilePath?: string | undefined;
   readonly defaultDraftRoot?: string | undefined;
+  readonly defaultExportDir?: string | undefined;
   readonly onExportSuccess?: ((result: CapCutExportResult | string) => void) | undefined;
+}
+
+export function extractParentDirectory(filePath?: string): string | null {
+  if (!filePath || typeof filePath !== 'string') {
+    return null;
+  }
+  const trimmed = filePath.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const normalized = trimmed.replace(/[/\\]+$/, '');
+  const lastSlashIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  if (lastSlashIndex === -1) {
+    return null;
+  }
+  if (lastSlashIndex === 2 && normalized[1] === ':') {
+    return normalized.slice(0, 3);
+  }
+  if (lastSlashIndex === 0) {
+    return '/';
+  }
+  return normalized.slice(0, lastSlashIndex);
 }
 
 function stripUnsafeFilenameChars(value: string): string {
@@ -67,15 +90,25 @@ export function sanitizeFilenameSegment(rawName: string, fallback = 'neuroclip_s
   return 'neuroclip_subtitles';
 }
 
-function resolveDefaultOutputPath(defaultName: string, format: ExportFormat): string {
+export function resolveDefaultOutputPath(
+  defaultName: string,
+  format: ExportFormat,
+  baseDir?: string,
+): string {
   const safeName = sanitizeFilenameSegment(defaultName);
+  const targetDir =
+    baseDir && baseDir.trim().length > 0
+      ? baseDir.trim().replace(/[/\\]+$/, '')
+      : 'C:\\NeuroClip\\export';
+
+  const sep = targetDir.includes('/') && !targetDir.includes('\\') ? '/' : '\\';
   if (format === 'premiere_xml') {
-    return `C:\\NeuroClip\\export\\${safeName}_timeline.xml`;
+    return `${targetDir}${sep}${safeName}_timeline.xml`;
   }
   if (format === 'ass') {
-    return `C:\\NeuroClip\\export\\${safeName}.ass`;
+    return `${targetDir}${sep}${safeName}.ass`;
   }
-  return `C:\\NeuroClip\\export\\${safeName}.srt`;
+  return `${targetDir}${sep}${safeName}.srt`;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -84,6 +117,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   project,
   videoFilePath: propVideoFilePath,
   defaultDraftRoot,
+  defaultExportDir,
   onExportSuccess,
 }) => {
   const [format, setFormat] = useState<ExportFormat>('capcut');
@@ -96,6 +130,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [premiereResult, setPremiereResult] = useState<PremiereExportResult | null>(null);
   const [standaloneResultPath, setStandaloneResultPath] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState<boolean>(false);
+
+  const effectiveVideoPath =
+    propVideoFilePath?.trim() || project.videoFilePath?.trim() || undefined;
+  const effectiveExportDir =
+    defaultExportDir?.trim() || extractParentDirectory(effectiveVideoPath) || undefined;
 
   const mountedRef = useRef<boolean>(true);
   const isOpenRef = useRef<boolean>(isOpen);
@@ -151,10 +190,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         setCustomDraftRoot(defaultDraftRoot);
       }
       const safeName = sanitizeFilenameSegment(project.projectName, project.projectId);
-      setCustomOutputPath(resolveDefaultOutputPath(safeName, format));
+      setCustomOutputPath(resolveDefaultOutputPath(safeName, format, effectiveExportDir));
       prevFormatRef.current = format;
     }
-  }, [isOpen, defaultDraftRoot, project.projectId, project.projectName, format]);
+  }, [
+    isOpen,
+    defaultDraftRoot,
+    project.projectId,
+    project.projectName,
+    format,
+    effectiveExportDir,
+  ]);
 
   // Update default output path suffix when format changes while modal is open
   useEffect(() => {
@@ -165,9 +211,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     if (prevFormatRef.current !== format) {
       prevFormatRef.current = format;
       const safeName = sanitizeFilenameSegment(project.projectName, project.projectId);
-      setCustomOutputPath(resolveDefaultOutputPath(safeName, format));
+      setCustomOutputPath(resolveDefaultOutputPath(safeName, format, effectiveExportDir));
     }
-  }, [isOpen, format, project.projectName, project.projectId]);
+  }, [isOpen, format, project.projectName, project.projectId, effectiveExportDir]);
 
   // Subscribe to real-time export:progress events while modal is open
   useEffect(() => {
@@ -268,7 +314,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         onExportSuccess?.(result);
       } else if (format === 'premiere_xml') {
         const targetPath =
-          customOutputPath.trim() || resolveDefaultOutputPath(fallbackName, 'premiere_xml');
+          customOutputPath.trim() ||
+          resolveDefaultOutputPath(fallbackName, 'premiere_xml', effectiveExportDir);
         const result = await exportPremiereXml(
           project,
           targetPath,
@@ -278,13 +325,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         setPremiereResult(result);
         onExportSuccess?.(result.xmlPath);
       } else if (format === 'ass') {
-        const targetPath = customOutputPath.trim() || resolveDefaultOutputPath(fallbackName, 'ass');
+        const targetPath =
+          customOutputPath.trim() ||
+          resolveDefaultOutputPath(fallbackName, 'ass', effectiveExportDir);
         const resultPath = await exportSubtitlesProjectAss(project, targetPath);
         if (isStaleRun()) return;
         setStandaloneResultPath(resultPath);
         onExportSuccess?.(resultPath);
       } else if (format === 'srt') {
-        const targetPath = customOutputPath.trim() || resolveDefaultOutputPath(fallbackName, 'srt');
+        const targetPath =
+          customOutputPath.trim() ||
+          resolveDefaultOutputPath(fallbackName, 'srt', effectiveExportDir);
         const resultPath = await exportSubtitlesProjectSrt(project, targetPath);
         if (isStaleRun()) return;
         setStandaloneResultPath(resultPath);
@@ -298,7 +349,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         setIsExporting(false);
       }
     }
-  }, [format, project, propVideoFilePath, customDraftRoot, customOutputPath, onExportSuccess]);
+  }, [
+    format,
+    project,
+    propVideoFilePath,
+    customDraftRoot,
+    customOutputPath,
+    effectiveExportDir,
+    onExportSuccess,
+  ]);
 
   if (!isOpen) return null;
 

@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { ERROR_CODES, parseIpcError } from './error.ts';
 import {
   type SliceResult,
@@ -107,5 +108,48 @@ export async function cancelSliceVideoSegment(taskId: string): Promise<boolean> 
     return Boolean(res);
   } catch (err: unknown) {
     throw parseIpcError(err, 'Không thể hủy tiến trình cắt video');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Event Stream Payloads & Listeners
+// ---------------------------------------------------------------------------
+
+export interface SliceProgressPayload {
+  readonly taskId: string;
+  readonly stage: string;
+  readonly percent: number;
+}
+
+export function isSliceProgressPayload(val: unknown): val is SliceProgressPayload {
+  if (typeof val !== 'object' || val === null) {
+    return false;
+  }
+  const obj = val as Record<string, unknown>;
+  return (
+    typeof obj['taskId'] === 'string' &&
+    typeof obj['stage'] === 'string' &&
+    typeof obj['percent'] === 'number' &&
+    Number.isFinite(obj['percent'])
+  );
+}
+
+/**
+ * Subscribe to video slicing progress events.
+ *
+ * @param callback Handler receiving SliceProgressPayload updates.
+ * @returns UnlistenFn to unsubscribe from the 'slice:progress' event.
+ */
+export async function listenSliceProgress(
+  callback: (payload: SliceProgressPayload) => void,
+): Promise<UnlistenFn> {
+  try {
+    return await listen<unknown>('slice:progress', (event) => {
+      if (isSliceProgressPayload(event.payload)) {
+        callback(event.payload);
+      }
+    });
+  } catch (err: unknown) {
+    throw parseIpcError(err, 'Lỗi lắng nghe tiến trình cắt video');
   }
 }

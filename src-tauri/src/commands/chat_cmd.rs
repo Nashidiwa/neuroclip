@@ -3,8 +3,10 @@
 //! Complies with docs/CONVENTIONS.md (zero-panic invariant, `Result<T, AppError>`)
 //! and docs/ARCHITECTURE.md §4.2, §5.3, §6 (ERR-05).
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 
@@ -25,6 +27,48 @@ pub struct ChatFallbackPayload {
     pub code: String,
     pub message: String,
     pub audio_fallback_active: bool,
+}
+
+static ACTIVE_CHAT_TASKS: Mutex<Option<HashMap<String, CancellationToken>>> = Mutex::new(None);
+
+/// Register an active cancellation token for a chat extraction task.
+pub fn register_chat_task_token(task_id: &str, token: CancellationToken) {
+    if let Ok(mut lock) = ACTIVE_CHAT_TASKS.lock() {
+        let map = lock.get_or_insert_with(HashMap::new);
+        map.insert(task_id.to_string(), token);
+    }
+}
+
+/// Unregister a chat extraction cancellation token when the task finishes.
+pub fn unregister_chat_task_token(task_id: &str) {
+    if let Ok(mut lock) = ACTIVE_CHAT_TASKS.lock() {
+        if let Some(map) = lock.as_mut() {
+            map.remove(task_id);
+        }
+    }
+}
+
+/// Cancel a running chat extraction task by ID (or the single active task if task_id is empty).
+pub fn cancel_chat_task_token(task_id: &str) -> bool {
+    if let Ok(mut lock) = ACTIVE_CHAT_TASKS.lock() {
+        if let Some(map) = lock.as_mut() {
+            let key = task_id.trim();
+            if !key.is_empty() {
+                if let Some(token) = map.remove(key) {
+                    token.cancel();
+                    return true;
+                }
+            } else if map.len() == 1 {
+                if let Some(first_key) = map.keys().next().cloned() {
+                    if let Some(token) = map.remove(&first_key) {
+                        token.cancel();
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Extract and normalize chat replay for a VOD.
@@ -65,6 +109,7 @@ pub async fn start_chat_extraction(
     let heatmap_json_path = project_dir.join("chat_heatmap.json");
 
     let cancel_token = CancellationToken::new();
+    register_chat_task_token(&clean_id, cancel_token.clone());
     let source_type = detect_source_type(&clean_url);
 
     // 1. Download raw chat stream based on source platform
@@ -104,6 +149,20 @@ pub async fn start_chat_extraction(
     };
 
     if let Err(err) = download_res {
+        unregister_chat_task_token(&clean_id);
+        if cancel_token.is_cancelled() || matches!(&err, AppError::TaskCancelled) {
+            let _ = app.emit(
+                "chat:progress",
+                ChatProgressPayload {
+                    task_id: clean_id.clone(),
+                    stage: "cancelled".to_string(),
+                    percent: 0.0,
+                    messages_extracted: 0,
+                    current_offset_sec: 0.0,
+                },
+            );
+            return Err(AppError::TaskCancelled);
+        }
         if let AppError::Ingestion(IngestError::ChatReplayUnavailable) = &err {
             tracing::warn!(
                 "Chat replay unavailable for VOD {}. Activating Audio RMS fallback (ERR-05).",
@@ -122,23 +181,74 @@ pub async fn start_chat_extraction(
         return Err(err);
     }
 
+    if cancel_token.is_cancelled() {
+        unregister_chat_task_token(&clean_id);
+        let _ = app.emit(
+            "chat:progress",
+            ChatProgressPayload {
+                task_id: clean_id,
+                stage: "cancelled".to_string(),
+                percent: 0.0,
+                messages_extracted: 0,
+                current_offset_sec: 0.0,
+            },
+        );
+        return Err(AppError::TaskCancelled);
+    }
+
     // 2. Normalize raw chat in blocking thread (strict concurrency separation per CONVENTIONS §2.2)
     let normalizer = StreamingChatNormalizer::new(clean_id.clone(), &project_dir);
     let norm_raw_path = raw_chat_path.clone();
     let norm_out_path = normalized_json_path.clone();
     let token_clone = cancel_token.clone();
 
-    let (_total_msgs, ndjson_path) = tokio::task::spawn_blocking(move || {
+    let norm_res = tokio::task::spawn_blocking(move || {
         normalizer.normalize_file(&norm_raw_path, &norm_out_path, &token_clone)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("Chat normalization worker failed: {e}")))??;
+    .map_err(|e| AppError::Internal(format!("Chat normalization worker failed: {e}")))?;
+
+    let (_total_msgs, ndjson_path) = match norm_res {
+        Ok(res) => res,
+        Err(e) => {
+            unregister_chat_task_token(&clean_id);
+            if cancel_token.is_cancelled() || matches!(&e, AppError::TaskCancelled) {
+                let _ = app.emit(
+                    "chat:progress",
+                    ChatProgressPayload {
+                        task_id: clean_id,
+                        stage: "cancelled".to_string(),
+                        percent: 0.0,
+                        messages_extracted: 0,
+                        current_offset_sec: 0.0,
+                    },
+                );
+                return Err(AppError::TaskCancelled);
+            }
+            return Err(e);
+        }
+    };
+
+    if cancel_token.is_cancelled() {
+        unregister_chat_task_token(&clean_id);
+        let _ = app.emit(
+            "chat:progress",
+            ChatProgressPayload {
+                task_id: clean_id,
+                stage: "cancelled".to_string(),
+                percent: 0.0,
+                messages_extracted: 0,
+                current_offset_sec: 0.0,
+            },
+        );
+        return Err(AppError::TaskCancelled);
+    }
 
     // 3. Compute 10s sliding window density heatmap and persist metadata on blocking pool
     let normalizer_heat = StreamingChatNormalizer::new(clean_id.clone(), &project_dir);
     let norm_path_for_manifest = normalized_json_path.clone();
     let project_dir_for_manifest = project_dir.clone();
-    let heatmap = tokio::task::spawn_blocking(move || {
+    let heatmap_res = tokio::task::spawn_blocking(move || {
         let heatmap = normalizer_heat.compute_density_heatmap(&ndjson_path, 10.0, 10.0)?;
 
         if let Ok(heatmap_str) = serde_json::to_string(&heatmap) {
@@ -162,7 +272,17 @@ pub async fn start_chat_extraction(
         Ok::<_, AppError>(heatmap)
     })
     .await
-    .map_err(|e| AppError::Internal(format!("Heatmap computation worker failed: {e}")))??;
+    .map_err(|e| AppError::Internal(format!("Heatmap computation worker failed: {e}")))?;
+
+    let heatmap = match heatmap_res {
+        Ok(h) => h,
+        Err(e) => {
+            unregister_chat_task_token(&clean_id);
+            return Err(e);
+        }
+    };
+
+    unregister_chat_task_token(&clean_id);
 
     let _ = app.emit(
         "chat:progress",
@@ -180,6 +300,30 @@ pub async fn start_chat_extraction(
     );
 
     Ok(normalized_json_path.to_string_lossy().to_string())
+}
+
+/// Cancel a running chat extraction task.
+///
+/// # Errors
+/// Returns `Ok(true)` if task was found and cancelled, `Ok(false)` otherwise.
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub fn cancel_chat_extraction(task_id: String, app: AppHandle) -> Result<bool, AppError> {
+    let clean_id = task_id.trim();
+    let cancelled = cancel_chat_task_token(clean_id);
+    if cancelled {
+        let _ = app.emit(
+            "chat:progress",
+            ChatProgressPayload {
+                task_id: clean_id.to_string(),
+                stage: "cancelled".to_string(),
+                percent: 0.0,
+                messages_extracted: 0,
+                current_offset_sec: 0.0,
+            },
+        );
+    }
+    Ok(cancelled)
 }
 
 /// Retrieve paginated chat events adhering to Schema 5.3 contract.
@@ -317,8 +461,53 @@ pub async fn get_chat_velocity_heatmap(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_chat_task_token_lifecycle() {
+        let token = CancellationToken::new();
+        let task_id = "vod_test_12345";
+
+        register_chat_task_token(task_id, token.clone());
+        assert!(!token.is_cancelled());
+
+        let cancelled = cancel_chat_task_token(task_id);
+        assert!(cancelled);
+        assert!(token.is_cancelled());
+
+        // Cancelling again should return false (already removed)
+        let cancelled_again = cancel_chat_task_token(task_id);
+        assert!(!cancelled_again);
+    }
+
+    #[test]
+    fn test_chat_task_token_empty_id_fallback_single_task() {
+        let token = CancellationToken::new();
+        let task_id = "vod_single";
+
+        register_chat_task_token(task_id, token.clone());
+        assert!(!token.is_cancelled());
+
+        // Empty task_id should cancel the single registered task
+        let cancelled = cancel_chat_task_token("");
+        assert!(cancelled);
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn test_chat_task_token_unregister() {
+        let token = CancellationToken::new();
+        let task_id = "vod_unreg";
+
+        register_chat_task_token(task_id, token.clone());
+        unregister_chat_task_token(task_id);
+
+        let cancelled = cancel_chat_task_token(task_id);
+        assert!(!cancelled);
+        assert!(!token.is_cancelled());
+    }
 
     #[tokio::test]
     async fn test_chat_commands_reject_invalid_vod_id() {

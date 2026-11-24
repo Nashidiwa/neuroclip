@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Volume2,
   MessageSquare,
+  Loader2,
 } from 'lucide-react';
 import {
   type HighlightCluster,
@@ -34,6 +35,9 @@ export interface HighlightViewerProps {
   readonly clusters: readonly HighlightCluster[];
   readonly selectedClusterId?: string | null | undefined;
   readonly onSelectCluster?: ((cluster: HighlightCluster) => void) | undefined;
+  readonly onSliceCluster?: ((cluster: HighlightCluster) => void) | undefined;
+  readonly isSlicing?: boolean | undefined;
+  readonly slicingClusterId?: string | null | undefined;
   readonly onToggleBookmark?: ((clusterId: string, nextBookmarked: boolean) => void) | undefined;
   readonly onRefresh?: (() => void) | undefined;
   readonly isLoading?: boolean | undefined;
@@ -47,6 +51,9 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
   clusters,
   selectedClusterId,
   onSelectCluster,
+  onSliceCluster,
+  isSlicing = false,
+  slicingClusterId = null,
   onToggleBookmark,
   onRefresh,
   isLoading = false,
@@ -329,15 +336,32 @@ export const HighlightViewer: React.FC<HighlightViewerProps> = ({
                       <div className="flex items-center space-x-1 opacity-80 transition-opacity group-hover:opacity-100">
                         <button
                           type="button"
+                          data-testid={`slice-cluster-${cluster.clusterId}`}
+                          disabled={isSlicing}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSelectCluster?.(cluster);
+                            if (onSliceCluster) {
+                              onSliceCluster(cluster);
+                            } else {
+                              onSelectCluster?.(cluster);
+                            }
                           }}
                           title="Cắt phân đoạn (TASK-M4-13 Range Slicer)"
-                          className="flex items-center space-x-1 rounded border border-border-dark bg-bg-primary px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-700"
+                          className={`flex items-center space-x-1 rounded border border-border-dark bg-bg-primary px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-700 ${
+                            isSlicing ? 'cursor-not-allowed opacity-60' : ''
+                          }`}
                         >
-                          <Scissors className="h-3 w-3 text-accent-vedal" />
-                          <span>Cắt Clip</span>
+                          {isSlicing && slicingClusterId === cluster.clusterId ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin text-accent-vedal" />
+                              <span>Đang cắt...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Scissors className="h-3 w-3 text-accent-vedal" />
+                              <span>Cắt Clip</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>

@@ -21,10 +21,12 @@ pub use highlight_cmd::{
 };
 
 pub use chat_cmd::{
-    __cmd__get_chat_events, __cmd__get_chat_velocity_heatmap, __cmd__start_chat_extraction,
+    __cmd__cancel_chat_extraction, __cmd__get_chat_events, __cmd__get_chat_velocity_heatmap,
+    __cmd__start_chat_extraction, __tauri_command_name_cancel_chat_extraction,
     __tauri_command_name_get_chat_events, __tauri_command_name_get_chat_velocity_heatmap,
-    __tauri_command_name_start_chat_extraction, get_chat_events, get_chat_velocity_heatmap,
-    start_chat_extraction,
+    __tauri_command_name_start_chat_extraction, cancel_chat_extraction, cancel_chat_task_token,
+    get_chat_events, get_chat_velocity_heatmap, register_chat_task_token, start_chat_extraction,
+    unregister_chat_task_token,
 };
 pub use config_cmd::{
     __cmd__complete_onboarding, __cmd__delete_api_key, __cmd__detect_hardware, __cmd__get_api_key,

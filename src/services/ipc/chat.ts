@@ -137,6 +137,22 @@ export async function getChatVelocityHeatmap(
   }
 }
 
+/**
+ * Cancel a running chat extraction task.
+ *
+ * @param taskId Unique identifier or VOD ID of the active chat extraction task.
+ * @returns True if active task was found and cancelled, false otherwise.
+ */
+export async function cancelChatExtraction(taskId: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>('cancel_chat_extraction', {
+      taskId: taskId.trim(),
+    });
+  } catch (err: unknown) {
+    throw parseIpcError(err, 'Không thể hủy tiến trình trích xuất chat');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Event Listeners
 // ---------------------------------------------------------------------------

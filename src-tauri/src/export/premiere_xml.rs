@@ -12,7 +12,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
@@ -204,6 +204,30 @@ fn percent_encode_preserving_escapes(segment: &str) -> String {
     out
 }
 
+fn resolve_relative_to_absolute(trimmed: &str) -> String {
+    let p = Path::new(trimmed);
+    let abs_path = if let Ok(canon) = std::fs::canonicalize(p) {
+        canon
+    } else {
+        let base = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let combined = base.join(p);
+        let mut components = Vec::new();
+        for comp in combined.components() {
+            match comp {
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    if let Some(std::path::Component::Normal(_)) = components.last() {
+                        components.pop();
+                    }
+                }
+                c => components.push(c),
+            }
+        }
+        components.iter().collect::<PathBuf>()
+    };
+    abs_path.to_string_lossy().to_string()
+}
+
 /// Convert a local or UNC filesystem path (Windows or POSIX) into an RFC-3986 `file://` URL.
 ///
 /// Preserves Windows drive letters (`C:`) and `/` path separators while percent-encoding spaces,
@@ -241,7 +265,22 @@ pub fn path_to_file_url(path: &str) -> String {
         return format!("file://{}", percent_encode_preserving_escapes(&rest));
     }
 
-    let normalized = trimmed.replace('\\', "/");
+    let is_windows_drive = {
+        let b = trimmed.as_bytes();
+        b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':'
+    };
+    let is_absolute_posix = trimmed.starts_with('/');
+    let is_unc_or_device = trimmed.starts_with(r"\\") || trimmed.starts_with("//");
+
+    let resolved_path_str: String;
+    let path_to_process = if !is_windows_drive && !is_absolute_posix && !is_unc_or_device {
+        resolved_path_str = resolve_relative_to_absolute(trimmed);
+        &resolved_path_str
+    } else {
+        trimmed
+    };
+
+    let normalized = path_to_process.replace('\\', "/");
 
     let unc_rest = if let Some(device_rest) = normalized
         .strip_prefix("//?/")
@@ -1043,6 +1082,37 @@ pub mod tests {
             "file://localhost/C:/already/encoded.mp4"
         );
         assert_eq!(path_to_file_url("   "), "");
+    }
+
+    #[test]
+    fn test_path_to_file_url_relative_path_normalization() {
+        let url_dot = path_to_file_url("./clips/clip_1.mp4");
+        assert!(
+            url_dot.starts_with("file://localhost/"),
+            "URL must start with file://localhost/, got: {url_dot}"
+        );
+        assert!(
+            !url_dot.contains("/./") && !url_dot.contains("/."),
+            "URL must not contain relative dot segments, got: {url_dot}"
+        );
+        assert!(
+            url_dot.ends_with("/clips/clip_1.mp4"),
+            "URL must terminate with resolved filename, got: {url_dot}"
+        );
+
+        let url_dotdot = path_to_file_url(r"..\test\clip.mp4");
+        assert!(
+            url_dotdot.starts_with("file://localhost/"),
+            "URL must start with file://localhost/, got: {url_dotdot}"
+        );
+        assert!(
+            !url_dotdot.contains("/../") && !url_dotdot.contains(".."),
+            "URL must not contain parent dotdot segments, got: {url_dotdot}"
+        );
+        assert!(
+            url_dotdot.ends_with("/test/clip.mp4"),
+            "URL must terminate with resolved filename, got: {url_dotdot}"
+        );
     }
 
     #[test]

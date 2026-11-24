@@ -30,7 +30,17 @@ import { useProjectStore } from './stores/useProjectStore.ts';
 import { useIngestionStore } from './stores/useIngestionStore.ts';
 import { useChatStore } from './stores/useChatStore.ts';
 import { useHighlightStore } from './stores/useHighlightStore.ts';
-import type { VodManifest } from './services/ipc/ingestion.ts';
+import { useStudioStore } from './stores/useStudioStore.ts';
+import { useTranscriptStore } from './stores/useTranscriptStore.ts';
+import { toLocalAssetUrl, type VodManifest } from './services/ipc/ingestion.ts';
+import {
+  sliceVideoSegment,
+  cancelSliceVideoSegment,
+  listenSliceProgress,
+  type SliceProgressPayload,
+} from './services/ipc/slice.ts';
+import { parseIpcError, type IpcErrorResponse } from './services/ipc/error.ts';
+import type { HighlightCluster } from './types/highlight.ts';
 
 type AppTab = 'overview' | 'ingestion' | 'highlights' | 'studio';
 
@@ -141,6 +151,84 @@ export const App: React.FC = () => {
     void detectHighlightsForVod(activeVodId, duration, audioPath ? { audioPath } : undefined).catch(
       () => {},
     );
+  };
+
+  const [isSlicing, setIsSlicing] = useState<boolean>(false);
+  const [slicingClusterId, setSlicingClusterId] = useState<string | null>(null);
+  const [slicingTaskId, setSlicingTaskId] = useState<string | null>(null);
+  const [sliceProgress, setSliceProgress] = useState<SliceProgressPayload | null>(null);
+  const [sliceError, setSliceError] = useState<IpcErrorResponse | null>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listenSliceProgress((payload) => {
+      setSliceProgress(payload);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  const handleSliceCluster = async (cluster: HighlightCluster): Promise<void> => {
+    const vodId = activeVodId ?? manifest?.vodId ?? 'vod_current';
+    const customInputSource = manifest?.localVideoPath ?? manifest?.videoStreamUrl ?? undefined;
+    const taskId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `slice_${Date.now()}`;
+
+    setIsSlicing(true);
+    setSlicingClusterId(cluster.clusterId);
+    setSlicingTaskId(taskId);
+    setSliceProgress({ taskId, stage: 'starting', percent: 0 });
+    setSliceError(null);
+
+    try {
+      const res = await sliceVideoSegment({
+        vodId,
+        startSec: cluster.startSec,
+        endSec: cluster.endSec,
+        clusterId: cluster.clusterId,
+        customInputSource,
+      });
+
+      if (res.clipPath) {
+        useStudioStore.getState().setVideoSrc(toLocalAssetUrl(res.clipPath), res.clipPath);
+        const transcriptState = useTranscriptStore.getState();
+        const segments =
+          transcriptState.container?.segments ?? transcriptState.streamedChunks ?? [];
+        if (segments.length > 0) {
+          useStudioStore.getState().setSegments(segments);
+        }
+        setActiveTab('studio');
+      }
+    } catch (err: unknown) {
+      const ipcErr = parseIpcError(err, 'Lỗi cắt phân đoạn Highlight');
+      setSliceError(ipcErr);
+    } finally {
+      setIsSlicing(false);
+      setSlicingClusterId(null);
+      setSlicingTaskId(null);
+      setSliceProgress(null);
+    }
+  };
+
+  const handleCancelSlice = async (): Promise<void> => {
+    if (!slicingTaskId) return;
+    try {
+      await cancelSliceVideoSegment(slicingTaskId);
+    } catch {
+      // Ignored
+    } finally {
+      setIsSlicing(false);
+      setSlicingClusterId(null);
+      setSlicingTaskId(null);
+      setSliceProgress(null);
+    }
   };
 
   const handleWindowMinimize = (): void => {
@@ -572,6 +660,49 @@ export const App: React.FC = () => {
                 />
               )}
 
+              {sliceError && (
+                <ErrorBanner
+                  error={sliceError}
+                  onDismiss={() => setSliceError(null)}
+                  title="Lỗi cắt phân đoạn video"
+                />
+              )}
+
+              {isSlicing && sliceProgress && (
+                <div
+                  data-testid="slice-progress-banner"
+                  className="flex items-center justify-between rounded-lg border border-accent-vedal/40 bg-bg-secondary p-3"
+                >
+                  <div className="flex flex-1 items-center space-x-3 pr-4">
+                    <RefreshCw className="h-4 w-4 animate-spin text-accent-vedal" />
+                    <div className="flex-1">
+                      <div className="flex justify-between text-xs text-slate-300">
+                        <span>Đang cắt phân đoạn: {sliceProgress.stage}</span>
+                        <span>{Math.round(sliceProgress.percent)}%</span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-bg-primary">
+                        <div
+                          className="h-full bg-accent-vedal transition-all duration-300"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, sliceProgress.percent))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="cancel-slice-button"
+                    onClick={() => {
+                      void handleCancelSlice();
+                    }}
+                    className="rounded border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/20"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              )}
+
               {activeVodId && (
                 <div className="flex items-center justify-end gap-3">
                   {!canDetectHighlights && (
@@ -601,6 +732,11 @@ export const App: React.FC = () => {
                 selectedClusterId={selectedClusterId}
                 isLoading={isLoadingHighlights}
                 onSelectCluster={(cluster) => selectCluster(cluster.clusterId)}
+                onSliceCluster={(cluster) => {
+                  void handleSliceCluster(cluster);
+                }}
+                isSlicing={isSlicing}
+                slicingClusterId={slicingClusterId}
                 onToggleBookmark={(clusterId, nextBookmarked) => {
                   void toggleBookmark(clusterId, nextBookmarked).catch(() => {});
                 }}

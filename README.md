@@ -16,8 +16,8 @@
 [![React: v18.3](https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript: Strict 5.6](https://img.shields.io/badge/TypeScript-Strict%205.6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS: 3.4](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Tests: 705 Vitest + 137 Node + 470 Rust](https://img.shields.io/badge/Tests-705%20Vitest%20%2B%20137%20Node%20%2B%20470%20Rust%20Passing-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
-[![Status: v1 In Progress](https://img.shields.io/badge/Status-v1%20In%20Progress%20(26%2F33%20Tasks)-orange?style=flat-square)](#-current-implementation)
+[![Tests: 754 Vitest + 140 Node + 509 Rust](https://img.shields.io/badge/Tests-754%20Vitest%20%2B%20140%20Node%20%2B%20509%20Rust-brightgreen?style=flat-square&logo=vitest&logoColor=white)](src/test/)
+[![Status: v1.0.0 MVP In Progress](https://img.shields.io/badge/Status-v1.0.0%20MVP%20In%20Progress%20(30%2F34%20Tasks)-orange?style=flat-square)](#-current-implementation)
 
 [Overview](#-tổng-quan-dự-án) •
 [Current Implementation](#-current-implementation) •
@@ -49,14 +49,14 @@ Hiện tại quy trình clip hoàn toàn thủ công, có thể tốn nhiều gi
 
 ## ⚡ Current Implementation
 
-Dự án hiện đang ở **Phase 4: Implementation & Verification** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
+Dự án hiện đang ở **Phase 4: Implementation & Verification** hướng tới phát hành **`v1.0.0 MVP`** theo mô hình Single Source of Truth (SSOT). Tiến độ hiện tại đạt:
 
 ```text
-[██████████████████████████░░░░░░░] 26 / 33 Tasks Hoàn thành (78.8% v1 Core)
-705 Vitest Tests Passing (37 files) • 137 Node Native Runner Tests Passing (53 suites) • 470 Rust Tests Passing (27 active binaries) • Zero Unhandled Panics
+[████████████████████████████░░░░░] 30 / 34 Tasks Hoàn thành (88.2% v1.0.0 MVP)
+754 Vitest Tests Passing (41 files) • 140 Node Native Runner Tests Passing (54 suites) • 509 Cargo Rust Tests (29 active test binaries) • Zero Unhandled Panics
 ```
 
-Toàn bộ 26 tasks thuộc 7 Milestones đầu tiên (`M4.1`–`M4.7`) đã hoàn thành và vượt qua toàn bộ cổng kiểm định tự động (cùng đợt Stabilization `P0`–`P2`):
+Toàn bộ 30 tasks thuộc 8 Milestones đầu tiên (`M4.1`–`M4.8`) đã hoàn thành và vượt qua toàn bộ cổng kiểm định tự động (cùng đợt Stabilization `P0`–`P2`):
 
 - **Desktop Shell & Neuro Design (`TASK-M4-01`)**:
   - Chạy native trên Windows 10/11 qua Tauri v2 (WebView2) với mức chiếm dụng RAM tĩnh $\le 90\text{MB}$.
@@ -142,12 +142,24 @@ Toàn bộ 26 tasks thuộc 7 Milestones đầu tiên (`M4.1`–`M4.7`) đã ho�
 - **Bộ xuất dòng thời gian Premiere Pro XML (FCP7 XML) & Tiến độ xuất NLE (`TASK-M4-26`)**:
   - Triển khai `premiere_xml.rs` xuất tệp XML chuẩn **FCP7 (`<xmeml version="4">`)** UTF-8 (không BOM), tương thích Adobe Premiere Pro 2022–2025 và DaVinci Resolve 18–19 (`60fps` non-NTSC, dynamic `1920x1080`/`1080x1920`, synchronized Video + 48kHz stereo Audio tracks với `<link>`, single `<file id>` dedup + self-closing refs, RFC-3986 `file://localhost/...` & UNC `file://server/share/...`, sequence `<marker>` Vietsub sync) với tốc độ $\le 100\text{ms}$.
   - Đăng ký IPC `export_premiere_xml` (`export_cmd.rs`) và phát event `export:progress` (`{ projectId, percent, currentStep }`) từ `spawn_blocking` cho cả Premiere XML lẫn CapCut Draft; `ExportModal.tsx` bổ sung tùy chọn `'premiere_xml'` và thanh tiến trình `role="progressbar"` real-time.
+- **Động cơ thăm dò phần cứng & Đề xuất cấu hình (`TASK-M4-27`)**:
+  - Tinh chỉnh `config/hardware.rs` đọc Win32 Registry `ProcessorNameString`, `GlobalMemoryStatusEx` và 64-bit `qwMemorySize` (tránh giới hạn 32-bit 4095MB), tính dung sai kit RAM 16GB ($\ge 15000\text{MB}$), đề xuất `offline_local` / `hybrid` / `cloud_byok` trong $< 2\text{ms}$ (SLA $\le 200\text{ms}$).
+  - Bọc probe & `atomic_save_json` lưu `hardware_profile.json` vào `tokio::task::spawn_blocking` (`config_cmd.rs`), tích hợp `useHardwareStore.ts` (race guard, override preservation) và `HardwareRecommendation.tsx` (Acrylic Dark Theme).
+- **Onboarding Wizard & Két sắt Windows Credential (`TASK-M4-28`)**:
+  - Triển khai `core/keyring.rs` (2-tier Windows Credential Locker + In-memory/DPAPI fallback có cô lập namespace song song), loại bỏ 100% plaintext API key khỏi `app_config.json` (`#[serde(default, skip_serializing)]`), nối `KeyringManager` vào `stt_cmd.rs` & `translation_cmd.rs`.
+  - Xây dựng `OnboardingWizardModal.tsx` 4 bước (nhúng `HardwareRecommendation`), `ApiKeyTester.tsx` kiểm tra kết nối Groq/Gemini (SLA timeout $\le 2.0\text{s}$), tích hợp luồng khởi chạy lần đầu trong `App.tsx`.
+- **Quản lý & Tự động cập nhật Sidecars + Phòng vệ Anti-Bot (`TASK-M4-29`)**:
+  - Xây dựng `sidecar/manifest.rs`, `sidecar/updater.rs` và `commands/updater_cmd.rs` (`check_sidecar_updates`, `download_and_apply_sidecar_update`, `get_sidecar_status`, `get_anti_bot_guidance`, `trigger_bot_defense_update`) + `services/ipc/updater.ts`.
+  - Xác thực SHA-256 theo luồng dữ liệu, tráo đổi nguyên tử với backup `.old` và auto-rollback (`ERR-04`), phát tiến độ nền `sidecar:status`, phối hợp xoay vòng User-Agent & hướng dẫn nạp cookie chống HTTP 403.
+- **Tích hợp luồng toàn tuyến App Pipeline Wiring (`TASK-M4-29B`)**:
+  - Nối hoàn chỉnh `HighlightViewer.tsx` $\rightarrow$ `sliceVideoSegment` (`slice.ts` + `listenSliceProgress`) $\rightarrow$ `useStudioStore` dual-path (`videoSrc = asset://...`, `videoPath = raw OS path`) $\rightarrow$ `SubtitleStudio` $\rightarrow$ `ExportModal` (tự nhận thư mục chứa video nguồn), kèm chuẩn hóa relative path trong `premiere_xml.rs`.
+  - Bổ sung lệnh hủy trích xuất chat `cancel_chat_extraction` (`chat_cmd.rs` với `ACTIVE_CHAT_TASKS` token registry), cập nhật `TWITCH_COMMENTS_SHA256` và ban hành [`RFC-003`](docs/adr/RFC-003-twitch-gql-http-client.md) (PO chốt Option 1 giữ `curl.exe` cho `v1.0.0 MVP`, đưa Option 2 `reqwest` TLS keep-alive vào [`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 ---
 
-## 🗺️ Lộ trình phát triển (v1 Milestone Roadmap)
+## 🗺️ Lộ trình phát triển (v1.0.0 MVP Milestone Roadmap)
 
-Toàn bộ 33 tasks của v1 (32 baseline + 1 task tích hợp `TASK-M4-29B`) được tổ chức thành 9 Milestones tuần tự. Quá trình phát triển tuân thủ luồng dữ liệu đầu-cuối:
+Toàn bộ 34 tasks của chu kỳ v1.0.0 (32 baseline + `TASK-M4-29B` tích hợp + `TASK-M4-33` đại cập nhật tài liệu hậu đóng gói) được tổ chức thành 9 Milestones tuần tự. Quá trình phát triển tuân thủ luồng dữ liệu đầu-cuối:
 
 ```mermaid
 flowchart LR
@@ -188,14 +200,15 @@ flowchart LR
     end
 
     subgraph M48 ["M4.8: Integration"]
-        G1["Onboarding Wizard"]
-        G2["DPAPI Key Vault"]
+        G1["Hardware & Wizard"]
+        G2["Keyring & Updater"]
         G3["App Pipeline Wiring"]
     end
 
-    subgraph M49 ["M4.9: Packaging"]
-        P1["E2E Benchmark"]
+    subgraph M49 ["M4.9: Packaging & Docs"]
+        P1["E2E & Stress Tests"]
         P2["NSIS/MSI Installer"]
+        P3["Docs & AGENTS Overhaul"]
     end
 
     M41 --> M42 --> M43 --> M44 --> M45 --> M46 --> M47 --> M48 --> M49
@@ -212,11 +225,11 @@ flowchart LR
 | **M4.5** | **Bản địa hóa & Vietsub Swarm Lore** | Gemini 1.5 Flash Theatrical Framing & `BLOCK_NONE` (`TASK-M4-17` ✅), Từ điển 12 thuật ngữ Swarm Lore & Hybrid Diarization (`TASK-M4-18` ✅), Smart line-breaker & CPS (`TASK-M4-19` ✅) | **3 / 3** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.6** | **Trình biên tập Subtitle Studio UI** | Canvas video sync timeline (`TASK-M4-20` ✅), Virtualized subtitle list 60fps (`TASK-M4-21` ✅), Bàn phím số 1-chạm đổi màu nhân vật (`TASK-M4-22` ✅), Đèn cảnh báo CPS (`TASK-M4-23` ✅) | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
 | **M4.7** | **Xuất bản NLE đa nền tảng** | Xuất Aegisub .ASS (chuẩn màu style), .SRT (`M4-24` ✅), CapCut PC Draft JSON & Dual Export (`M4-25` ✅), Adobe Premiere Pro XML FCP7 `<xmeml version="4">` & `export:progress` (`M4-26` ✅) | **3 / 3** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
-| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI, First-run setup wizard, Windows DPAPI Credential Locker, Sidecar auto-updater, App Pipeline Wiring (`HighlightViewer` → `Slicer` → `useStudioStore`, `M4-29B`) | **0 / 4** | ⏳ *Planned* |
-| **M4.9** | **Kiểm thử E2E & Đóng gói bộ cài** | E2E synthetic pipeline test harness, Low-end PC stress benchmark (<100MB RAM), Bộ cài đặt Windows NSIS / MSI chính thức | **0 / 3** | ⏳ *Planned* |
-| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **26 / 33** | **78.8% Complete** |
+| **M4.8** | **Tích hợp hệ thống & Bảo mật** | Hardware probe recommendation UI (`M4-27` ✅), First-run wizard & Windows Credential/DPAPI Keyring (`M4-28` ✅), Sidecar auto-updater SHA-256 (`M4-29` ✅), App Pipeline Wiring & `cancel_chat_extraction` (`M4-29B` ✅) | **4 / 4** | <kbd>ĐÃ HOÀN THÀNH</kbd> |
+| **M4.9** | **Kiểm thử E2E, Đóng gói & Chuẩn hóa Docs** | E2E synthetic pipeline harness (`M4-30`), Low-end PC stress benchmark (`M4-31`), Bộ cài đặt Windows NSIS/MSI + CSP (`M4-32`), Đại cập nhật cấu trúc tài liệu, phiên bản, `README.md` & `AGENTS.md` (`M4-33` — *dự kiến sơ bộ, chốt lại với PO trước khi làm*) | **0 / 4** | ⏳ *Next Up* |
+| **TỔNG** | **Toàn bộ 9 Milestones thuộc v1.0.0 MVP** | **Cam kết zero-panic backend, zero-any frontend, coverage 100% contracts** | **30 / 34** | **88.2% Complete** |
 
-> 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 33 tasks (`TASK-M4-01` đến `TASK-M4-32` + `TASK-M4-29B`) được theo dõi tập trung tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md).
+> 💡 **Single Source of Truth:** Chi tiết đặc tả kỹ thuật, tiêu chí nghiệm thu định lượng (AC) và QA checklist của toàn bộ 34 tasks (`TASK-M4-01` đến `TASK-M4-33` + `TASK-M4-29B`) được theo dõi tại [`docs/TASK_BOARD.md`](docs/TASK_BOARD.md); các tối ưu & tính năng dự kiến cho phiên bản sau được ghi nhận tại [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
@@ -288,10 +301,10 @@ graph TD
 | **Error Handling** | `thiserror` v1.0 | Định nghĩa cây lỗi phân cấp `AppError` và chuẩn hóa **48 mã lỗi canonical** (parity 48/48 với TS `error.ts`). |
 | **Frontend Framework** | [React 18.3](https://react.dev/), [TypeScript 5.6](https://www.typescriptlang.org/) (Strict Mode) | Giao diện người dùng SPA hiện đại, kiểm tra kiểu nghiêm ngặt (Zero-any). |
 | **UI & Styling** | [Tailwind CSS 3.4](https://tailwindcss.com/), `clsx`, `tailwind-merge`, [Lucide Icons](https://lucide.dev/) | Hệ thống thiết kế Dark Theme Neuro-sama chuẩn **PO Option 1** (`#FFB6C1`, `#FF0055`, `#98FB98`, `#FFD700`, `#87CEEB`) với Acrylic/Mica backdrop. |
-| **State Management** | `src/stores/createStore.ts` (`React.useSyncExternalStore`, API tương thích [Zustand](https://github.com/pmndrs/zustand)) | Quản lý 8 stores nhẹ (kèm `useStudioStore`), memoized selector, chống race condition. |
+| **State Management** | `src/stores/createStore.ts` (`React.useSyncExternalStore`, API tương thích [Zustand](https://github.com/pmndrs/zustand)) | Quản lý 9 stores nhẹ (gồm `useHardwareStore`, `useStudioStore`), memoized selector, chống race condition. |
 | **Build & Tooling** | [Vite 5.4](https://vitejs.dev/), PostCSS, Autoprefixer, ESLint 9, Prettier + `prettier-plugin-tailwindcss` | Đóng gói giao diện tốc độ cao, linter tuân thủ Flat Config. |
 | **Pure Rust Neural VAD** | `tract-onnx` v0.21 + `silero_vad_16k.onnx` | Suy luận Silero VAD đồ thị tĩnh 16kHz thuần Rust (không cần DLL C++), kèm DSP fallback an toàn (`ADR-008`). |
-| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | **1,312 bài kiểm tra tự động** (**705 Vitest** [37 files] + **137 Node** [53 suites] + **470 Cargo Rust tests** [27 active binaries: 1 lib + 26 integration]). |
+| **Testing Harness** | [Vitest 2.1](https://vitest.dev/), `@testing-library/react`, Node.js native test runner (`--test`), `cargo test` | **1,403 bài kiểm tra tự động** (**754 Vitest** [41 files] + **140 Node** [54 suites] + **509 Cargo Rust tests** [29 active test binaries: 1 lib + 28 integration]). |
 | **Portable Sidecars** | `ffmpeg.exe` (v6.0+), `yt-dlp.exe` (latest), `faster-whisper-worker`, `whisper.cpp` (`main.exe`) | Trích xuất âm thanh trực tuyến, xử lý mẫu PCM 16kHz, cào chat replay Twitch/YouTube, bóc băng giọng nói local INT8 / Q5_K. |
 
 ### Data Contracts & JSON Schemas (SSOT):
@@ -341,16 +354,17 @@ npm run dev
 Dự án áp dụng quy chuẩn kiểm thử nghiêm ngặt, bao gồm cả các kịch bản tấn công dồn dập (Adversarial Stress Testing):
 
 ```powershell
-# Chạy bộ test hợp đồng & AST bằng Node.js Native Test Runner (137 tests, 53 suites)
+# Chạy bộ test hợp đồng & AST bằng Node.js Native Test Runner (140 tests, 54 suites)
 npm test
 
-# Chạy toàn bộ 705 bài kiểm thử bằng Vitest (37 files: Unit, Component, Adversarial)
+# Chạy toàn bộ 754 bài kiểm thử bằng Vitest (41 files: Unit, Component, Adversarial)
 npm run test:vitest   # hoặc: npm run test:run
 
-# Chạy toàn bộ 470 bài kiểm thử Rust backend song song (27 active binaries: 1 lib + 26 integration)
+# Chạy toàn bộ 509 bài kiểm thử Rust backend (29 active test binaries: 1 lib + 28 integration)
 cargo test --manifest-path src-tauri/Cargo.toml --all-targets
+# (Lưu ý debug mode: nếu test SLA `groq_client_test` bị nghẽn CPU khi chạy song song, chạy riêng `--test groq_client_test -- --test-threads=1`)
 
-# Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant: 92 files) & build Vite
+# Kiểm tra kiểu dữ liệu TypeScript nghiêm ngặt (Zero-any Invariant: 101 files) & build Vite
 npm run typecheck
 npm run build
 
@@ -379,12 +393,13 @@ File cài đặt sau khi đóng gói sẽ nằm tại: `src-tauri/target/release
 neuroclip/
 ├── .agents/                    # Bộ quy chuẩn và skills dành cho Multi-Agent Team
 │   └── skills/                 # Skills hỗ trợ lập trình, tài liệu và frontend design
-├── docs/                       # TÀI LIỆU SSOT (Single Source of Truth)
-│   ├── adr/                    # 8 Architectural Decision Records (ADR-001 -> ADR-008) & RFC-001..002
+├── docs/                       # TÀI LIỆU SSOT & LỘ TRÌNH (Target Product: v1.0.0 MVP)
+│   ├── adr/                    # 8 Architectural Decision Records (ADR-001 -> ADR-008) & RFC-001..003
 │   ├── ARCHITECTURE.md         # Đặc tả kiến trúc hệ thống, data contracts, failure modes
 │   ├── CONVENTIONS.md          # Tiêu chuẩn code Rust/TypeScript, clippy lint, IPC protocol
 │   ├── PRD.md                  # Tài liệu yêu cầu sản phẩm, chân dung người dùng, epics
-│   └── TASK_BOARD.md           # Bảng theo dõi tiến độ chi tiết 33 tasks và 9 milestones
+│   ├── ROADMAP.md              # Kế hoạch tối ưu & tính năng dự kiến cho bản patch / v1.1+ / v2.0
+│   └── TASK_BOARD.md           # Bảng theo dõi tiến độ chi tiết 34 tasks và 9 milestones
 ├── scripts/                    # Scripts tự động hóa hỗ trợ phát triển (icon generator...)
 ├── src/                        # FRONTEND TYPESCRIPT & REACT SPA
 │   ├── components/             # React UI Components
@@ -392,38 +407,39 @@ neuroclip/
 │   │   ├── dashboard/          # IngestionDashboard, DropZone (local video)
 │   │   ├── export/             # ExportModal (CapCut Draft, Premiere XML, .ASS, .SRT)
 │   │   ├── highlight/          # HighlightViewer, index.ts
+│   │   ├── onboarding/         # HardwareRecommendation, OnboardingWizardModal, ApiKeyTester
 │   │   └── studio/             # SubtitleStudio, VideoCanvas, TimelineScrubber, VirtualizedSegmentList, SegmentRow, TimecodeNudge, CharacterHotkeyBar, CPSIndicator
 │   ├── hooks/                  # Custom React Hooks (useStudioHotkeys: Numpad 1-5, IME isolation)
 │   ├── services/               # Tầng dịch vụ kết nối và gọi IPC
 │   │   ├── config/             # Hardware probing client, App settings client
-│   │   ├── ipc/                # error.ts (48/48), export, sidecar, storage, ingestion, chat, highlight, slice, stt, translation
+│   │   ├── ipc/                # error.ts (48/48), export, sidecar, storage, ingestion, chat, highlight, slice, stt, translation, updater
 │   │   └── logging/            # Client logging service, Token redactor, Logger store bridge
-│   ├── stores/                 # createStore.ts (useSyncExternalStore, Zustand-compatible) + 8 stores (useStudioStore...)
+│   ├── stores/                 # createStore.ts (useSyncExternalStore, Zustand-compatible) + 9 stores (useHardwareStore, useStudioStore...)
 │   ├── styles/                 # Theme tokens (PO Option 1), globals.css, theme.css, theme.ts
 │   ├── types/                  # TypeScript Data Contracts (chat, export, highlight, range_slicer, transcript, translation)
 │   ├── utils/                  # text_wrap.ts (line wrap & CPS), cps.ts (Unicode CPS calculation & time borrowing assistant)
-│   ├── test/                   # Test Suites (Vitest 705 tests / 37 files, Node runner 137 tests / 53 suites, typecheck.node.ts)
-│   ├── App.tsx                 # Acrylic shell + 4-tab minimal workspace (overview / ingestion / highlights / studio)
+│   ├── test/                   # Test Suites (Vitest 754 tests / 41 files, Node runner 140 tests / 54 suites, typecheck.node.ts)
+│   ├── App.tsx                 # Acrylic shell + 4-tab minimal workspace + Onboarding wizard + E2E Slice wiring
 │   └── main.tsx                # Root mount bọc <GlobalErrorBoundary>
 ├── src-tauri/                  # BACKEND RUST CORE (TAURI V2 NATIVE)
 │   ├── capabilities/           # Tauri v2 capability permissions (`default.json`)
 │   ├── icons/                  # Bộ biểu tượng ứng dụng đa kích thước cho Windows
 │   ├── resources/              # Tài nguyên tĩnh nhúng kèm ứng dụng (`models/silero_vad_16k.onnx`)
 │   ├── src/                    # Mã nguồn Rust
-│   │   ├── commands/           # 43 Tauri IPC Commands (`chat_cmd`, `config_cmd`, `export_cmd`, `highlight_cmd`, `ingest_cmd`, `log_cmd`, `slice_cmd`, `storage_cmd`, `stt_cmd`, `translation_cmd`)
-│   │   ├── config/             # Early M4-27/28 backend (`app_config.rs`, `atomic.rs`, `hardware.rs`)
-│   │   ├── core/               # `storage.rs` (Win32 FreeSpace, `validate_vod_id`), `custom_protocol.rs` (`asset://` Range 206)
+│   │   ├── commands/           # 56 Tauri IPC Commands across 11 modules (`chat_cmd`, `config_cmd`, `export_cmd`, `highlight_cmd`, `ingest_cmd`, `log_cmd`, `slice_cmd`, `storage_cmd`, `stt_cmd`, `translation_cmd`, `updater_cmd`)
+│   │   ├── config/             # `app_config.rs` (zero plaintext keys), `atomic.rs`, `hardware.rs` (Win32 probe)
+│   │   ├── core/               # `storage.rs` (Win32 FreeSpace, `validate_vod_id`), `custom_protocol.rs` (`asset://` Range 206), `keyring.rs` (2-tier Windows Credential + fallback)
 │   │   ├── error/              # Cây lỗi phân cấp `AppError` (`mod.rs`) và 48 mã lỗi `ERR_*` (`codes.rs`)
 │   │   ├── export/             # `mod.rs` (Schema 5.6), `ass_exporter.rs`, `srt_exporter.rs`, `capcut_draft.rs`, `capcut_schema.rs`, `premiere_xml.rs`
 │   │   ├── highlight/          # `bucket.rs`, `zscore.rs`, `emote_filter.rs`, `swarm_dict.rs`, `audio_rms.rs`, `energy_analyzer.rs`, `fusion.rs`, `cluster.rs`
 │   │   ├── ingestion/          # `streamer.rs`, `cookies.rs`, `buffer.rs`, `validator.rs`, `local_importer.rs`, `range_slicer.rs`, `chat_parser.rs`, `twitch_gql.rs`, `youtube_chat.rs`
 │   │   ├── logging/            # Hạ tầng Tracing NDJSON (`mod.rs`), xoay vòng log (`rotation.rs`), lọc secret redaction (`secrets.rs`)
-│   │   ├── sidecar/            # `supervisor.rs` (bounded 1k lines, `sidecar:progress`) & `kill_switch.rs` (Windows Job Objects)
+│   │   ├── sidecar/            # `supervisor.rs` (bounded 1k lines, `sidecar:progress`), `kill_switch.rs` (Windows Job Objects), `manifest.rs`, `updater.rs` (SHA-256 + atomic swap)
 │   │   ├── stt/                # `audio_prep.rs`, `vad.rs` (`tract-onnx` Silero VAD + DSP fallback), `vad_bridge.rs`, `groq_client.rs`, `faster_whisper_worker.rs`, `whisper_sidecar.rs`, `model_manager.rs`, `transcript_parser.rs`, `subtitle_export.rs` (facade trỏ về `crate::export`)
 │   │   ├── translation/        # `gemini_client.rs`, `prompt_builder.rs` (`Theatrical Framing`), `lore_dictionary.rs` (12 Swarm terms), `pronoun_matrix.rs` (PO Option 1), `diarization.rs` (Hybrid 3-stage), `line_wrapper.rs`, `cps_optimizer.rs` (Time Borrowing)
-│   │   ├── lib.rs              # Clippy denies/pedantic, đăng ký `asset://` & 43 IPC handlers
+│   │   ├── lib.rs              # Clippy denies/pedantic, đăng ký `asset://` & 56 IPC handlers
 │   │   └── main.rs             # Điểm vào thực thi ứng dụng Windows desktop
-│   ├── tests/                  # 26 Integration & adversarial test suites (gồm `remediation_m4_test.rs`) + `fixtures/silero_test.wav`
+│   ├── tests/                  # 28 Integration & adversarial test suites (gồm `keyring_test.rs`, `sidecar_updater_test.rs`, `remediation_m4_test.rs`) + `fixtures/silero_test.wav`
 │   ├── build.rs                # Tauri build script
 │   ├── Cargo.toml              # Khai báo crate dependencies, target Windows Win32 APIs
 │   ├── rustfmt.toml            # Quy chuẩn format code Rust (stable toolchain)
