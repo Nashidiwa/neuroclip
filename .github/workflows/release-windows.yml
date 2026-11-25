@@ -1,5 +1,11 @@
 name: Release Windows
 
+# Maintenance note:
+# Sidecar versions and SHA-256 hashes are pinned in `env:` below (fail-closed).
+# When bumping `YTDLP_VERSION` or `FFMPEG_VERSION` manually, you must also update
+# `YTDLP_SHA256`, `FFMPEG_ESSENTIALS_SHA256`, and `FFMPEG_SHARED_SHA256` to match
+# the official upstream release checksums.
+
 on:
   push:
     tags:
@@ -20,7 +26,10 @@ permissions:
 
 env:
   YTDLP_VERSION: "2025.03.31"
-  FFMPEG_VERSION: "7.1.1"
+  YTDLP_SHA256: "5374c46da65bbe661d3220a23646c785c3e53264485edc31436e8dba3889337c"
+  FFMPEG_VERSION: "9.1"
+  FFMPEG_ESSENTIALS_SHA256: "b9bbbb3acece000cbeec994f856649354e52c773807841e78908374b24d658fd"
+  FFMPEG_SHARED_SHA256: "d010a19b78d5eae62dca8d4c7f195acd56dae8ed6fb85f72821edd9437da2898"
   NSIS_MAX_BYTES: "125829120"
 
 jobs:
@@ -131,7 +140,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path $sidecarDir | Out-Null
           New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
-          # 1. yt-dlp.exe (pinned official yt-dlp/yt-dlp release + SHA2-256SUMS)
+          # 1. yt-dlp.exe (pinned official yt-dlp/yt-dlp release + pinned SHA-256 + SHA2-256SUMS cross-check)
+          $ytPinnedHash = $env:YTDLP_SHA256.ToLowerInvariant()
+          if ($ytPinnedHash -notmatch '^[0-9a-f]{64}$') {
+            throw "Invalid YTDLP_SHA256 format in workflow env: $ytPinnedHash"
+          }
+
           $ytBase = "https://github.com/yt-dlp/yt-dlp/releases/download/$($env:YTDLP_VERSION)"
           $ytExe = Join-Path $sidecarDir "yt-dlp.exe"
           $ytSums = Join-Path $tmpDir "SHA2-256SUMS"
@@ -143,13 +157,16 @@ jobs:
           if (-not $ytExpectedLine) {
             throw "Failed to locate yt-dlp.exe entry in official SHA2-256SUMS for $($env:YTDLP_VERSION)"
           }
-          $ytExpectedHash = ($ytExpectedLine.Trim() -split '\s+')[0].ToLowerInvariant()
-          if ($ytExpectedHash -notmatch '^[0-9a-f]{64}$') {
-            throw "Invalid SHA-256 hash format in SHA2-256SUMS: $ytExpectedHash"
+          $ytUpstreamHash = ($ytExpectedLine.Trim() -split '\s+')[0].ToLowerInvariant()
+          if ($ytUpstreamHash -notmatch '^[0-9a-f]{64}$') {
+            throw "Invalid SHA-256 hash format in SHA2-256SUMS: $ytUpstreamHash"
+          }
+          if ($ytUpstreamHash -ne $ytPinnedHash) {
+            throw "yt-dlp.exe upstream SHA2-256SUMS mismatch against pinned YTDLP_SHA256! Pinned: $ytPinnedHash, Upstream: $ytUpstreamHash"
           }
           $ytActualHash = (Get-FileHash -Path $ytExe -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($ytActualHash -ne $ytExpectedHash) {
-            throw "yt-dlp.exe SHA-256 mismatch! Expected: $ytExpectedHash, Actual: $ytActualHash"
+          if ($ytActualHash -ne $ytPinnedHash) {
+            throw "yt-dlp.exe SHA-256 mismatch! Expected: $ytPinnedHash, Actual: $ytActualHash"
           }
           Write-Host "Verified yt-dlp.exe SHA-256: $ytActualHash"
 
@@ -179,30 +196,48 @@ jobs:
             throw "Asset $ffArchiveName not found in GyanD/codexffmpeg release $($env:FFMPEG_VERSION)"
           }
 
-          $ffExpectedHash = $null
+          $ffPinnedHash = if ($env:FFMPEG_VARIANT -eq 'full_build-shared') {
+            $env:FFMPEG_SHARED_SHA256.ToLowerInvariant()
+          } else {
+            $env:FFMPEG_ESSENTIALS_SHA256.ToLowerInvariant()
+          }
+
+          $ffUpstreamHash = $null
           $shaAsset = $ffRelease.assets | Where-Object { $_.name -eq "$ffArchiveName.sha256" } | Select-Object -First 1
           if ($shaAsset) {
             $shaTmp = Join-Path $tmpDir "$ffArchiveName.sha256"
             Invoke-WebRequest -Uri $shaAsset.browser_download_url -OutFile $shaTmp
             $rawSha = (Get-Content $shaTmp -Raw).Trim()
             if ($rawSha -match '([0-9a-fA-F]{64})') {
-              $ffExpectedHash = $Matches[1].ToLowerInvariant()
+              $ffUpstreamHash = $Matches[1].ToLowerInvariant()
             }
           }
-          if (-not $ffExpectedHash -and $ffAsset.digest -and ($ffAsset.digest -match '^sha256:([0-9a-fA-F]{64})$')) {
-            $ffExpectedHash = $Matches[1].ToLowerInvariant()
+          if (-not $ffUpstreamHash -and $ffAsset.digest -and ($ffAsset.digest -match '^sha256:([0-9a-fA-F]{64})$')) {
+            $ffUpstreamHash = $Matches[1].ToLowerInvariant()
           }
-          if (-not $ffExpectedHash) {
+          if (-not $ffUpstreamHash -and $ffRelease.body) {
+            $escapedName = [regex]::Escape($ffArchiveName)
+            $bodyPattern = "(?:^|[\s*\`])$escapedName(?:[\`\s:-])*(?:\r?\n\s*(?:sha256[:\s]*)?)?([0-9a-fA-F]{64})\b"
+            if ($ffRelease.body -match $bodyPattern) {
+              $ffUpstreamHash = $Matches[1].ToLowerInvariant()
+            }
+          }
+          if (-not $ffUpstreamHash) {
             $gyanShaUrl = "https://www.gyan.dev/ffmpeg/builds/packages/$ffArchiveName.sha256"
             try {
               $gyanSha = (Invoke-RestMethod -Uri $gyanShaUrl).ToString().Trim()
               if ($gyanSha -match '([0-9a-fA-F]{64})') {
-                $ffExpectedHash = $Matches[1].ToLowerInvariant()
+                $ffUpstreamHash = $Matches[1].ToLowerInvariant()
               }
             } catch {
               Write-Host "gyan.dev .sha256 fallback unavailable: $_"
             }
           }
+
+          if ($ffUpstreamHash -and $ffPinnedHash -and ($ffUpstreamHash -ne $ffPinnedHash)) {
+            throw "Upstream SHA-256 mismatch against pinned hash for $ffArchiveName! Pinned: $ffPinnedHash, Upstream: $ffUpstreamHash"
+          }
+          $ffExpectedHash = if ($ffPinnedHash) { $ffPinnedHash } else { $ffUpstreamHash }
           if (-not $ffExpectedHash) {
             throw "Could not retrieve official SHA-256 checksum for $ffArchiveName from GyanD/codexffmpeg $($env:FFMPEG_VERSION)"
           }
