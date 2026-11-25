@@ -371,3 +371,56 @@ fn test_malformed_lines_and_unicode_resilience() {
     assert_eq!(e.message, "Chào Neuro và Vedal 💖 Tutel!");
     assert!(e.is_swarm_emote);
 }
+
+#[test]
+fn test_parse_twitch_gql_emote_alias_and_youtube_multi_action() {
+    let twitch_emote_alias = r#"{
+        "id": "msg_alias_1",
+        "contentOffsetSeconds": 18.25,
+        "commenter": { "displayName": "SwarmFan" },
+        "message": {
+            "fragments": [
+                { "text": "KEKW", "emote": { "emoteID": "425618" } }
+            ]
+        }
+    }"#;
+    let parsed_twitch = parse_raw_chat_line(twitch_emote_alias);
+    assert!(parsed_twitch.is_some());
+    let te = parsed_twitch.unwrap();
+    assert_eq!(te.author, "SwarmFan");
+    assert_eq!(te.message, "KEKW");
+    assert!(te.is_swarm_emote);
+    assert!(te.emotes_detected.contains(&"KEKW".to_string()));
+
+    let yt_multi_action = r#"{
+        "replayChatItemAction": {
+            "actions": [
+                {
+                    "addLiveChatTickerItemAction": {
+                        "durationSec": "10"
+                    }
+                },
+                {
+                    "addChatItemAction": {
+                        "item": {
+                            "liveChatTextMessageRenderer": {
+                                "message": {
+                                    "runs": [{ "text": "Cinema! KEKW" }]
+                                },
+                                "authorName": { "simpleText": "YtViewer" },
+                                "videoOffsetTimeMsec": "64500"
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }"#;
+    let parsed_yt = parse_raw_chat_line(yt_multi_action);
+    assert!(parsed_yt.is_some());
+    let ye = parsed_yt.unwrap();
+    assert!((ye.timestamp_sec - 64.5).abs() < 1e-4);
+    assert_eq!(ye.author, "YtViewer");
+    assert_eq!(ye.message, "Cinema! KEKW");
+    assert!(ye.is_swarm_emote);
+}

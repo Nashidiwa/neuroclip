@@ -9,6 +9,7 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, IngestError, SidecarError, StorageError};
+use crate::ingestion::cookies::{parse_browser_type, try_build_bot_defense_args, CookieSource};
 use crate::ingestion::streamer::{assign_child_to_job_guard, validate_http_url};
 use crate::ingestion::twitch_gql::ChatProgressPayload;
 use crate::sidecar::resolve_sidecar_binary;
@@ -17,9 +18,27 @@ fn resolve_ytdlp_binary() -> String {
     resolve_sidecar_binary("yt-dlp", "NEUROCLIP_YTDLP_PATH")
 }
 
-fn build_youtube_chat_args(validated_url: &str, template_path: &Path) -> Vec<String> {
-    vec![
+fn resolve_cookie_source(
+    cookies_path: Option<&str>,
+    browser_cookies: Option<&str>,
+) -> CookieSource {
+    if let Some(path) = cookies_path.map(str::trim).filter(|p| !p.is_empty()) {
+        return CookieSource::File(path.to_string());
+    }
+    if let Some(browser) = browser_cookies.and_then(parse_browser_type) {
+        return CookieSource::Browser(browser);
+    }
+    CookieSource::None
+}
+
+fn build_youtube_chat_args(
+    validated_url: &str,
+    template_path: &Path,
+    bot_defense_args: &[String],
+) -> Vec<String> {
+    let mut args = vec![
         "--skip-download".to_string(),
+        "--ignore-no-formats-error".to_string(),
         "--write-subs".to_string(),
         "--sub-langs".to_string(),
         "live_chat".to_string(),
@@ -29,22 +48,63 @@ fn build_youtube_chat_args(validated_url: &str, template_path: &Path) -> Vec<Str
         "3".to_string(),
         "--socket-timeout".to_string(),
         "20".to_string(),
+    ];
+    args.extend(bot_defense_args.iter().cloned());
+    args.extend([
         "-o".to_string(),
         template_path.to_string_lossy().to_string(),
         "--".to_string(),
         validated_url.to_string(),
-    ]
+    ]);
+    args
+}
+
+fn is_youtube_bot_blocked(stderr: &str) -> bool {
+    stderr.contains("Sign in to confirm you're not a bot")
+        || stderr.contains("Sign in to confirm you\u{2019}re not a bot")
+        || stderr.contains("HTTP Error 403")
+        || stderr.contains("HTTP Error 429")
+        || stderr.contains("429")
 }
 
 /// Download YouTube Live Chat replay NDJSON stream using managed yt-dlp.
 ///
 /// If video has no live chat replay (e.g. standard pre-recorded upload or disabled replay),
 /// returns `ERR_INGEST_CHAT_UNAVAILABLE` within <= 200ms to allow soft fallback (ERR-05).
-#[allow(clippy::too_many_lines)]
 pub async fn fetch_youtube_live_chat_replay<F>(
     url: &str,
     vod_id: &str,
     output_dir: &Path,
+    cancel_token: CancellationToken,
+    progress_callback: F,
+) -> Result<PathBuf, AppError>
+where
+    F: Fn(ChatProgressPayload) + Send + Sync + 'static,
+{
+    fetch_youtube_live_chat_replay_with_cookies(
+        url,
+        vod_id,
+        output_dir,
+        None,
+        None,
+        cancel_token,
+        progress_callback,
+    )
+    .await
+}
+
+/// Download YouTube Live Chat replay NDJSON stream using managed yt-dlp with optional cookies.
+///
+/// # Errors
+/// Returns [`AppError::Ingestion`] on invalid URL, anti-bot challenge, or missing live chat replay,
+/// [`AppError::Sidecar`] if `yt-dlp` fails to launch, or [`AppError::TaskCancelled`] on cancellation.
+#[allow(clippy::too_many_lines)]
+pub async fn fetch_youtube_live_chat_replay_with_cookies<F>(
+    url: &str,
+    vod_id: &str,
+    output_dir: &Path,
+    cookies_path: Option<&str>,
+    browser_cookies: Option<&str>,
     cancel_token: CancellationToken,
     progress_callback: F,
 ) -> Result<PathBuf, AppError>
@@ -80,6 +140,9 @@ where
         }
     }
 
+    let cookie_source = resolve_cookie_source(cookies_path, browser_cookies);
+    let bot_defense_args = try_build_bot_defense_args(&cookie_source, None)?;
+
     let ytdlp_bin = resolve_ytdlp_binary();
     let template_path = output_dir.join(format!("{vod_id}.%(ext)s"));
 
@@ -91,7 +154,7 @@ where
         current_offset_sec: 0.0,
     });
 
-    let args = build_youtube_chat_args(validated_url, &template_path);
+    let args = build_youtube_chat_args(validated_url, &template_path, &bot_defense_args);
 
     let mut cmd = Command::new(&ytdlp_bin);
     cmd.args(&args)
@@ -122,10 +185,20 @@ where
     };
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    if stderr.contains("Sign in to confirm you’re not a bot") || stderr.contains("429") {
+    if is_youtube_bot_blocked(&stderr) {
         return Err(AppError::Ingestion(IngestError::BotBlocked(
             stderr.to_string(),
         )));
+    }
+
+    if !output.status.success() {
+        let stderr_preview: String = stderr.chars().take(240).collect();
+        tracing::warn!(
+            vod_id,
+            exit_code = output.status.code(),
+            stderr = %stderr_preview,
+            "yt-dlp YouTube live chat exited with non-zero status"
+        );
     }
 
     if stderr.contains("No live chat found")
@@ -171,13 +244,34 @@ mod tests {
 
     #[test]
     fn test_build_youtube_chat_args_places_double_dash_before_url() {
+        let bot_args =
+            try_build_bot_defense_args(&resolve_cookie_source(None, Some("chrome")), None).unwrap();
         let args = build_youtube_chat_args(
             "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
             Path::new("C:\\tmp\\vod.%(ext)s"),
+            &bot_args,
         );
         let len = args.len();
         assert_eq!(args[len - 2], "--");
         assert_eq!(args[len - 1], "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        assert!(args.contains(&"--ignore-no-formats-error".to_string()));
+        assert!(args.contains(&"--cookies-from-browser".to_string()));
+        assert!(args.contains(&"chrome".to_string()));
+    }
+
+    #[test]
+    fn test_is_youtube_bot_blocked_handles_ascii_curly_and_http_errors() {
+        assert!(is_youtube_bot_blocked(
+            "ERROR: Sign in to confirm you're not a bot."
+        ));
+        assert!(is_youtube_bot_blocked(
+            "ERROR: Sign in to confirm you\u{2019}re not a bot."
+        ));
+        assert!(is_youtube_bot_blocked("HTTP Error 403: Forbidden"));
+        assert!(is_youtube_bot_blocked("HTTP Error 429: Too Many Requests"));
+        assert!(!is_youtube_bot_blocked(
+            "There's no subtitles for the requested languages"
+        ));
     }
 
     #[tokio::test]

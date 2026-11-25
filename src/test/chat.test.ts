@@ -682,4 +682,40 @@ describe('useChatStore React Lifecycle & Referential Invariants', () => {
     expect(chatStore.getState().progress).toBeNull();
     expect(chatStore.getState().fallbackNotice).toBeNull();
   });
+
+  it('forwards non-empty cookie options and supports cancelling active chat extraction', async () => {
+    mockedInvoke.mockResolvedValueOnce('C:\\cache\\yt_chat.json');
+    mockedInvoke.mockResolvedValueOnce({
+      vod_id: 'vod_yt_cookies',
+      window_seconds: 10.0,
+      step_seconds: 10.0,
+      total_buckets: 0,
+      max_velocity_mps: 0,
+      peak_timestamp_sec: 0,
+      points: [],
+    });
+
+    await chatStore
+      .getState()
+      .extractChat('vod_yt_cookies', 'https://www.youtube.com/watch?v=abc12345', {
+        browserCookies: 'chrome',
+        cookiesPath: '   ',
+      });
+
+    expect(mockedInvoke).toHaveBeenCalledWith('start_chat_extraction', {
+      vodId: 'vod_yt_cookies',
+      url: 'https://www.youtube.com/watch?v=abc12345',
+      browserCookies: 'chrome',
+    });
+
+    chatStore.setState({ vodId: 'vod_yt_cookies', isExtracting: true });
+    mockedInvoke.mockResolvedValueOnce(true);
+    const cancelled = await chatStore.getState().cancelChat();
+    expect(cancelled).toBe(true);
+    expect(mockedInvoke).toHaveBeenCalledWith('cancel_chat_extraction', {
+      taskId: 'vod_yt_cookies',
+    });
+    expect(chatStore.getState().isExtracting).toBe(false);
+    expect(chatStore.getState().progress).toBeNull();
+  });
 });

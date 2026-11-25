@@ -40,9 +40,21 @@ import {
   type SliceProgressPayload,
 } from './services/ipc/slice.ts';
 import { parseIpcError, type IpcErrorResponse } from './services/ipc/error.ts';
+import type { ChatExtractionOptions } from './services/ipc/chat.ts';
 import type { HighlightCluster } from './types/highlight.ts';
 
 type AppTab = 'overview' | 'ingestion' | 'highlights' | 'studio';
+
+function formatChatOffset(seconds: number): string {
+  const safe = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+  const hrs = Math.floor(safe / 3600);
+  const mins = Math.floor((safe % 3600) / 60);
+  const secs = safe % 60;
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 export const App: React.FC = () => {
   const theme = loadTheme();
@@ -78,12 +90,19 @@ export const App: React.FC = () => {
 
   const manifest = useIngestionStore((s) => s.manifest);
   const ingestionUrl = useIngestionStore((s) => s.url);
+  const ingestionCookiesPath = useIngestionStore((s) => s.cookiesPath);
+  const ingestionBrowserCookies = useIngestionStore((s) => s.browserCookies);
 
   const chatVodId = useChatStore((s) => s.vodId);
   const isExtractingChat = useChatStore((s) => s.isExtracting);
+  const hasChatReplay = useChatStore((s) => s.hasChatReplay);
+  const chatFilePath = useChatStore((s) => s.chatFilePath);
+  const chatProgress = useChatStore((s) => s.progress);
+  const chatHeatmap = useChatStore((s) => s.chatHeatmap);
   const chatFallbackNotice = useChatStore((s) => s.fallbackNotice);
   const chatError = useChatStore((s) => s.error);
   const extractChat = useChatStore((s) => s.extractChat);
+  const cancelChat = useChatStore((s) => s.cancelChat);
   const clearFallbackNotice = useChatStore((s) => s.clearFallbackNotice);
   const clearChatError = useChatStore((s) => s.clearError);
 
@@ -141,16 +160,33 @@ export const App: React.FC = () => {
 
   const handleExtractChat = (): void => {
     if (!activeVodId || isLocalFileManifest || !ingestionUrl.trim()) return;
-    void extractChat(activeVodId, ingestionUrl).catch(() => {});
+    const chatOptions: { cookiesPath?: string; browserCookies?: string } = {};
+    if (ingestionCookiesPath && ingestionCookiesPath.trim().length > 0) {
+      chatOptions.cookiesPath = ingestionCookiesPath.trim();
+    }
+    if (ingestionBrowserCookies && ingestionBrowserCookies.trim().length > 0) {
+      chatOptions.browserCookies = ingestionBrowserCookies;
+    }
+    const resolvedOptions: ChatExtractionOptions | undefined =
+      Object.keys(chatOptions).length > 0 ? chatOptions : undefined;
+    void extractChat(activeVodId, ingestionUrl, resolvedOptions).catch(() => {});
   };
 
   const handleDetectHighlights = (): void => {
     if (!activeVodId || !canDetectHighlights || !manifest) return;
     const duration = manifest.durationSeconds;
-    const audioPath = manifest.audioPath;
-    void detectHighlightsForVod(activeVodId, duration, audioPath ? { audioPath } : undefined).catch(
-      () => {},
-    );
+    const detectOptions: { chatEventsPath?: string; audioPath?: string } = {};
+    if (manifest.audioPath) {
+      detectOptions.audioPath = manifest.audioPath;
+    }
+    if (chatFilePath) {
+      detectOptions.chatEventsPath = chatFilePath;
+    }
+    void detectHighlightsForVod(
+      activeVodId,
+      duration,
+      Object.keys(detectOptions).length > 0 ? detectOptions : undefined,
+    ).catch(() => {});
   };
 
   const [isSlicing, setIsSlicing] = useState<boolean>(false);
@@ -618,6 +654,56 @@ export const App: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {isExtractingChat && (
+                <div
+                  data-testid="chat-progress-banner"
+                  className="flex items-center justify-between rounded-lg border border-accent-chat/40 bg-bg-secondary p-3"
+                >
+                  <div className="flex flex-1 items-center space-x-3 pr-4">
+                    <RefreshCw className="h-4 w-4 animate-spin text-accent-chat" />
+                    <div className="flex-1 text-xs text-slate-200">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>Đang trích xuất Chat Replay...</span>
+                        <span className="font-mono text-accent-chat">
+                          {chatProgress?.messagesExtracted ?? 0} tin nhắn (
+                          {formatChatOffset(chatProgress?.currentOffsetSec ?? 0)})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="cancel-chat-button"
+                    onClick={() => {
+                      void cancelChat().catch(() => {});
+                    }}
+                    className="rounded border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/20"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              )}
+
+              {!isExtractingChat && hasChatReplay && (
+                <div
+                  role="status"
+                  data-testid="chat-ready-badge"
+                  className="flex items-center justify-between rounded-lg border border-accent-vedal/40 bg-accent-vedal/10 p-3 text-xs text-accent-vedal"
+                >
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-accent-vedal" />
+                    <span>
+                      Đã trích xuất Chat Replay
+                      {chatHeatmap
+                        ? `: ${chatHeatmap.points.reduce((sum, pt) => sum + pt.messageCount, 0)} tin nhắn (peak ${formatChatOffset(chatHeatmap.peakTimestampSec)})`
+                        : chatProgress && chatProgress.messagesExtracted > 0
+                          ? `: ${chatProgress.messagesExtracted} tin nhắn`
+                          : ''}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {chatFallbackNotice && (
                 <div

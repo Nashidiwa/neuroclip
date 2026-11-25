@@ -16,8 +16,25 @@ use crate::ingestion::chat_parser::{
     ChatEventsContainer, ChatHeatmapResponse, StreamingChatNormalizer,
 };
 use crate::ingestion::streamer::{detect_source_type, validate_http_url, VodManifest};
-use crate::ingestion::twitch_gql::{fetch_twitch_vod_chat_gql, ChatProgressPayload};
-use crate::ingestion::youtube_chat::fetch_youtube_live_chat_replay;
+use crate::ingestion::twitch_gql::{
+    extract_twitch_vod_id, fetch_twitch_vod_chat_gql_with_task_id, ChatProgressPayload,
+};
+use crate::ingestion::youtube_chat::fetch_youtube_live_chat_replay_with_cookies;
+
+/// Resolve the numeric Twitch VOD ID to send to GQL, falling back to extracting it from `clean_url`
+/// when `clean_id` is synthetic/non-numeric (e.g., `vod_custom_alias`).
+#[must_use]
+fn resolve_twitch_gql_vod_id<'a>(clean_id: &'a str, clean_url: &'a str) -> &'a str {
+    let from_id = extract_twitch_vod_id(clean_id);
+    if !from_id.is_empty() && from_id.chars().all(|c| c.is_ascii_digit()) {
+        return from_id;
+    }
+    let from_url = extract_twitch_vod_id(clean_url);
+    if !from_url.is_empty() && from_url.chars().all(|c| c.is_ascii_digit()) {
+        return from_url;
+    }
+    clean_id
+}
 
 /// Fallback notification payload emitted to Frontend UI when chat replay is missing.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -84,6 +101,8 @@ pub fn cancel_chat_task_token(task_id: &str) -> bool {
 pub async fn start_chat_extraction(
     vod_id: String,
     url: String,
+    cookies_path: Option<String>,
+    browser_cookies: Option<String>,
     app: AppHandle,
 ) -> Result<String, AppError> {
     let clean_url = validate_http_url(&url)?.to_string();
@@ -119,13 +138,22 @@ pub async fn start_chat_extraction(
     };
 
     let download_res = if source_type == "twitch_vod" {
-        fetch_twitch_vod_chat_gql(&clean_id, &raw_chat_path, cancel_token.clone(), progress_cb)
-            .await
+        let twitch_query_id = resolve_twitch_gql_vod_id(&clean_id, &clean_url);
+        fetch_twitch_vod_chat_gql_with_task_id(
+            &clean_id,
+            twitch_query_id,
+            &raw_chat_path,
+            cancel_token.clone(),
+            progress_cb,
+        )
+        .await
     } else {
-        match fetch_youtube_live_chat_replay(
+        match fetch_youtube_live_chat_replay_with_cookies(
             &clean_url,
             &clean_id,
             &project_dir,
+            cookies_path.as_deref(),
+            browser_cookies.as_deref(),
             cancel_token.clone(),
             progress_cb,
         )
@@ -208,7 +236,7 @@ pub async fn start_chat_extraction(
     .await
     .map_err(|e| AppError::Internal(format!("Chat normalization worker failed: {e}")))?;
 
-    let (_total_msgs, ndjson_path) = match norm_res {
+    let (total_msgs, ndjson_path) = match norm_res {
         Ok(res) => res,
         Err(e) => {
             unregister_chat_task_token(&clean_id);
@@ -228,6 +256,24 @@ pub async fn start_chat_extraction(
             return Err(e);
         }
     };
+
+    if total_msgs == 0 {
+        unregister_chat_task_token(&clean_id);
+        tracing::warn!(
+            "Chat replay produced 0 valid normalized messages for VOD {}. Activating Audio RMS fallback (ERR-05).",
+            clean_id
+        );
+        let _ = app.emit(
+            "chat:fallback",
+            ChatFallbackPayload {
+                task_id: clean_id,
+                code: codes::ERR_INGEST_CHAT_UNAVAILABLE.to_string(),
+                message: "Chat replay không khả dụng hoặc không có tin nhắn hợp lệ. Đang tự động chuyển sang phân tích highlight bằng Năng lượng Âm thanh.".to_string(),
+                audio_fallback_active: true,
+            },
+        );
+        return Err(AppError::Ingestion(IngestError::ChatReplayUnavailable));
+    }
 
     if cancel_token.is_cancelled() {
         unregister_chat_task_token(&clean_id);
@@ -491,6 +537,25 @@ mod tests {
             }
         }
         ChatTokenTestGuard { _lock: guard }
+    }
+
+    #[test]
+    fn test_resolve_twitch_gql_vod_id_prefers_numeric_url_when_vod_id_synthetic() {
+        assert_eq!(
+            resolve_twitch_gql_vod_id(
+                "vod_custom_alias",
+                "https://www.twitch.tv/vedal987/video/2939581544?t=5s"
+            ),
+            "2939581544"
+        );
+        assert_eq!(
+            resolve_twitch_gql_vod_id("vod_2939581544", "https://www.twitch.tv/videos/2939581544"),
+            "2939581544"
+        );
+        assert_eq!(
+            resolve_twitch_gql_vod_id("vod_custom_alias", "https://www.twitch.tv/videos/"),
+            "vod_custom_alias"
+        );
     }
 
     #[test]

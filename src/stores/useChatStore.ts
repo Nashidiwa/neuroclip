@@ -14,7 +14,9 @@ import {
   type ChatHeatmapResponse,
   type ChatProgressPayload,
   type ChatFallbackPayload,
+  type ChatExtractionOptions,
   startChatExtraction,
+  cancelChatExtraction,
   getChatEvents,
   getChatVelocityHeatmap,
   listenChatProgress,
@@ -40,7 +42,8 @@ export interface ChatState {
 
   // Actions
   setVodId: (vodId: string | null) => void;
-  extractChat: (vodId: string, url: string) => Promise<string>;
+  extractChat: (vodId: string, url: string, options?: ChatExtractionOptions) => Promise<string>;
+  cancelChat: () => Promise<boolean>;
   fetchChatEvents: (vodId: string, limit?: number, offset?: number) => Promise<ChatEventsContainer>;
   fetchHeatmap: (vodId: string, windowSec?: number) => Promise<ChatHeatmapResponse>;
   clearFallbackNotice: () => void;
@@ -202,12 +205,19 @@ export const useChatStore = createStore<ChatState>((set, get) => ({
     set({ vodId });
   },
 
-  extractChat: async (vodId: string, url: string): Promise<string> => {
+  extractChat: async (
+    vodId: string,
+    url: string,
+    options?: ChatExtractionOptions,
+  ): Promise<string> => {
     const seq = ++extractSeq;
     const epoch = resetEpoch;
     set({
       vodId,
       isExtracting: true,
+      hasChatReplay: false,
+      chatFilePath: null,
+      progress: null,
       error: null,
       fallbackNotice: null,
     });
@@ -218,7 +228,7 @@ export const useChatStore = createStore<ChatState>((set, get) => ({
         return '';
       }
 
-      const filePath = await startChatExtraction(vodId, url);
+      const filePath = await startChatExtraction(vodId, url, options);
       if (seq !== extractSeq || epoch !== resetEpoch) {
         return filePath;
       }
@@ -264,6 +274,20 @@ export const useChatStore = createStore<ChatState>((set, get) => ({
         }
       }
       throw ipcError;
+    }
+  },
+
+  cancelChat: async (): Promise<boolean> => {
+    const activeVodId = get().vodId;
+    ++extractSeq;
+    set({ isExtracting: false, progress: null });
+    if (!activeVodId) {
+      return false;
+    }
+    try {
+      return await cancelChatExtraction(activeVodId);
+    } catch {
+      return false;
     }
   },
 

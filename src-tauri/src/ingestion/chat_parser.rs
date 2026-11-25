@@ -199,12 +199,18 @@ struct RawTwitchMessage {
 #[derive(Deserialize)]
 struct RawTwitchFragment {
     text: Option<String>,
+    #[serde(alias = "emote")]
     emoticon: Option<RawTwitchEmoticon>,
 }
 
 #[derive(Deserialize)]
 struct RawTwitchEmoticon {
-    #[serde(alias = "emoticon_id", alias = "emoticonID")]
+    #[serde(
+        alias = "emoticon_id",
+        alias = "emoticonID",
+        alias = "emoteID",
+        alias = "emote_id"
+    )]
     emoticon_id: Option<String>,
 }
 
@@ -377,17 +383,12 @@ fn parse_twitch_node(node: &RawTwitchNode) -> Option<ChatEvent> {
 fn parse_youtube_line(yt: &RawYouTubeLine) -> Option<ChatEvent> {
     let action = yt.replay_chat_item_action.as_ref()?;
     let action_items = action.actions.as_ref()?;
-    let first_item = action_items
-        .first()?
-        .add_chat_item_action
-        .as_ref()?
-        .item
-        .as_ref()?;
-
-    let renderer = first_item
-        .live_chat_text_message_renderer
-        .as_ref()
-        .or(first_item.live_chat_paid_message_renderer.as_ref())?;
+    let renderer = action_items.iter().find_map(|item_action| {
+        let item = item_action.add_chat_item_action.as_ref()?.item.as_ref()?;
+        item.live_chat_text_message_renderer
+            .as_ref()
+            .or(item.live_chat_paid_message_renderer.as_ref())
+    })?;
 
     let offset_ms_str = renderer
         .video_offset_time_msec

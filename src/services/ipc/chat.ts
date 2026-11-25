@@ -72,19 +72,43 @@ export function isChatFallbackPayload(val: unknown): val is ChatFallbackPayload 
 // IPC Invoke Wrappers
 // ---------------------------------------------------------------------------
 
+export interface ChatExtractionOptions {
+  readonly cookiesPath?: string | null | undefined;
+  readonly browserCookies?: string | null | undefined;
+}
+
 /**
  * Trigger online VOD chat download and normalization into Schema 5.3 JSON.
  *
  * @param vodId Unique identifier for the VOD.
  * @param url Full streaming URL (Twitch or YouTube).
+ * @param options Optional cookie configuration passed through to YouTube replay extraction.
  * @returns Path to the normalized `chat_events.json`.
  */
-export async function startChatExtraction(vodId: string, url: string): Promise<string> {
+export async function startChatExtraction(
+  vodId: string,
+  url: string,
+  options?: ChatExtractionOptions,
+): Promise<string> {
+  const payload: {
+    vodId: string;
+    url: string;
+    cookiesPath?: string;
+    browserCookies?: string;
+  } = {
+    vodId,
+    url,
+  };
+
+  if (typeof options?.cookiesPath === 'string' && options.cookiesPath.trim().length > 0) {
+    payload.cookiesPath = options.cookiesPath.trim();
+  }
+  if (typeof options?.browserCookies === 'string' && options.browserCookies.trim().length > 0) {
+    payload.browserCookies = options.browserCookies.trim();
+  }
+
   try {
-    return await invoke<string>('start_chat_extraction', {
-      vodId,
-      url,
-    });
+    return await invoke<string>('start_chat_extraction', payload);
   } catch (err: unknown) {
     throw parseIpcError(err);
   }
