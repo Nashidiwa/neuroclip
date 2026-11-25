@@ -248,7 +248,6 @@ impl GroqClient {
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
-            .no_proxy()
             .build()
             .map_err(|e| {
                 AppError::Stt(SttError::SidecarExecutionFailed {

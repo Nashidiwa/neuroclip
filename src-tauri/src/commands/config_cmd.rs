@@ -171,7 +171,7 @@ pub async fn test_api_key_connection(service: String, api_key: String) -> Result
     match service.to_lowercase().as_str() {
         "groq" => {
             let client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_millis(2000))
+                .timeout(std::time::Duration::from_millis(8000))
                 .build()
                 .map_err(|e| AppError::Internal(format!("Failed to build HTTP client: {e}")))?;
 
@@ -186,7 +186,7 @@ pub async fn test_api_key_connection(service: String, api_key: String) -> Result
                 .map_err(|e| {
                     if e.is_timeout() {
                         AppError::Stt(crate::error::SttError::SidecarExecutionFailed {
-                            details: "Groq connection timed out (> 2.0s SLA)".to_string(),
+                            details: "Groq connection timed out (> 8.0s)".to_string(),
                         })
                     } else {
                         AppError::Stt(crate::error::SttError::SidecarExecutionFailed {
@@ -208,14 +208,14 @@ pub async fn test_api_key_connection(service: String, api_key: String) -> Result
             }
         }
         "gemini" => tokio::time::timeout(
-            std::time::Duration::from_millis(2000),
+            std::time::Duration::from_millis(8000),
             crate::commands::translation_cmd::test_gemini_connection(clean_key.to_string()),
         )
         .await
         .map_err(|_| {
             AppError::Translation(crate::error::TranslationError::ApiRequestFailed {
                 status: 408,
-                message: "Kiểm tra kết nối vượt quá thời gian cho phép (2.0s)".to_string(),
+                message: "Kiểm tra kết nối vượt quá thời gian cho phép (8.0s)".to_string(),
             })
         })?,
         unknown => Err(AppError::Config(crate::error::ConfigError::InvalidValue {

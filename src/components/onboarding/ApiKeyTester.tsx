@@ -10,6 +10,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { testApiKeyConnection } from '../../services/config/settings.ts';
+import { ERROR_CODES, parseIpcError } from '../../services/ipc/error.ts';
+import { sanitizeLogString } from '../../services/logging/redactor.ts';
 
 export type ApiKeyStatus = 'idle' | 'testing' | 'valid' | 'invalid' | 'error';
 
@@ -81,9 +83,18 @@ export const ApiKeyTester: React.FC<ApiKeyTesterProps> = ({
     } catch (err: unknown) {
       const elapsed = Math.round(performance.now() - startTime);
       setLatencyMs(elapsed);
-      setStatus('error');
-      const errStr = err instanceof Error ? err.message : String(err);
-      setErrorMessage(errStr.length > 0 ? errStr : 'Lỗi kết nối tới máy chủ AI');
+      const parsed = parseIpcError(err, 'Lỗi kết nối tới máy chủ AI');
+      const isInvalidKey =
+        parsed.code === ERROR_CODES.STT_INVALID_API_KEY ||
+        parsed.code === ERROR_CODES.TRANSLATE_INVALID_API_KEY;
+      setStatus(isInvalidKey ? 'invalid' : 'error');
+      const cleanMsg = sanitizeLogString(parsed.message);
+      const cleanDetails = parsed.details ? sanitizeLogString(parsed.details).trim() : '';
+      const formatted =
+        cleanDetails.length > 0 && !cleanMsg.includes(cleanDetails)
+          ? `${cleanMsg} (${cleanDetails})`
+          : cleanMsg;
+      setErrorMessage(formatted.length > 0 ? formatted : 'Lỗi kết nối tới máy chủ AI');
     }
   };
 

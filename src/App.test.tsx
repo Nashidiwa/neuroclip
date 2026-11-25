@@ -211,6 +211,26 @@ describe('TASK-M4-01: Tauri Desktop Shell & Acrylic Dark Theme', () => {
       const expectedGeometryBadge = `Window: ${WINDOW_GEOMETRY.defaultWidth}x${WINDOW_GEOMETRY.defaultHeight} (Min: ${WINDOW_GEOMETRY.minWidth}x${WINDOW_GEOMETRY.minHeight})`;
       expect(screen.getByText(expectedGeometryBadge)).toBeInTheDocument();
     });
+
+    it('declares Tauri v2 window control and drag permissions in capabilities/default.json', () => {
+      const capPath = path.resolve(process.cwd(), 'src-tauri/capabilities/default.json');
+      expect(fs.existsSync(capPath)).toBe(true);
+
+      const rawCap = fs.readFileSync(capPath, 'utf8');
+      const capJson = JSON.parse(rawCap) as { permissions?: string[] };
+      const permissions = capJson.permissions ?? [];
+
+      for (const perm of [
+        'core:window:allow-minimize',
+        'core:window:allow-maximize',
+        'core:window:allow-unmaximize',
+        'core:window:allow-toggle-maximize',
+        'core:window:allow-close',
+        'core:window:allow-start-dragging',
+      ]) {
+        expect(permissions).toContain(perm);
+      }
+    });
   });
 
   describe('Workspace Tab Wiring & GlobalErrorBoundary Integration', () => {

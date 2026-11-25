@@ -13,9 +13,12 @@ use tokio_util::sync::CancellationToken;
 
 use crate::core::storage::check_disk_space;
 use crate::error::{AppError, IngestError, SidecarError, StorageError};
-use crate::ingestion::range_slicer::{resolve_ffmpeg_binary, resolve_ffprobe_binary};
+use crate::ingestion::range_slicer::{
+    parse_ffprobe_json, resolve_ffmpeg_binary, resolve_ffprobe_binary,
+};
 use crate::ingestion::streamer::{
-    build_ffmpeg_file_args, generate_vod_manifest_with_streams, IngestProgressPayload, VodManifest,
+    build_ffmpeg_file_args, generate_vod_manifest_with_streams, probe_media_duration_fallback,
+    IngestProgressPayload, VodManifest,
 };
 use crate::sidecar::{
     assign_child_to_job_guard, ChildProcessGuard, SubprocessConfig, SubprocessSupervisor,
@@ -142,9 +145,9 @@ pub async fn probe_local_video_duration(
         "-v",
         "error",
         "-show_entries",
-        "format=duration",
+        "format=duration:stream=duration",
         "-of",
-        "default=noprint_wrappers=1:nokey=1",
+        "json",
     ])
     .arg(file_path.as_os_str())
     .stdout(Stdio::piped())
@@ -191,7 +194,26 @@ pub async fn probe_local_video_duration(
     }
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let duration = stdout_str.trim().parse::<f64>().unwrap_or(0.0);
+    let duration = if let Ok(parsed) = parse_ffprobe_json(&stdout_str) {
+        parsed
+            .format
+            .as_ref()
+            .and_then(|f| f.duration.as_deref())
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .filter(|d| d.is_finite() && *d > 0.0)
+            .or_else(|| {
+                parsed
+                    .streams
+                    .iter()
+                    .filter_map(|s| s.duration.as_deref())
+                    .filter_map(|s| s.trim().parse::<f64>().ok())
+                    .filter(|d| d.is_finite() && *d > 0.0)
+                    .max_by(f64::total_cmp)
+            })
+            .unwrap_or(0.0)
+    } else {
+        stdout_str.trim().parse::<f64>().unwrap_or(0.0)
+    };
     if duration.is_finite() && duration > 0.0 {
         Ok(duration)
     } else {
@@ -290,6 +312,59 @@ fn prepare_local_import_paths(
     Ok((canonical_video, vod_id, project_dir, audio_cache_path))
 }
 
+async fn run_local_audio_extraction(
+    canonical_video: &Path,
+    audio_cache_path: &Path,
+    effective_task_id: &str,
+    initial_duration: f64,
+    runtime_opts: LocalImportRuntimeOptions,
+    cancellation_token: &CancellationToken,
+) -> Result<f64, AppError> {
+    if runtime_opts.mock_duration.is_some() || std::env::var("NEUROCLIP_MOCK_LOCAL_IMPORT").is_ok()
+    {
+        if cancellation_token.is_cancelled() {
+            return Err(AppError::TaskCancelled);
+        }
+        let audio_cache_write_path = audio_cache_path.to_path_buf();
+        tokio::task::spawn_blocking(move || {
+            let wav_bytes = build_synthetic_pcm_wav_bytes(1600);
+            std::fs::write(&audio_cache_write_path, wav_bytes).map_err(|e| {
+                AppError::Storage(StorageError::DirectoryCreationFailed {
+                    path: audio_cache_write_path.display().to_string(),
+                    details: e.to_string(),
+                })
+            })
+        })
+        .await
+        .map_err(|e| AppError::Internal(format!("Mock WAV write task panicked: {e}")))??;
+        return Ok(initial_duration);
+    }
+
+    let ffmpeg_bin = resolve_ffmpeg_binary();
+    let args = build_local_wav_extraction_args(canonical_video, audio_cache_path);
+    let config = SubprocessConfig {
+        task_id: effective_task_id.to_string(),
+        binary: ffmpeg_bin,
+        args,
+        total_duration_sec: if initial_duration > 0.0 {
+            Some(initial_duration)
+        } else {
+            None
+        },
+    };
+    SubprocessSupervisor::run(&config, None, None, cancellation_token).await?;
+
+    if initial_duration > 0.0 {
+        return Ok(initial_duration);
+    }
+    let probed = probe_media_duration_fallback(audio_cache_path, cancellation_token).await;
+    if probed.is_finite() && probed > 0.0 {
+        Ok(probed)
+    } else {
+        Ok(0.0)
+    }
+}
+
 async fn import_local_video_file_inner<F>(
     file_path: &Path,
     project_root: &Path,
@@ -335,7 +410,7 @@ where
         eta_sec: 0,
     });
 
-    let duration_seconds = match runtime_opts.mock_duration {
+    let initial_duration = match runtime_opts.mock_duration {
         Some(d) => d,
         None => probe_local_video_duration(&canonical_video, &cancellation_token).await?,
     };
@@ -348,38 +423,15 @@ where
         eta_sec: 0,
     });
 
-    if runtime_opts.mock_duration.is_some() || std::env::var("NEUROCLIP_MOCK_LOCAL_IMPORT").is_ok()
-    {
-        if cancellation_token.is_cancelled() {
-            return Err(AppError::TaskCancelled);
-        }
-        let audio_cache_write_path = audio_cache_path.clone();
-        tokio::task::spawn_blocking(move || {
-            let wav_bytes = build_synthetic_pcm_wav_bytes(1600);
-            std::fs::write(&audio_cache_write_path, wav_bytes).map_err(|e| {
-                AppError::Storage(StorageError::DirectoryCreationFailed {
-                    path: audio_cache_write_path.display().to_string(),
-                    details: e.to_string(),
-                })
-            })
-        })
-        .await
-        .map_err(|e| AppError::Internal(format!("Mock WAV write task panicked: {e}")))??;
-    } else {
-        let ffmpeg_bin = resolve_ffmpeg_binary();
-        let args = build_local_wav_extraction_args(&canonical_video, &audio_cache_path);
-        let config = SubprocessConfig {
-            task_id: effective_task_id.clone(),
-            binary: ffmpeg_bin,
-            args,
-            total_duration_sec: if duration_seconds > 0.0 {
-                Some(duration_seconds)
-            } else {
-                None
-            },
-        };
-        SubprocessSupervisor::run(&config, None, None, &cancellation_token).await?;
-    }
+    let duration_seconds = run_local_audio_extraction(
+        &canonical_video,
+        &audio_cache_path,
+        &effective_task_id,
+        initial_duration,
+        runtime_opts,
+        &cancellation_token,
+    )
+    .await?;
 
     let vod_id_for_manifest = vod_id;
     let manifest = tokio::task::spawn_blocking(move || {

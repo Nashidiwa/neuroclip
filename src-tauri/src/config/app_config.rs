@@ -38,7 +38,7 @@ pub struct AppConfig {
     pub active_stt_provider: String,
     /// Active STT model name ("whisper-large-v3", "medium-int8").
     pub active_stt_model: String,
-    /// Active Translation LLM model ("gemini-1.5-flash").
+    /// Active Translation LLM model ("gemini-flash-latest").
     pub active_translation_model: String,
     /// Optional custom sidecar paths.
     pub sidecar_paths: SidecarPaths,
@@ -71,7 +71,7 @@ impl Default for AppConfig {
             audio_buffer_size_kb: 64,
             active_stt_provider: "groq".to_string(),
             active_stt_model: "whisper-large-v3".to_string(),
-            active_translation_model: "gemini-1.5-flash".to_string(),
+            active_translation_model: "gemini-flash-latest".to_string(),
             sidecar_paths: SidecarPaths::default(),
             is_first_run: true,
             groq_api_key: String::new(),

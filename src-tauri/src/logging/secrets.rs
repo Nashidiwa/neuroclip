@@ -2,7 +2,7 @@
 //!
 //! Provides zero-leak redaction for API keys and auth tokens across providers:
 //! - Groq (`gsk_*`)
-//! - Google Gemini (`AIza*`)
+//! - Google Gemini (`AIza*`, `AQ.*`)
 //! - OpenAI (`sk-*`)
 //! - Twitch OAuth & session tokens (`oauth:*`, `auth-token=*`)
 //!
@@ -39,6 +39,7 @@ fn get_secret_regex() -> Option<&'static Regex> {
                 r"(?x)
                 (?P<gsk>\bgsk_[a-zA-Z0-9_]{16,}\b) |
                 (?P<aiza>\bAIza[0-9A-Za-z\-_]{20,}\b) |
+                (?P<aq>\bAQ\.[0-9A-Za-z\-_]{20,}\b) |
                 (?P<sk>\bsk-(?:proj-)?[a-zA-Z0-9_\-]{20,}\b) |
                 (?P<oauth>\boauth:[a-zA-Z0-9]{16,}\b) |
                 (?P<authtoken>auth-token[=:]\s*[a-zA-Z0-9\-_]{16,}) |
@@ -127,11 +128,17 @@ mod tests {
         assert!(!res_groq.contains(groq));
         assert!(res_groq.contains("gsk_[REDACTED]dcba"));
 
-        // Gemini
+        // Gemini (legacy AIza + modern AQ.Ab)
         let gemini = "AIzaSyD987654321abcdef1234567890";
         let res_gemini = redact_secrets_in_text(&format!("Gemini token {gemini} initialized"));
         assert!(!res_gemini.contains(gemini));
         assert!(res_gemini.contains("AIza[REDACTED]7890"));
+
+        let gemini_aq = "AQ.Ab9876543210abcdef1234567890wxyz";
+        let res_gemini_aq =
+            redact_secrets_in_text(&format!("Gemini auth key {gemini_aq} initialized"));
+        assert!(!res_gemini_aq.contains(gemini_aq));
+        assert!(res_gemini_aq.contains("AQ.A[REDACTED]wxyz"));
 
         // OpenAI
         let openai = "sk-proj-abcdefghijklmnopqrstuvwxyz123456";

@@ -66,6 +66,8 @@ struct YtDlpFormat {
     acodec: Option<String>,
     #[serde(default)]
     height: Option<u32>,
+    #[serde(default)]
+    duration: Option<f64>,
 }
 
 fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -87,6 +89,8 @@ struct YtDlpRawMetadata {
     channel: Option<String>,
     #[serde(default)]
     duration: Option<f64>,
+    #[serde(default)]
+    duration_string: Option<String>,
     #[serde(default)]
     is_live: Option<bool>,
     #[serde(default)]
@@ -187,14 +191,60 @@ fn extract_video_stream_url(raw: &YtDlpRawMetadata, webpage_url: &str) -> Option
     None
 }
 
+/// Parse a `yt-dlp` duration string (`HH:MM:SS`, `MM:SS`, or `SS`, with optional fractional seconds)
+/// into total seconds.
+#[must_use]
+pub fn parse_duration_string(raw: &str) -> Option<f64> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let parts: Vec<&str> = trimmed.split(':').collect();
+    if parts.is_empty() || parts.len() > 3 {
+        return None;
+    }
+
+    let mut total = 0.0_f64;
+    for part in parts {
+        let val = part.trim().parse::<f64>().ok()?;
+        if !val.is_finite() || val < 0.0 {
+            return None;
+        }
+        total = total * 60.0 + val;
+    }
+
+    if total.is_finite() && total > 0.0 {
+        Some(total)
+    } else {
+        None
+    }
+}
+
 fn raw_to_vod_metadata(raw: YtDlpRawMetadata, webpage_url: &str) -> VodMetadata {
     let video_stream_url = extract_video_stream_url(&raw, webpage_url);
+    let duration = raw
+        .duration
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .or_else(|| {
+            raw.duration_string
+                .as_deref()
+                .and_then(parse_duration_string)
+        })
+        .or_else(|| {
+            raw.requested_formats
+                .iter()
+                .chain(raw.formats.iter())
+                .filter_map(|f| f.duration)
+                .filter(|d| d.is_finite() && *d > 0.0)
+                .max_by(f64::total_cmp)
+        });
     VodMetadata {
         id: raw.id,
         title: raw.title,
         uploader: raw.uploader,
         channel: raw.channel,
-        duration: raw.duration,
+        duration,
         is_live: raw.is_live,
         live_status: raw.live_status,
         video_stream_url,
@@ -612,6 +662,13 @@ where
         audio_file_template.to_string_lossy().to_string(),
         "--no-playlist".to_string(),
     ];
+    let ffmpeg_bin = resolve_ffmpeg_binary();
+    if let Some(parent) = Path::new(&ffmpeg_bin).parent() {
+        if !parent.as_os_str().is_empty() && parent.is_dir() {
+            args.push("--ffmpeg-location".to_string());
+            args.push(parent.to_string_lossy().to_string());
+        }
+    }
     args.extend(defense_args);
     args.push("--".to_string());
     args.push(validated_url.to_string());
@@ -1077,6 +1134,239 @@ fn resolve_ffmpeg_binary() -> String {
     resolve_sidecar_binary("ffmpeg", "NEUROCLIP_FFMPEG_PATH")
 }
 
+fn resolve_ffprobe_binary() -> String {
+    resolve_sidecar_binary("ffprobe", "NEUROCLIP_FFPROBE_PATH")
+}
+
+/// Probe the duration (in seconds) of a RIFF/WAVE file directly from its header chunks
+/// without loading the audio payload into RAM or spawning an external process.
+#[allow(clippy::cast_precision_loss)]
+#[must_use]
+pub fn probe_wav_duration_from_header(path: &Path) -> Option<f64> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let mut file = std::fs::File::open(path).ok()?;
+    let file_len = file.metadata().ok()?.len();
+    if file_len < 44 {
+        return None;
+    }
+
+    let mut riff_hdr = [0u8; 12];
+    file.read_exact(&mut riff_hdr).ok()?;
+    if &riff_hdr[0..4] != b"RIFF" || &riff_hdr[8..12] != b"WAVE" {
+        return None;
+    }
+
+    let mut byte_rate: u32 = 0;
+    let mut data_bytes: Option<u64> = None;
+    let mut offset: u64 = 12;
+
+    while offset.saturating_add(8) <= file_len {
+        let mut chunk_hdr = [0u8; 8];
+        if file.read_exact(&mut chunk_hdr).is_err() {
+            break;
+        }
+        let chunk_id = &chunk_hdr[0..4];
+        let chunk_size =
+            u32::from_le_bytes([chunk_hdr[4], chunk_hdr[5], chunk_hdr[6], chunk_hdr[7]]);
+        let payload_offset = offset.saturating_add(8);
+
+        if chunk_id == b"fmt " && chunk_size >= 16 {
+            let mut fmt_buf = [0u8; 16];
+            file.read_exact(&mut fmt_buf).ok()?;
+            byte_rate = u32::from_le_bytes([fmt_buf[8], fmt_buf[9], fmt_buf[10], fmt_buf[11]]);
+            let remaining = i64::from(chunk_size) - 16;
+            if remaining > 0 {
+                let _ = file.seek(SeekFrom::Current(remaining));
+            }
+        } else if chunk_id == b"data" {
+            let effective_bytes = if chunk_size == 0 || chunk_size == u32::MAX {
+                file_len.saturating_sub(payload_offset)
+            } else {
+                u64::from(chunk_size).min(file_len.saturating_sub(payload_offset))
+            };
+            data_bytes = Some(effective_bytes);
+            break;
+        } else {
+            let step = i64::from(chunk_size);
+            if file.seek(SeekFrom::Current(step)).is_err() {
+                break;
+            }
+        }
+
+        let padded_size = u64::from(chunk_size) + u64::from(chunk_size % 2);
+        offset = payload_offset.saturating_add(padded_size);
+        if chunk_id == b"fmt " && chunk_size % 2 == 1 {
+            let _ = file.seek(SeekFrom::Current(1));
+        }
+    }
+
+    let bytes = data_bytes?;
+    if byte_rate == 0 || bytes == 0 {
+        return None;
+    }
+
+    let duration = bytes as f64 / f64::from(byte_rate);
+    if duration.is_finite() && duration > 0.0 {
+        Some(duration)
+    } else {
+        None
+    }
+}
+
+async fn probe_ffprobe_duration_fallback(
+    path: &Path,
+    cancellation_token: &CancellationToken,
+) -> Option<f64> {
+    let ffprobe_bin = resolve_ffprobe_binary();
+    let mut probe_cmd = Command::new(&ffprobe_bin);
+    probe_cmd
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration:stream=duration",
+            "-of",
+            "json",
+        ])
+        .arg(path.as_os_str())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+
+    let child = probe_cmd.spawn().ok()?;
+    assign_child_to_job_guard(&child);
+    let mut guard = ChildProcessGuard::new(child);
+    let child_proc = guard.take_child()?;
+
+    let output = tokio::select! {
+        biased;
+        () = cancellation_token.cancelled() => return None,
+        res = child_proc.wait_with_output() => res.ok()?,
+    };
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
+    let parsed = crate::ingestion::range_slicer::parse_ffprobe_json(&stdout_str).ok()?;
+    if let Some(d) = parsed
+        .format
+        .as_ref()
+        .and_then(|f| f.duration.as_deref())
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .filter(|d| d.is_finite() && *d > 0.0)
+    {
+        return Some(d);
+    }
+
+    parsed
+        .streams
+        .iter()
+        .filter_map(|s| s.duration.as_deref())
+        .filter_map(|s| s.trim().parse::<f64>().ok())
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .max_by(f64::total_cmp)
+}
+
+#[allow(clippy::cast_precision_loss)]
+async fn probe_ffmpeg_pcm_duration_fallback(
+    path: &Path,
+    cancellation_token: &CancellationToken,
+) -> f64 {
+    let ffmpeg_bin = resolve_ffmpeg_binary();
+    let mut dec_cmd = Command::new(&ffmpeg_bin);
+    dec_cmd
+        .args(["-hide_banner", "-loglevel", "error", "-nostdin", "-i"])
+        .arg(path.as_os_str())
+        .args([
+            "-vn", "-sn", "-dn", "-f", "s16le", "-ac", "1", "-ar", "16000", "pipe:1",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+
+    let Ok(mut child) = dec_cmd.spawn() else {
+        return 0.0;
+    };
+    assign_child_to_job_guard(&child);
+    let Some(mut stdout) = child.stdout.take() else {
+        return 0.0;
+    };
+    let mut guard = ChildProcessGuard::new(child);
+
+    let mut total_bytes: u64 = 0;
+    let mut buf = vec![0u8; DEFAULT_CHUNK_SIZE_BYTES];
+    loop {
+        tokio::select! {
+            biased;
+            () = cancellation_token.cancelled() => {
+                if let Some(c) = guard.child_mut() {
+                    let _ = c.start_kill();
+                }
+                return 0.0;
+            }
+            read_res = stdout.read(&mut buf) => {
+                match read_res {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        total_bytes = total_bytes.saturating_add(n as u64);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(c) = guard.child_mut() {
+        let _ = c.wait().await;
+    }
+
+    if total_bytes == 0 {
+        return 0.0;
+    }
+
+    let duration = total_bytes as f64 / 32_000.0;
+    if duration.is_finite() && duration > 0.0 {
+        duration
+    } else {
+        0.0
+    }
+}
+
+/// Probe media duration as a fallback when `yt-dlp` / initial metadata reports `0.0` or `None`.
+///
+/// Order:
+/// 1. Direct RIFF/WAVE header inspection (instant, zero subprocess).
+/// 2. `ffprobe -show_entries format=duration:stream=duration -of json`.
+/// 3. Streaming `ffmpeg` decode to `s16le` `16kHz` mono `pipe:1` counting total PCM bytes in 64KB chunks.
+pub async fn probe_media_duration_fallback(
+    path: &Path,
+    cancellation_token: &CancellationToken,
+) -> f64 {
+    if cancellation_token.is_cancelled() || !path.is_file() {
+        return 0.0;
+    }
+
+    let path_for_wav = path.to_path_buf();
+    if let Ok(Some(wav_dur)) =
+        tokio::task::spawn_blocking(move || probe_wav_duration_from_header(&path_for_wav)).await
+    {
+        if wav_dur.is_finite() && wav_dur > 0.0 {
+            return wav_dur;
+        }
+    }
+
+    if let Some(ffprobe_dur) = probe_ffprobe_duration_fallback(path, cancellation_token).await {
+        return ffprobe_dur;
+    }
+
+    if cancellation_token.is_cancelled() {
+        return 0.0;
+    }
+
+    probe_ffmpeg_pcm_duration_fallback(path, cancellation_token).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1250,5 +1540,82 @@ mod tests {
             err_ua,
             Err(AppError::Ingestion(IngestError::InvalidUrl(_)))
         ));
+    }
+
+    #[test]
+    fn test_parse_duration_string_formats() {
+        assert_eq!(parse_duration_string("45"), Some(45.0));
+        assert_eq!(parse_duration_string("05:12"), Some(312.0));
+        assert_eq!(parse_duration_string("1:02:03.5"), Some(3723.5));
+        assert_eq!(parse_duration_string("00:00:00"), None);
+        assert_eq!(parse_duration_string(""), None);
+        assert_eq!(parse_duration_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_raw_to_vod_metadata_duration_fallbacks() {
+        let json_duration_string = r#"{
+            "id": "v1",
+            "title": "Test VOD",
+            "duration": null,
+            "duration_string": "1:30:00",
+            "formats": []
+        }"#;
+        let raw_str: YtDlpRawMetadata = serde_json::from_str(json_duration_string).unwrap();
+        let meta_str = raw_to_vod_metadata(raw_str, "https://www.twitch.tv/videos/1");
+        assert_eq!(meta_str.duration, Some(5400.0));
+
+        let json_format_duration = r#"{
+            "id": "v2",
+            "title": "Test VOD 2",
+            "duration": 0.0,
+            "formats": [
+                { "vcodec": "none", "acodec": "aac", "duration": 185.5 }
+            ]
+        }"#;
+        let raw_fmt: YtDlpRawMetadata = serde_json::from_str(json_format_duration).unwrap();
+        let meta_fmt = raw_to_vod_metadata(raw_fmt, "https://www.youtube.com/watch?v=2");
+        assert_eq!(meta_fmt.duration, Some(185.5));
+    }
+
+    #[test]
+    fn test_probe_wav_duration_from_header() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "neuroclip_wav_probe_{}_{}",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // 2.0 seconds of 16kHz 16-bit mono PCM = 64,000 bytes (byte_rate = 32,000)
+        let wav_path = temp_dir.join("valid.wav");
+        let data_len: u32 = 64_000;
+        let mut bytes = Vec::with_capacity(44 + data_len as usize);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&16_000u32.to_le_bytes());
+        bytes.extend_from_slice(&32_000u32.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        bytes.resize(44 + data_len as usize, 0);
+        std::fs::write(&wav_path, &bytes).unwrap();
+
+        let dur = probe_wav_duration_from_header(&wav_path).unwrap();
+        assert!((dur - 2.0).abs() < 1e-6);
+
+        // Pipe-written WAV with 0 data chunk size falls back to file length
+        let zero_hdr_path = temp_dir.join("zero_data_size.wav");
+        bytes[40..44].copy_from_slice(&0u32.to_le_bytes());
+        std::fs::write(&zero_hdr_path, &bytes).unwrap();
+        let dur_zero = probe_wav_duration_from_header(&zero_hdr_path).unwrap();
+        assert!((dur_zero - 2.0).abs() < 1e-6);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

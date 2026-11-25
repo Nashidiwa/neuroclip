@@ -16,8 +16,8 @@ use crate::ingestion::cookies::{parse_browser_type, CookieSource};
 use crate::ingestion::local_importer::import_local_video_file;
 use crate::ingestion::streamer::{
     compute_audio_energy_stream, detect_source_type, download_audio_stream,
-    generate_vod_manifest_with_streams, probe_vod_metadata, AudioEnergyWindow, IngestOptions,
-    IngestProgressPayload, VodManifest, VodMetadata,
+    generate_vod_manifest_with_streams, probe_media_duration_fallback, probe_vod_metadata,
+    AudioEnergyWindow, IngestOptions, IngestProgressPayload, VodManifest, VodMetadata,
 };
 
 static ACTIVE_TASKS: Mutex<Option<HashMap<String, CancellationToken>>> = Mutex::new(None);
@@ -223,6 +223,7 @@ where
     // Step 4: Download audio stream with 1Hz progress updates keyed by initial_task_id
     let progress_task_id = initial_task_id.clone();
     let emit_for_download = emit_progress.clone();
+    let probe_cancel_token = cancellation_token.clone();
     let audio_res = download_audio_stream(
         &url,
         &cache_dir,
@@ -245,7 +246,16 @@ where
 
     // Step 6: Generate Schema 5.2 compliant vod_manifest.json on blocking threadpool
     let source_type = detect_source_type(&url).to_string();
-    let duration = metadata.duration.unwrap_or(0.0);
+    let mut duration = metadata
+        .duration
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .unwrap_or(0.0);
+    if duration <= 0.0 && std::env::var("NEUROCLIP_MOCK_INGEST_RUN").is_err() {
+        let probed = probe_media_duration_fallback(&audio_path, &probe_cancel_token).await;
+        if probed.is_finite() && probed > 0.0 {
+            duration = probed;
+        }
+    }
     let streamer = metadata.uploader.or(metadata.channel);
     let title = metadata.title.clone();
     let video_stream_url = metadata.video_stream_url.clone();

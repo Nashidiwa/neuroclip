@@ -43,7 +43,11 @@ pub async fn translate_vietsub(
 
     let mut config = GeminiClientConfig::new(resolved_key);
     if let Some(m) = model.filter(|m| !m.trim().is_empty()) {
-        config.model = m;
+        if m.trim() == "gemini-1.5-flash" {
+            config.model = DEFAULT_GEMINI_MODEL.to_string();
+        } else {
+            config.model = m;
+        }
     } else {
         config.model = DEFAULT_GEMINI_MODEL.to_string();
     }

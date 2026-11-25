@@ -267,7 +267,7 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
                 value={geminiKey}
                 onChange={setGeminiKey}
                 getKeyUrl="https://aistudio.google.com/app/apikey"
-                placeholder="AIza..."
+                placeholder="AIza... hoặc AQ.Ab..."
                 helpText="Dùng cho dịch thuật ngữ cảnh sân khấu Việt hóa chuẩn lore NeuroClip."
               />
 

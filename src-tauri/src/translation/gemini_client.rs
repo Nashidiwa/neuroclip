@@ -28,7 +28,7 @@ use crate::translation::prompt_builder::{
 pub const DEFAULT_GEMINI_API_URL: &str = "https://generativelanguage.googleapis.com";
 
 /// Default fast translation model.
-pub const DEFAULT_GEMINI_MODEL: &str = "gemini-1.5-flash";
+pub const DEFAULT_GEMINI_MODEL: &str = "gemini-flash-latest";
 
 /// Maximum rate limit retry attempts on HTTP 429.
 pub const MAX_RATE_LIMIT_RETRIES: u32 = 3;
@@ -120,7 +120,7 @@ pub struct GeminiClientConfig {
     /// Base URL override (defaults to `https://generativelanguage.googleapis.com`).
     #[serde(default)]
     pub base_url: Option<String>,
-    /// Model identifier (defaults to `gemini-1.5-flash`).
+    /// Model identifier (defaults to `gemini-flash-latest`).
     #[serde(default = "default_model")]
     pub model: String,
     /// Sampling temperature (default 0.3 for consistent translation).
@@ -389,7 +389,6 @@ impl GeminiClient {
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
-            .no_proxy()
             .build()
             .map_err(|e| {
                 AppError::Translation(TranslationError::ApiRequestFailed {
@@ -418,22 +417,32 @@ impl GeminiClient {
         &self.config
     }
 
-    /// Resolve effective generateContent endpoint URL.
-    #[must_use]
-    pub fn endpoint_url(&self) -> String {
-        let base = if let Some(ref url) = self.config.base_url {
+    fn resolve_base_url(&self) -> String {
+        if let Some(ref url) = self.config.base_url {
             url.clone()
         } else if let Ok(env_url) = std::env::var("NEUROCLIP_GEMINI_API_URL") {
             env_url
         } else {
             DEFAULT_GEMINI_API_URL.to_string()
-        };
+        }
+    }
 
+    /// Resolve effective generateContent endpoint URL.
+    #[must_use]
+    pub fn endpoint_url(&self) -> String {
+        let base = self.resolve_base_url();
         format!(
             "{}/v1beta/models/{}:generateContent",
             base.trim_end_matches('/'),
             self.config.model
         )
+    }
+
+    /// Resolve the lightweight models-list endpoint URL for connection testing.
+    #[must_use]
+    pub fn models_endpoint_url(&self) -> String {
+        let base = self.resolve_base_url();
+        format!("{}/v1beta/models", base.trim_end_matches('/'))
     }
 
     /// Helper to construct the 4 standard `BLOCK_NONE` safety settings (`UT-17.2`).
@@ -448,36 +457,45 @@ impl GeminiClient {
             .collect()
     }
 
-    /// Test API key validity with a lightweight 1-token request.
+    /// Test API key validity with a lightweight `GET /v1beta/models` request.
     ///
     /// # Errors
     /// Returns [`AppError::Translation`] if authentication or network transport fails.
     pub async fn test_connection(&self) -> Result<bool, AppError> {
-        let endpoint = self.endpoint_url();
-        let payload = GeminiRequest {
-            system_instruction: None,
-            contents: vec![GeminiContent {
-                role: Some("user".to_string()),
-                parts: vec![GeminiPart {
-                    text: "Ping".to_string(),
-                }],
-            }],
-            safety_settings: Self::build_safety_settings(),
-            generation_config: Some(GeminiGenerationConfig {
-                temperature: Some(0.0),
-                response_mime_type: None,
-            }),
+        let endpoint = self.models_endpoint_url();
+
+        let (status, body_str) = if let Some(ref mock) = self.mock_handler {
+            let auth_header = format!("Bearer {}", self.config.api_key);
+            let resp = mock(&endpoint, &auth_header, "application/json", &[])?;
+            (resp.status_code, resp.body)
+        } else {
+            let response = self
+                .client
+                .get(&endpoint)
+                .header("x-goog-api-key", &self.config.api_key)
+                .timeout(Duration::from_secs(8))
+                .send()
+                .await
+                .map_err(|e| {
+                    AppError::Translation(TranslationError::ApiRequestFailed {
+                        status: if e.is_timeout() { 408 } else { 0 },
+                        message: if e.is_timeout() {
+                            "Kiểm tra kết nối Gemini vượt quá thời gian cho phép (8.0s)".to_string()
+                        } else {
+                            format!("Gemini network request failed: {e}")
+                        },
+                    })
+                })?;
+
+            let status = response.status().as_u16();
+            let body = response.text().await.map_err(|e| {
+                AppError::Translation(TranslationError::ApiRequestFailed {
+                    status,
+                    message: format!("Failed reading Gemini response body: {e}"),
+                })
+            })?;
+            (status, body)
         };
-
-        let body_bytes = serde_json::to_vec(&payload).map_err(|e| {
-            AppError::Translation(TranslationError::ApiRequestFailed {
-                status: 0,
-                message: format!("Failed serializing test request: {e}"),
-            })
-        })?;
-
-        let (status, _retry_after, body_str) =
-            self.send_http_with_retry(&endpoint, &body_bytes).await?;
 
         if (200..300).contains(&status) {
             Ok(true)

@@ -24,6 +24,7 @@ export function redactSecret(key: string): string {
 const SECRET_PATTERNS: readonly RegExp[] = [
   /\bgsk_[a-zA-Z0-9_]{16,}\b/g,
   /\bAIza[0-9A-Za-z_-]{20,}\b/g,
+  /\bAQ\.[0-9A-Za-z_-]{20,}\b/g,
   /\bsk-(?:proj-)?[a-zA-Z0-9_-]{20,}\b/g,
   /\boauth:[a-zA-Z0-9]{16,}\b/g,
   /\bauth-token[=:]\s*[a-zA-Z0-9_-]{16,}\b/g,

@@ -10,14 +10,79 @@ use crate::core::storage::{
     validate_vod_id,
 };
 use crate::error::{AppError, HighlightError, StorageError};
+use crate::highlight::audio_rms::{DEFAULT_BLOCK_DURATION_SEC, DEFAULT_SAMPLE_RATE};
 use crate::highlight::cluster::{
     generate_clusters_from_fused_series, HighlightCluster, HighlightClustersContainer,
 };
 use crate::highlight::emote_filter::compute_emote_density_series_from_file;
-use crate::highlight::energy_analyzer::analyze_wav_file;
+use crate::highlight::energy_analyzer::{
+    analyze_wav_file, detect_energy_peaks_default, process_pcm_reader, AudioRmsPoint,
+};
 use crate::highlight::fusion::fuse_multimodal_series;
 use crate::highlight::zscore::compute_chat_velocity_series_from_file;
 use crate::ingestion::streamer::VodManifest;
+
+struct StdChildGuard(Option<std::process::Child>);
+
+impl Drop for StdChildGuard {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Analyze an audio file (WAV or compressed formats like `.aac`/`.m4a`/`.opus`/`.webm`)
+/// into 500ms `AudioRmsPoint` blocks using bounded-memory streaming.
+pub fn analyze_audio_file_for_highlights(audio_path: &Path) -> Vec<AudioRmsPoint> {
+    if let Ok(points) = analyze_wav_file(audio_path) {
+        if !points.is_empty() {
+            return points;
+        }
+    }
+
+    if !audio_path.is_file() {
+        return Vec::new();
+    }
+
+    let ffmpeg_bin = crate::ingestion::range_slicer::resolve_ffmpeg_binary();
+    let mut cmd = std::process::Command::new(&ffmpeg_bin);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-i"])
+        .arg(audio_path.as_os_str())
+        .args([
+            "-vn", "-sn", "-dn", "-f", "s16le", "-ac", "1", "-ar", "16000", "pipe:1",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+
+    let Ok(mut child) = cmd.spawn() else {
+        return Vec::new();
+    };
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Vec::new();
+    };
+    let mut guard = StdChildGuard(Some(child));
+
+    let blocks_res = process_pcm_reader(stdout, DEFAULT_SAMPLE_RATE, DEFAULT_BLOCK_DURATION_SEC);
+    let status_ok = guard
+        .0
+        .take()
+        .is_some_and(|mut c| c.wait().is_ok_and(|s| s.success()));
+
+    if !status_ok {
+        return Vec::new();
+    }
+
+    match blocks_res {
+        Ok(blocks) if !blocks.is_empty() => {
+            detect_energy_peaks_default(&blocks).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    }
+}
 
 fn run_highlight_detection_blocking(
     vod_id: &str,
@@ -48,9 +113,9 @@ fn run_highlight_detection_blocking(
         Vec::new()
     };
 
-    // 3. Audio RMS Series (TASK-M4-11)
+    // 3. Audio RMS Series (TASK-M4-11; supports both WAV and compressed audio via streaming FFmpeg)
     let audio_series = if let Some(audio_path) = resolved_audio_path {
-        analyze_wav_file(audio_path).unwrap_or_default()
+        analyze_audio_file_for_highlights(audio_path)
     } else {
         Vec::new()
     };
@@ -409,6 +474,46 @@ mod tests {
                 StorageError::DirectoryCreationFailed { .. }
             ))
         ));
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_analyze_audio_file_for_highlights_wav_and_missing() {
+        let missing = PathBuf::from("C:\\definitely_missing_neuroclip_highlight_audio_12345.aac");
+        assert_eq!(analyze_audio_file_for_highlights(&missing), Vec::new());
+
+        let root = std::env::temp_dir().join(format!(
+            "neuroclip_hl_audio_test_{}_{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let _ = std::fs::create_dir_all(&root);
+        let wav_path = root.join("sample.wav");
+
+        // 1.0 second of 16kHz 16-bit mono PCM (32,000 bytes -> 2 blocks of 500ms)
+        let sample_count: usize = 16_000;
+        let data_len = u32::try_from(sample_count * 2).unwrap();
+        let mut bytes = Vec::with_capacity(44 + data_len as usize);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&16_000u32.to_le_bytes());
+        bytes.extend_from_slice(&32_000u32.to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        for _ in 0..sample_count {
+            bytes.extend_from_slice(&1000i16.to_le_bytes());
+        }
+        std::fs::write(&wav_path, &bytes).unwrap();
+
+        let points = analyze_audio_file_for_highlights(&wav_path);
+        assert_eq!(points.len(), 2);
 
         let _ = std::fs::remove_dir_all(&root);
     }

@@ -85,7 +85,7 @@ export const DEFAULT_APP_CONFIG: Readonly<AppConfig> = Object.freeze({
   audioBufferSizeKb: 64,
   activeSttProvider: 'groq',
   activeSttModel: 'whisper-large-v3',
-  activeTranslationModel: 'gemini-1.5-flash',
+  activeTranslationModel: 'gemini-flash-latest',
   sidecarPaths: Object.freeze({}),
   groqApiKey: '',
   geminiApiKey: '',

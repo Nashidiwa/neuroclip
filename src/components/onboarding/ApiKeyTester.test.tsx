@@ -145,4 +145,86 @@ describe('ApiKeyTester Component (AC-28.1, IT-28.2)', () => {
     expect(screen.getByText('Chưa kiểm tra kết nối')).toBeInTheDocument();
     expect(screen.queryByText(/\[Sẵn sàng\]/i)).not.toBeInTheDocument();
   });
+
+  it('formats plain IpcErrorResponse objects cleanly without rendering [object Object]', async () => {
+    const mockTest = vi.fn().mockRejectedValue({
+      code: 'ERR_TRANSLATE_API_FAILED',
+      message: 'Gọi API dịch thuật Gemini thất bại',
+      details: 'HTTP 404 Not Found',
+      recoverable: true,
+    });
+
+    render(
+      <ApiKeyTester
+        provider="gemini"
+        label="Gemini Key"
+        value="AQ.AbTestKey1234567890123456"
+        onChange={vi.fn()}
+        getKeyUrl="https://aistudio.google.com/app/apikey"
+        onTest={mockTest}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra kết nối/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/\[Lỗi kết nối\]/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Gọi API dịch thuật Gemini thất bại \(HTTP 404 Not Found\)/i),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/\[object Object\]/i)).not.toBeInTheDocument();
+  });
+
+  it('maps ERR_STT_INVALID_API_KEY and ERR_TRANSLATE_INVALID_API_KEY rejections to [Không hợp lệ]', async () => {
+    const mockGroqTest = vi.fn().mockRejectedValue({
+      code: 'ERR_STT_INVALID_API_KEY',
+      message: 'Groq API Key không hợp lệ',
+      details: null,
+      recoverable: false,
+    });
+
+    const { rerender } = render(
+      <ApiKeyTester
+        provider="groq"
+        label="Groq Key"
+        value="gsk_bad_key"
+        onChange={vi.fn()}
+        getKeyUrl="https://console.groq.com/keys"
+        onTest={mockGroqTest}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra kết nối/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/\[Không hợp lệ\]/i)).toBeInTheDocument();
+      expect(screen.getByText(/Groq API Key không hợp lệ/i)).toBeInTheDocument();
+    });
+
+    const mockGeminiTest = vi.fn().mockRejectedValue({
+      code: 'ERR_TRANSLATE_INVALID_API_KEY',
+      message: 'Google Gemini API Key không hợp lệ',
+      details: null,
+      recoverable: false,
+    });
+
+    rerender(
+      <ApiKeyTester
+        provider="gemini"
+        label="Gemini Key"
+        value="AQ.AbBadKey"
+        onChange={vi.fn()}
+        getKeyUrl="https://aistudio.google.com/app/apikey"
+        onTest={mockGeminiTest}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Kiểm tra kết nối/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/\[Không hợp lệ\]/i)).toBeInTheDocument();
+      expect(screen.getByText(/Google Gemini API Key không hợp lệ/i)).toBeInTheDocument();
+    });
+  });
 });

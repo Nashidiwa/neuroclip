@@ -325,7 +325,7 @@ async fn test_it17_1_mock_gemini_translation_batch_30_lines() {
     );
     assert_eq!(
         requests[0].url,
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
     );
     assert_eq!(requests[0].auth, "Bearer AIzaMockTestKey123");
     assert_eq!(requests[0].content_type, "application/json");
