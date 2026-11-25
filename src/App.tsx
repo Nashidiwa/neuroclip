@@ -23,7 +23,7 @@ import { ErrorBanner } from './components/common/ErrorBanner.tsx';
 import { IngestionDashboard } from './components/dashboard/IngestionDashboard.tsx';
 import { DropZone } from './components/dashboard/DropZone.tsx';
 import { HighlightViewer } from './components/highlight/HighlightViewer.tsx';
-import { SubtitleStudio } from './components/studio/SubtitleStudio.tsx';
+import { SubtitleStudio, deriveStudioClipId } from './components/studio/SubtitleStudio.tsx';
 import { OnboardingWizardModal } from './components/onboarding/OnboardingWizardModal.tsx';
 import { useSettingsStore } from './stores/settingsStore.ts';
 import { useProjectStore } from './stores/useProjectStore.ts';
@@ -239,6 +239,11 @@ export const App: React.FC = () => {
           transcriptState.container?.segments ?? transcriptState.streamedChunks ?? [];
         if (segments.length > 0) {
           useStudioStore.getState().setSegments(segments);
+        }
+        if (transcriptState.clipId === null) {
+          useTranscriptStore
+            .getState()
+            .setClipId(deriveStudioClipId(`${vodId}_${cluster.clusterId}`, res.clipPath));
         }
         setActiveTab('studio');
       }

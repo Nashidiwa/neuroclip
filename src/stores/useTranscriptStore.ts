@@ -63,6 +63,7 @@ export interface TranscriptState {
   // Actions
   setClipId: (clipId: string | null) => void;
   setActiveSegmentId: (segmentId: string | null) => void;
+  setContainerSegments: (clipId: string, segments: readonly TranscriptSegment[]) => void;
   transcribe: (
     clipId: string,
     audioPath: string,
@@ -278,6 +279,17 @@ export const useTranscriptStore = createStore<TranscriptState>((set, get) => ({
 
   setActiveSegmentId: (activeSegmentId: string | null): void => {
     set({ activeSegmentId });
+  },
+
+  setContainerSegments: (clipId: string, segments: readonly TranscriptSegment[]): void => {
+    set({
+      clipId,
+      container: {
+        clipId,
+        clip_id: clipId,
+        segments: [...segments],
+      },
+    });
   },
 
   transcribe: async (

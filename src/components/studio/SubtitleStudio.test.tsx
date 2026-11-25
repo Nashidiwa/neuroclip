@@ -24,10 +24,12 @@ import {
   getSpeakerColor,
   SPEAKER_COLORS,
 } from '../../stores/useStudioStore.ts';
+import { useTranscriptStore } from '../../stores/useTranscriptStore.ts';
 import { VideoCanvas } from './VideoCanvas.tsx';
 import { TimelineScrubber } from './TimelineScrubber.tsx';
 import {
   SubtitleStudio,
+  deriveStudioClipId,
   isNonFilesystemUri,
   normalizeFilesystemPath,
   mapStudioLayoutToTargetLayout,
@@ -50,6 +52,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
 
   useStudioStore.getState().reset();
+  useTranscriptStore.getState().reset();
   vi.clearAllMocks();
 });
 
@@ -766,6 +769,146 @@ describe('TASK-M4-20: Subtitle Studio UI & Timeline Sync Video Canvas', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('AI Subtitle Pipeline Toolbar (Whisper STT & Gemini Vietsub)', () => {
+    it('derives sanitized clipId from transcript state or OS video path', () => {
+      expect(deriveStudioClipId('vod_123_cluster_1', 'C:\\clips\\ignored.mp4')).toBe(
+        'vod_123_cluster_1',
+      );
+      expect(deriveStudioClipId(null, 'D:\\NeuroClip\\clips\\highlight clip 01!.mp4')).toBe(
+        'highlight_clip_01',
+      );
+      expect(deriveStudioClipId('  ../invalid/id  ', null)).toBe('invalid_id');
+      expect(deriveStudioClipId(null, null)).toBe('clip_studio');
+    });
+
+    it('runs Groq Whisper STT with Music Mode toggle, populates studio segments, and runs Gemini Vietsub translation', async () => {
+      const mockedInvoke = vi.mocked(invoke);
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'transcribe_highlight_clip') {
+          return {
+            clip_id: 'highlight_clip_01',
+            segments: [
+              {
+                segment_id: 'seg_stt_1',
+                start_sec: 1.2,
+                end_sec: 4.5,
+                speaker_id: 'unknown',
+                text_en: 'Wait what did Neuro just say?',
+                text_vi: null,
+                confidence: 0.94,
+                cps_score: 10.0,
+                is_flagged_for_review: false,
+                words: [],
+              },
+            ],
+          };
+        }
+        if (cmd === 'translate_vietsub') {
+          return {
+            clip_id: 'highlight_clip_01',
+            segments: [
+              {
+                segment_id: 'seg_stt_1',
+                start_sec: 1.2,
+                end_sec: 4.5,
+                speaker_id: 'vedal',
+                text_en: 'Wait what did Neuro just say?',
+                text_vi: 'Khoan đã, Neuro vừa nói cái gì thế?',
+                confidence: 0.94,
+                cps_score: 11.2,
+                is_flagged_for_review: false,
+                words: [],
+              },
+            ],
+          };
+        }
+        return undefined;
+      });
+
+      useStudioStore
+        .getState()
+        .setVideoSrc(
+          'asset://localhost/C:/clips/highlight_clip_01.mp4',
+          'C:\\clips\\highlight_clip_01.mp4',
+        );
+
+      render(<SubtitleStudio />);
+
+      const translateBtn = screen.getByTestId('studio-translate-button');
+      expect(translateBtn).toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('studio-music-mode-toggle'));
+      fireEvent.click(screen.getByTestId('studio-transcribe-button'));
+
+      await waitFor(() => {
+        expect(mockedInvoke).toHaveBeenCalledWith('transcribe_highlight_clip', {
+          clipId: 'highlight_clip_01',
+          audioPath: 'C:\\clips\\highlight_clip_01.mp4',
+          apiKey: null,
+          isMusicMode: true,
+        });
+      });
+
+      await waitFor(() => {
+        expect(useStudioStore.getState().segments).toHaveLength(1);
+        expect(translateBtn).not.toBeDisabled();
+      });
+
+      fireEvent.click(translateBtn);
+
+      await waitFor(() => {
+        expect(mockedInvoke).toHaveBeenCalledWith(
+          'translate_vietsub',
+          expect.objectContaining({
+            clipId: 'highlight_clip_01',
+          }),
+        );
+      });
+
+      await waitFor(() => {
+        expect(useStudioStore.getState().segments[0]?.textVi).toBe(
+          'Khoan đã, Neuro vừa nói cái gì thế?',
+        );
+      });
+    });
+
+    it('supports switching STT engine to Faster-Whisper local and shows ErrorBanner on STT failure', async () => {
+      const mockedInvoke = vi.mocked(invoke);
+      mockedInvoke.mockRejectedValueOnce({
+        code: 'ERR_STT_INVALID_API_KEY',
+        message: 'Groq API Key chưa được cấu hình',
+        recoverable: true,
+      });
+
+      useStudioStore
+        .getState()
+        .setVideoSrc('asset://localhost/C:/clips/clip_local.mp4', 'C:\\clips\\clip_local.mp4');
+
+      render(<SubtitleStudio />);
+
+      fireEvent.change(screen.getByTestId('studio-stt-engine-select'), {
+        target: { value: 'faster_whisper' },
+      });
+      expect(screen.queryByTestId('studio-music-mode-toggle')).toBeNull();
+
+      fireEvent.click(screen.getByTestId('studio-transcribe-button'));
+
+      await waitFor(() => {
+        expect(mockedInvoke).toHaveBeenCalledWith(
+          'start_faster_whisper_transcription',
+          expect.objectContaining({
+            clipId: 'clip_local',
+            audioPath: 'C:\\clips\\clip_local.mp4',
+          }),
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Lỗi xử lý phụ đề AI')).toBeInTheDocument();
+      });
     });
   });
 });

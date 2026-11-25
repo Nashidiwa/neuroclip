@@ -9,8 +9,9 @@
  */
 
 import React, { useEffect, useCallback, useState, useMemo } from 'react';
-import { MessageSquare, Sparkles, Share2 } from 'lucide-react';
+import { MessageSquare, Sparkles, Share2, Mic, Languages, RefreshCw } from 'lucide-react';
 import { ErrorBoundary } from '../common/ErrorBoundary.tsx';
+import { ErrorBanner } from '../common/ErrorBanner.tsx';
 import { VideoCanvas } from './VideoCanvas.tsx';
 import { TimelineScrubber } from './TimelineScrubber.tsx';
 import { VirtualizedSegmentList } from './VirtualizedSegmentList.tsx';
@@ -22,9 +23,58 @@ import {
   type AspectRatioMode,
   type Preset916,
 } from '../../stores/useStudioStore.ts';
+import { useTranscriptStore } from '../../stores/useTranscriptStore.ts';
+import { useSettingsStore } from '../../stores/settingsStore.ts';
 import type { TargetLayout } from '../../types/export.ts';
 import type { TranscriptSegment, SubtitleProject } from '../../types/transcript.ts';
 import { normalizeSubtitleProject } from '../../types/transcript.ts';
+
+export type StudioSttEngine = 'groq' | 'faster_whisper' | 'whisper_cpp';
+
+function sanitizeClipIdentifier(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+  return cleaned.length > 0 ? cleaned : '';
+}
+
+export function deriveStudioClipId(clipId: string | null, videoPath: string | null): string {
+  if (typeof clipId === 'string') {
+    const clean = sanitizeClipIdentifier(clipId);
+    if (clean.length > 0) {
+      return clean;
+    }
+  }
+
+  if (typeof videoPath === 'string' && videoPath.trim().length > 0) {
+    const normalized = videoPath.trim().replace(/\\/g, '/');
+    const filename = normalized.split('/').pop() ?? '';
+    const stem = filename.replace(/\.[^/.]+$/, '');
+    const cleanStem = sanitizeClipIdentifier(stem);
+    if (cleanStem.length > 0) {
+      return cleanStem;
+    }
+  }
+
+  return 'clip_studio';
+}
+
+function formatSttStageLabel(stage: string): string {
+  switch (stage) {
+    case 'preparing':
+      return 'Đang chuẩn bị âm thanh (FFmpeg)...';
+    case 'vad':
+      return 'Đang tách đoạn giọng nói (Silero VAD)...';
+    case 'transcribing':
+      return 'Đang bóc băng giọng nói...';
+    case 'completed':
+      return 'Hoàn tất bóc băng';
+    default:
+      return 'Đang bóc băng Whisper STT...';
+  }
+}
 
 const NON_FILESYSTEM_URI_PREFIXES = ['asset://', 'http://', 'https://', 'blob:', 'data:'] as const;
 
@@ -117,6 +167,29 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
   const setVideoSrcInStore = useStudioStore((s) => s.setVideoSrc);
   const setSegmentsInStore = useStudioStore((s) => s.setSegments);
 
+  // Transcript / STT & Translation store bindings
+  const transcriptClipId = useTranscriptStore((s) => s.clipId);
+  const isTranscribing = useTranscriptStore((s) => s.isTranscribing);
+  const isTranslating = useTranscriptStore((s) => s.isTranslating);
+  const sttProgress = useTranscriptStore((s) => s.progress);
+  const translationProgress = useTranscriptStore((s) => s.translationProgress);
+  const streamedChunks = useTranscriptStore((s) => s.streamedChunks);
+  const transcriptError = useTranscriptStore((s) => s.error);
+  const transcribeClip = useTranscriptStore((s) => s.transcribeClip);
+  const transcribeFasterWhisper = useTranscriptStore((s) => s.transcribeFasterWhisper);
+  const transcribeWhisperCpp = useTranscriptStore((s) => s.transcribe);
+  const translateVietsub = useTranscriptStore((s) => s.translate);
+  const setContainerSegments = useTranscriptStore((s) => s.setContainerSegments);
+  const clearTranscriptError = useTranscriptStore((s) => s.clearError);
+
+  // Configured defaults
+  const activeSttProvider = useSettingsStore((s) => s.config.activeSttProvider);
+  const activeTranslationModel = useSettingsStore((s) => s.config.activeTranslationModel);
+  const [sttEngine, setSttEngine] = useState<StudioSttEngine>(() =>
+    activeSttProvider === 'local_whisper' ? 'faster_whisper' : 'groq',
+  );
+  const [isMusicMode, setIsMusicMode] = useState<boolean>(false);
+
   // Synchronize incoming props to store if provided (preserving store.videoPath when unchanged)
   useEffect(() => {
     if (propVideoSrc !== undefined) {
@@ -135,6 +208,12 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
     }
   }, [propSegments, setSegmentsInStore]);
 
+  useEffect(() => {
+    if (propSegments === undefined && isTranscribing && streamedChunks.length > 0) {
+      setSegmentsInStore(streamedChunks);
+    }
+  }, [propSegments, isTranscribing, streamedChunks, setSegmentsInStore]);
+
   const effectiveSegments = propSegments !== undefined ? propSegments : storeSegments;
   const effectiveVideoSrc =
     propVideoSrc !== undefined ? propVideoSrc : (storeVideoSrc ?? propVideoPath ?? null);
@@ -146,6 +225,42 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
   });
   const targetLayout = mapStudioLayoutToTargetLayout(aspectRatio, preset916);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+
+  const handleRunStt = async (): Promise<void> => {
+    if (!effectiveVideoPath || isTranscribing || isTranslating) {
+      return;
+    }
+    const targetClipId = deriveStudioClipId(transcriptClipId, effectiveVideoPath);
+    try {
+      const resultContainer =
+        sttEngine === 'groq'
+          ? await transcribeClip(targetClipId, effectiveVideoPath, { isMusicMode })
+          : sttEngine === 'faster_whisper'
+            ? await transcribeFasterWhisper(targetClipId, effectiveVideoPath)
+            : await transcribeWhisperCpp(targetClipId, effectiveVideoPath);
+
+      setSegmentsInStore(resultContainer.segments);
+    } catch {
+      // Error state captured in useTranscriptStore
+    }
+  };
+
+  const handleRunTranslate = async (): Promise<void> => {
+    if (effectiveSegments.length === 0 || isTranscribing || isTranslating) {
+      return;
+    }
+    const targetClipId = deriveStudioClipId(transcriptClipId, effectiveVideoPath);
+    setContainerSegments(targetClipId, effectiveSegments);
+    try {
+      const modelTrimmed = activeTranslationModel.trim();
+      const updated = await translateVietsub(
+        modelTrimmed.length > 0 ? { model: modelTrimmed } : undefined,
+      );
+      setSegmentsInStore(updated.segments);
+    } catch {
+      // Error state captured in useTranscriptStore
+    }
+  };
 
   const currentProject: SubtitleProject = useMemo(() => {
     return normalizeSubtitleProject({
@@ -262,6 +377,129 @@ export const SubtitleStudioInner: React.FC<SubtitleStudioProps> = ({
               <span>Xuất bản</span>
             </button>
           </div>
+        </div>
+
+        {/* AI Subtitle Pipeline Toolbar (Whisper STT & Gemini Vietsub) */}
+        <div
+          data-testid="studio-ai-pipeline-bar"
+          className="space-y-2 border-b border-border-dark bg-bg-primary/60 px-4 py-2.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <select
+              aria-label="Bộ máy Whisper STT"
+              data-testid="studio-stt-engine-select"
+              value={sttEngine}
+              onChange={(e) => setSttEngine(e.target.value as StudioSttEngine)}
+              disabled={isTranscribing || isTranslating}
+              className="rounded border border-border-dark bg-bg-secondary px-2 py-1 text-xs text-slate-200 outline-none focus:border-accent-neuro disabled:opacity-50"
+            >
+              <option value="groq">Groq Whisper (Cloud)</option>
+              <option value="faster_whisper">Faster-Whisper (Local INT8)</option>
+              <option value="whisper_cpp">Whisper.cpp (Local)</option>
+            </select>
+
+            {sttEngine === 'groq' && (
+              <label className="flex cursor-pointer items-center space-x-1.5 text-[11px] text-slate-300">
+                <input
+                  type="checkbox"
+                  data-testid="studio-music-mode-toggle"
+                  checked={isMusicMode}
+                  onChange={(e) => setIsMusicMode(e.target.checked)}
+                  disabled={isTranscribing || isTranslating}
+                  className="rounded border-border-dark bg-bg-secondary accent-accent-neuro"
+                />
+                <span>Nhạc / Karaoke</span>
+              </label>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="studio-transcribe-button"
+              disabled={!effectiveVideoPath || isTranscribing || isTranslating}
+              onClick={() => {
+                void handleRunStt();
+              }}
+              title={
+                effectiveVideoPath
+                  ? 'Bóc băng âm thanh clip bằng Whisper STT'
+                  : 'Cần cắt phân đoạn video hoặc nạp tệp clip cục bộ trước khi chạy Whisper STT'
+              }
+              className="flex flex-1 items-center justify-center space-x-1.5 rounded border border-accent-vedal/40 bg-accent-vedal/20 px-2.5 py-1.5 text-xs font-medium text-accent-vedal transition-colors hover:bg-accent-vedal/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Mic className="h-3.5 w-3.5" />
+              <span>{isTranscribing ? 'Đang bóc băng...' : 'Bóc băng (Whisper STT)'}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="studio-translate-button"
+              disabled={effectiveSegments.length === 0 || isTranscribing || isTranslating}
+              onClick={() => {
+                void handleRunTranslate();
+              }}
+              title="Dịch phụ đề sang tiếng Việt bằng Gemini (Theatrical Framing)"
+              className="flex flex-1 items-center justify-center space-x-1.5 rounded border border-accent-chat/40 bg-accent-chat/20 px-2.5 py-1.5 text-xs font-medium text-accent-chat transition-colors hover:bg-accent-chat/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Languages className="h-3.5 w-3.5" />
+              <span>{isTranslating ? 'Đang dịch Vietsub...' : 'Dịch Vietsub (Gemini)'}</span>
+            </button>
+          </div>
+
+          {!effectiveVideoPath && (
+            <p className="text-[11px] text-slate-400">
+              Cắt một phân đoạn ở tab Highlight để nạp video clip cho Whisper STT.
+            </p>
+          )}
+
+          {isTranscribing && sttProgress && (
+            <div data-testid="studio-stt-progress" className="space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-slate-300">
+                <span className="flex items-center space-x-1.5">
+                  <RefreshCw className="h-3 w-3 animate-spin text-accent-vedal" />
+                  <span>{formatSttStageLabel(sttProgress.stage)}</span>
+                </span>
+                <span className="font-mono text-accent-vedal">
+                  {Math.round(sttProgress.percent)}%
+                  {sttProgress.totalChunks > 1
+                    ? ` (${sttProgress.currentChunk}/${sttProgress.totalChunks})`
+                    : ''}
+                </span>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-bg-secondary">
+                <div
+                  className="h-full bg-accent-vedal transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.max(0, sttProgress.percent))}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {isTranslating && (
+            <div
+              data-testid="studio-translation-progress"
+              className="flex items-center justify-between text-[11px] text-accent-chat"
+            >
+              <span className="flex items-center space-x-1.5">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                <span>Đang dịch Vietsub ngữ cảnh (Gemini)...</span>
+              </span>
+              {translationProgress && (
+                <span className="font-mono">
+                  {translationProgress.translatedCount}/{translationProgress.totalCount}
+                </span>
+              )}
+            </div>
+          )}
+
+          {transcriptError && (
+            <ErrorBanner
+              error={transcriptError}
+              onDismiss={clearTranscriptError}
+              title="Lỗi xử lý phụ đề AI"
+            />
+          )}
         </div>
 
         {/* Character Hotkeys (1-5) & Multi-Selection Toolbar */}
